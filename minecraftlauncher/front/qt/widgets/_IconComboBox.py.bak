@@ -1,0 +1,66 @@
+from typing import Any
+
+from PySide6.QtCore import QSize, Signal, SignalInstance, MetaSignal
+from PySide6.QtGui import QIcon
+from PySide6.QtWidgets import QComboBox, QListView
+
+from ._IconPicker import IconPicker
+from minecraftlauncher.datatypes.GameProfile import GameProfile
+
+class IconComboBox(QComboBox):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.picker = IconPicker(self)
+        self.picker.icon_chosen.connect(self._icon_changed)
+        self.picker.change_icon.connect(self._change_icon)
+        self.picker.icon_automated.connect(self._set_automated_calls)
+        self.picker.add_icon.connect(self._add_icon)
+        self.picker.lost_focus.connect(self.hidePopup)
+        self.blank_icon = self.picker.blank_icon
+        self._automated = False
+        self.populate()
+        self._view = QListView()
+        self._view.setViewMode(QListView.ViewMode.IconMode)
+        self.setIconSize(QSize(12, 12))
+        self.setView(self._view)
+        self._view.setIconSize(QSize(32, 32))
+        
+
+    def _set_automated_calls(self, auto:bool):
+        self._automated = auto
+
+    def populate(self):
+        self.picker._populate_icons()
+    
+    def profile_selected(self):
+        return self.picker.profile_selected
+    
+    # def showPopup(self):
+    #     self.picker.show()
+    #     self.picker.setFocus()
+
+    # def hidePopup(self):
+    #     self.picker.hide()
+    #     super().hidePopup()
+    
+    def _icon_changed(self, i:int):
+        if self._automated:
+            self.blockSignals(True)
+        self.setCurrentIndex(i)
+        if self._automated:
+            self.blockSignals(False)
+
+    def profile_chosen(self, prof:GameProfile):
+        self.picker.profile_selected(prof)
+
+    def _clear_icons(self):
+        self.clear()
+
+    def _add_icon(self, idx:int, ico:QIcon):
+        self.insertItem(idx, ico, "", ico)
+
+    def _change_icon(self, idx:int, ico:QIcon):
+        self.setItemIcon(idx, ico)
+
+    def currentIcon(self):
+        return super().currentData()

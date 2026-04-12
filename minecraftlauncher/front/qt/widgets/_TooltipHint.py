@@ -1,0 +1,68 @@
+import weakref
+
+from PySide6.QtCore import Qt, QSize, Signal
+from PySide6.QtGui import QAction, QIcon, QFont
+from PySide6.QtWidgets import QWidget, QLabel
+
+from minecraftlauncher.front import resources
+from minecraftlauncher import config
+
+_instances = []
+
+class TooltipHint(QLabel):
+    hide_all = Signal(bool)
+    def __init__(self, tooltip:str|None=None, parent=None):
+        super().__init__(parent)
+        self.setPixmap(resources.symbol("info").pixmap(12, 12))
+        self.setProperty("tooltipHint", True)
+        self._tooltip_text = tooltip
+        if tooltip:
+            self.setText(tooltip)
+        self.setMargin(0)
+        self.setContentsMargins(0, 0, 0, 0)
+        self.setAlignment(Qt.AlignmentFlag.AlignVCenter)
+        self.hide_all.connect(self._hide_all_sig)
+        _instances.append(weakref.ref(self))
+        if not config.tooltip_icons_enabled:
+            self.setHidden(not config.tooltip_icons_enabled)
+
+    def _hide_all_sig(self, hide:bool):
+        if hide:
+            self.setHidden(True)
+        else:
+            self.setHidden(False)
+
+    def setText(self, text:str):
+        if not text:
+            self.setToolTip("")
+        lines = text.splitlines()
+        if len(lines) > 0:
+            lines[0] = f"<nobr>{lines[0]}</nobr>"
+            text = f"<font>{"<br>".join(lines)}</font>"
+        self.setToolTip(text)
+    
+    def text(self):
+        return self.toolTip()
+    
+    def setIconSize(self, w:int|QSize, h:int|None=None):
+        if isinstance(w, QSize):
+            self.setPixmap(resources.symbol("info").pixmap(w))
+        elif h:
+            self.setPixmap(resources.symbol("info").pixmap(w, h))
+        if w and h:
+            return
+        raise ValueError("Missing height argument!")
+    
+    @staticmethod
+    def refresh_visibility():
+        _remove = []
+        for ref in _instances:
+            obj = ref()
+            if not obj:
+                _remove.append(ref)
+                continue
+            obj.setHidden(not config.tooltip_icons_enabled)
+        if _remove:
+            for ref in _remove:
+                _instances.remove(ref)
+        return

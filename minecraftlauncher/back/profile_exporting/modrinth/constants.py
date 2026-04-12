@@ -1,0 +1,5 @@
+from minecraftlauncher.constants import (
+    LAUNCHER_NAME, LAUNCHER_VERSION, AUTHOR_USR, EMAIL
+)
+
+USER_AGENT = f"{AUTHOR_USR}/{LAUNCHER_NAME}:{LAUNCHER_VERSION} ({EMAIL})"

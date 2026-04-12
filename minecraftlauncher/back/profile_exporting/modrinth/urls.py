@@ -1,0 +1,1 @@
+CHECK_MOD_HASH_URL = "https://api.modrinth.com/v2/version_file/"

@@ -1,0 +1,184 @@
+<RCC>
+    <qresource prefix="/profile">
+        <file alias="bedrock.png">icon/profile_icons/bedrock.png</file>
+        <file alias="bookshelf.png">icon/profile_icons/bookshelf.png</file>
+        <file alias="bricks.png">icon/profile_icons/bricks.png</file>
+        <file alias="creeper_head.png">icon/profile_icons/creeper_head.png</file>
+        <file alias="default.png">icon/profile_icons/default.png</file>
+        <file alias="dirt.png">icon/profile_icons/dirt.png</file>
+        <file alias="fabric.png">icon/profile_icons/fabric.png</file>
+        <file alias="furnace.png">icon/profile_icons/furnace.png</file>
+        <file alias="grass.png">icon/profile_icons/grass.png</file>
+        <file alias="optifine.png">icon/profile_icons/optifine.png</file>
+        <file alias="portal.png">icon/profile_icons/portal.png</file>
+    </qresource>
+    <qresource prefix="/">
+        <file>icon/symbol/add.svg</file>
+        <file>icon/symbol/add-dark.svg</file>
+        <file>icon/symbol/alt-toggle-on.svg</file>
+        <file>icon/symbol/alt-toggle-on-dark.svg</file>
+        <file>icon/symbol/alt-toggle-off.svg</file>
+        <file>icon/symbol/alt-toggle-off-dark.svg</file>
+        <file>icon/symbol/bandaid.svg</file>
+        <file>icon/symbol/bandaid-dark.svg</file>
+        <file>icon/symbol/bandaid-fill.svg</file>
+        <file>icon/symbol/bandaid-fill-dark.svg</file>
+        <file>icon/symbol/bulb.svg</file>
+        <file>icon/symbol/bulb-dark.svg</file>
+        <file>icon/symbol/bulb-off.svg</file>
+        <file>icon/symbol/bulb-off-dark.svg</file>
+        <file>icon/symbol/box.svg</file>
+        <file>icon/symbol/box-dark.svg</file>
+        <file>icon/symbol/box-fill.svg</file>
+        <file>icon/symbol/box-fill-dark.svg</file>
+        <file>icon/symbol/braces.svg</file>
+        <file>icon/symbol/braces-dark.svg</file>
+        <file>icon/symbol/cancel.svg</file>
+        <file>icon/symbol/cancel-dark.svg</file>
+        <file>icon/symbol/capslock.svg</file>
+        <file>icon/symbol/capslock-dark.svg</file>
+        <file>icon/symbol/checkbox-checked.svg</file>
+        <file>icon/symbol/checkbox-checked-dark.svg</file>
+        <file>icon/symbol/circle.svg</file>
+        <file>icon/symbol/circle-clockwise.svg</file>
+        <file>icon/symbol/circle-clockwise-dark.svg</file>
+        <file>icon/symbol/circle-counter-clockwise.svg</file>
+        <file>icon/symbol/circle-counter-clockwise-dark.svg</file>
+        <file>icon/symbol/circle-dark.svg</file>
+        <file>icon/symbol/circle-fill.svg</file>
+        <file>icon/symbol/circle-fill-dark.svg</file>
+        <file>icon/symbol/circle-half.svg</file>
+        <file>icon/symbol/circle-half-dark.svg</file>
+        <file>icon/symbol/clipboard.svg</file>
+        <file>icon/symbol/clipboard-checked.svg</file>
+        <file>icon/symbol/clipboard-checked-dark.svg</file>
+        <file>icon/symbol/clipboard-dark.svg</file>
+        <file>icon/symbol/cloud-download.svg</file>
+        <file>icon/symbol/cloud-download-dark.svg</file>
+        <file>icon/symbol/code-slash.svg</file>
+        <file>icon/symbol/code-slash-dark.svg</file>
+        <file>icon/symbol/cup-hot-fill.svg</file>
+        <file>icon/symbol/cup-hot-fill-dark.svg</file>
+        <file>icon/symbol/download.svg</file>
+        <file>icon/symbol/download-dark.svg</file>
+        <file>icon/symbol/dropdown.svg</file>
+        <file>icon/symbol/dropdown-dark.svg</file>
+        <file>icon/symbol/dropdown-up.svg</file>
+        <file>icon/symbol/dropdown-up-dark.svg</file>
+        <file>icon/symbol/emoji-frown.svg</file>
+        <file>icon/symbol/emoji-frown-dark.svg</file>
+        <file>icon/symbol/emoji-frown-fill.svg</file>
+        <file>icon/symbol/emoji-frown-fill-dark.svg</file>
+        <file>icon/symbol/file.svg</file>
+        <file>icon/symbol/file-add.svg</file>
+        <file>icon/symbol/file-add-dark.svg</file>
+        <file>icon/symbol/file-dark.svg</file>
+        <file>icon/symbol/file-diff.svg</file>
+        <file>icon/symbol/file-diff-dark.svg</file>
+        <file>icon/symbol/file-image.svg</file>
+        <file>icon/symbol/file-image-dark.svg</file>
+        <file>icon/symbol/font.svg</file>
+        <file>icon/symbol/font-dark.svg</file>
+        <file>icon/symbol/folder.svg</file>
+        <file>icon/symbol/folder-dark.svg</file>
+        <file>icon/symbol/import.svg</file>
+        <file>icon/symbol/import-dark.svg</file>
+        <file>icon/symbol/info.svg</file>
+        <file>icon/symbol/info-dark.svg</file>
+        <file>icon/symbol/info-filled.svg</file>
+        <file>icon/symbol/info-filled-dark.svg</file>
+        <file>icon/symbol/info-square.svg</file>
+        <file>icon/symbol/info-square-dark.svg</file>
+        <file>icon/symbol/invisible.svg</file>
+        <file>icon/symbol/invisible-dark.svg</file>
+        <file>icon/symbol/link.svg</file>
+        <file>icon/symbol/link-dark.svg</file>
+        <file>icon/symbol/missing.svg</file>
+        <file>icon/symbol/missing-dark.svg</file>
+        <file>icon/symbol/microsoft.svg</file>
+        <file>icon/symbol/microsoft-dark.svg</file>
+        <file>icon/symbol/notification.svg</file>
+        <file>icon/symbol/notification-dark.svg</file>
+        <file>icon/symbol/notification-silent.svg</file>
+        <file>icon/symbol/notification-silent-dark.svg</file>
+        <file>icon/symbol/profile.svg</file>
+        <file>icon/symbol/profile-add.svg</file>
+        <file>icon/symbol/profile-add-dark.svg</file>
+        <file>icon/symbol/profile-dark.svg</file>
+        <file>icon/symbol/profile-remove.svg</file>
+        <file>icon/symbol/profile-remove-dark.svg</file>
+        <file>icon/symbol/refresh.svg</file>
+        <file>icon/symbol/refresh-dark.svg</file>
+        <file>icon/symbol/remove.svg</file>
+        <file>icon/symbol/remove-dark.svg</file>
+        <file>icon/symbol/save.svg</file>
+        <file>icon/symbol/save-dark.svg</file>
+        <file>icon/symbol/settings.svg</file>
+        <file>icon/symbol/settings-dark.svg</file>
+        <file>icon/symbol/share.svg</file>
+        <file>icon/symbol/share-dark.svg</file>
+        <file>icon/symbol/square.svg</file>
+        <file>icon/symbol/square-dark.svg</file>
+        <file>icon/symbol/square-filled.svg</file>
+        <file>icon/symbol/square-filled-dark.svg</file>
+        <file>icon/symbol/tools.svg</file>
+        <file>icon/symbol/tools-dark.svg</file>
+        <file>icon/symbol/toggle-on.svg</file>
+        <file>icon/symbol/toggle-on-dark.svg</file>
+        <file>icon/symbol/toggle-off.svg</file>
+        <file>icon/symbol/toggle-off-dark.svg</file>
+        <file>icon/symbol/volume-50.svg</file>
+        <file>icon/symbol/volume-50-dark.svg</file>
+        <file>icon/symbol/volume-100.svg</file>
+        <file>icon/symbol/volume-100-dark.svg</file>
+        <file>icon/symbol/volume.svg</file>
+        <file>icon/symbol/volume-dark.svg</file>
+        <file>icon/symbol/volume-mute.svg</file>
+        <file>icon/symbol/volume-mute-dark.svg</file>
+        <file>icon/symbol/visible.svg</file>
+        <file>icon/symbol/visible-dark.svg</file>
+        <file>icon/symbol/warning.svg</file>
+        <file>icon/symbol/warning-dark.svg</file>
+        <file>icon/symbol/copy.svg</file>
+        <file>icon/symbol/copy-dark.svg</file>
+        <file>icon/symbol/edit.svg</file>
+        <file>icon/symbol/edit-dark.svg</file>
+        <file>icon/symbol/file-zip.svg</file>
+        <file>icon/symbol/file-zip-dark.svg</file>
+        <file>icon/symbol/folder-check.svg</file>
+        <file>icon/symbol/folder-check-dark.svg</file>
+        <file>icon/symbol/folder-minus.svg</file>
+        <file>icon/symbol/folder-minus-dark.svg</file>
+        <file>icon/symbol/folder-plus.svg</file>
+        <file>icon/symbol/folder-plus-dark.svg</file>
+        <file>icon/symbol/folder-symlink.svg</file>
+        <file>icon/symbol/folder-symlink-dark.svg</file>
+        <file>icon/symbol/image.svg</file>
+        <file>icon/symbol/image-dark.svg</file>
+        <file>icon/symbol/images.svg</file>
+        <file>icon/symbol/images-dark.svg</file>
+        <file>icon/symbol/journal.svg</file>
+        <file>icon/symbol/journal-bookmark.svg</file>
+        <file>icon/symbol/journal-bookmark-dark.svg</file>
+        <file>icon/symbol/journal-bookmarked.svg</file>
+        <file>icon/symbol/journal-bookmarked-dark.svg</file>
+        <file>icon/symbol/journal-code.svg</file>
+        <file>icon/symbol/journal-code-dark.svg</file>
+        <file>icon/symbol/journal-dark.svg</file>
+        <file>icon/symbol/journal-minus.svg</file>
+        <file>icon/symbol/journal-minus-dark.svg</file>
+        <file>icon/symbol/journal-plus.svg</file>
+        <file>icon/symbol/journal-plus-dark.svg</file>
+        <file>icon/symbol/journals.svg</file>
+        <file>icon/symbol/journals-dark.svg</file>
+        <file>icon/symbol/journal-x.svg</file>
+        <file>icon/symbol/journal-x-dark.svg</file>
+        <file>icon/symbol/trash.svg</file>
+        <file>icon/symbol/trash-dark.svg</file>
+        <file>icon/symbol/trash-disabled.svg</file>
+        <file>icon/symbol/trash-disabled-dark.svg</file>
+    </qresource>
+    <qresource prefix="/animation">
+        <file alias="load.svg">icon/animate/load.svg</file>
+    </qresource>
+</RCC>
