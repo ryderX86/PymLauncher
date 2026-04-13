@@ -140,22 +140,22 @@ def animation(name:str):
     return svg_bytes
 
 PROF_ICON_LIST = [
-    "Bedrock", "Bookshelf", "Bricks", "Cake", "Pumpkin", "Chest", "Clay",
-    "Block_Of_Coal", "Coal_Ore", "Cobblestone", "Crafting_Table",
-    "Creeper_Head", "Block_Of_Diamond", "Diamond_Ore", "Dirt", "Podzol",
-    "Dirt_Snow", "Block_Of_Emerald", "Emerald_Ore", "Enchanting_Table",
-    "End_Stone", "Farmland", "Furnace", "Furnace_Lit", "Glass",
+    "Bedrock", "Bookshelf", "Brick", "Cake", "Pumpkin", "Chest", "Clay",
+    "Coal_Block", "Coal_Ore", "Cobblestone", "Crafting_Table",
+    "Creeper_Head", "Diamong_Block", "Diamond_Ore", "Dirt", "Podzol",
+    "Dirt_Snow", "Emerald_Block", "Emerald_Ore", "Enchanting_Table",
+    "End_Stone", "Farmland", "Furnace", "Furnace_On", "Glass",
     "Glazed_Terracotta_Light_Blue", "Glazed_Terracotta_Orange",
-    "Glazed_Terracotta_White", "Glowstone", "Block_Of_Gold", "Gold_Ore",
-    "Grass", "Gravel", "Terracotta", "Packed_Ice", "Iron_Block",
-    "Iron_Ore", "Lapis_Ore", "Oak_Leaves", "Jungle_Leaves", "Birch_Leaves",
-    "Spruce_Leaves", "Lectern", "Acacia_Log", "Birch_Log", "Dark_Oak_Log",
-    "Jungle_Log", "Oak_Log", "Spruce_Log", "Mycelium", "Nether_Bricks",
-    "Netherrack", "Obsidian", "Acacia_Planks", "Dark_Oak_Planks",
-    "Jungle_Planks", "Oak_Planks", "Spruce_Planks", "Nether_Quartz_Ore",
+    "Glazed_Terracotta_White", "Glowstone", "Gold_Block", "Gold_Ore",
+    "Grass", "Gravel", "Hardened_Clay", "Ice_Packed", "Iron_Block",
+    "Iron_Ore", "Lapis_Ore", "Leaves_Oak", "Leaves_Jungle", "Leaves_Birch",
+    "Leaves_Spruce", "Lectern", "Log_Acacia", "Log_Birch", "Log_DarkOak",
+    "Log_Jungle", "Log_Oak", "Log_Spruce", "Mycelium", "Nether_Brick",
+    "Netherrack", "Obsidian", "Planks_Acacia", "Planks_DarkOak",
+    "Planks_Jungle", "Planks_Oak", "Planks_Spruce", "Quartz_Ore",
     "Red_Sand", "Red_Sandstone", "Redstone", "Redstone_Block", "Sand",
-    "Sandstone", "Skeleton_Skull", "Snow", "Soul_Sand", "Stone", "Andesite",
-    "Diorite", "Granite", "TNT", "Water", "Wool"
+    "Sandstone", "Skeleton_Skull", "Snow", "Soul_Sand", "Stone",
+    "Stone_Andesite", "Stone_Diorite", "Stone_Granite", "TNT", "Water", "Wool"
 ]
 
 def get_unknown_icon():

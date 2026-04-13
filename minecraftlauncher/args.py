@@ -11,6 +11,11 @@ _resource_debug = _parser.add_argument(
     dest="resource_debug"
 )
 
+_exporting_debug = _parser.add_argument(
+    "-exp", "--debug-exports", "--debug-imports", "--imp", action="store_true",
+    default=False, dest="exporting_debug"
+)
+
 _parsed_args = _parser.parse_args()
 
 if _parsed_args and (isinstance(_parsed_args.work_dir, Path)
@@ -23,3 +28,4 @@ if _parsed_args and (isinstance(_parsed_args.work_dir, Path)
 
 work_dir:Path|None = _parsed_args.work_dir if _parsed_args else None
 resource_debug:bool = _parsed_args.resource_debug if _parsed_args else False
+exporting_debug = _parsed_args.exporting_debug if _parsed_args else False

@@ -22,12 +22,12 @@ class PostLaunchBehavior(IntEnum):
 
 """Config Values"""
 window_size = [1100, 700]
-window_coords:list[int] = []
 open_browser_for_login:bool = False
 post_launch_option:PostLaunchBehavior = PostLaunchBehavior.HIDE
 maximized:bool = False
 tooltip_icons_enabled:bool = True
 ignored_messages:list[str] = []
+# show_logs_on_home:bool = False
 
 def set(val_name:str, new_val:Any):
     current = globals().get(val_name)
@@ -69,11 +69,11 @@ def load(config:dict|None=None):
         if key.upper() == key:
             continue
         if isinstance(globals().get(key), NoneType):
-            _log.warning("Unknown key in config.json: '%s'" % key)
+            _log.warning("Ignoring unknown key in config.json: '%s'" % key)
             continue
         default = globals()[key]
         if not isinstance(default, type(val)):
-            _log.warning(f"Value in '{key}' has conflicting type")
+            _log.warning(f"Value in '{key}' has conflicting type, ignoring")
             continue
         if DEV and val != default:
             _log.debug(f"{key} def: {default}, new: {val}")

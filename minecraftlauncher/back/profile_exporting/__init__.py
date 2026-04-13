@@ -1,5 +1,7 @@
 from enum import StrEnum, IntEnum
 
+from ._PortableProfile import PortableProfile
+
 class ChunkUpdatePrioritization(IntEnum):
     THREADED = 0
     SEMI_BLOCKING = 1

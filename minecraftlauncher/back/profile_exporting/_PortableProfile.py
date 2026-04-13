@@ -7,9 +7,13 @@ import logging
 
 from minecraftlauncher.datatypes.GameProfile import GameProfile
 from minecraftlauncher.back import profile_manager
-from minecraftlauncher import constants
+from minecraftlauncher import constants, args
 
 log = logging.getLogger(__name__)
+if args._exporting_debug:
+    log.setLevel(logging.DEBUG)
+else:
+    log.setLevel(logging.INFO)
 
 def recursive_add_dir(path:Path, stop_at:Path, zip:zipfile.ZipFile):
     """
@@ -17,6 +21,8 @@ def recursive_add_dir(path:Path, stop_at:Path, zip:zipfile.ZipFile):
     nested folders.
     """
     def try_make_folder(f:str):
+        if f in zip.namelist():
+            return False
         try:
             zip.mkdir(f)
         except FileExistsError:
@@ -39,7 +45,6 @@ def recursive_add_dir(path:Path, stop_at:Path, zip:zipfile.ZipFile):
         raise ValueError("Paths must match at beginning!")
     folders = str(path).replace(str(stop_at), "")
     while folders.startswith(constants.OS_PATH_DELIM):
-        log.debug("\"%s\" -> \"%s\"" % (folders, folders[1:]))
         folders = folders[1:]
     folder_list = folders.split(constants.OS_PATH_DELIM)
     try_make_folder(folder_list[0])
@@ -49,7 +54,7 @@ def recursive_add_dir(path:Path, stop_at:Path, zip:zipfile.ZipFile):
         try_make_folder(last_folder)
     if file:
         try:
-            zip.write(file, folders)
+            zip.write(file, last_folder + "/" + file.name)
         except Exception as err:
             err.add_note("File at \"%s\" caused the above error." % str(file))
             raise
@@ -60,13 +65,7 @@ class PortableProfile:
     class PathType(IntEnum):
         DIR = 0
         FILE = 1
-    def __init__(self, prof:GameProfile|str, mods:bool,
-                 options_txt:bool, resource_packs:bool, saves:bool,
-                 quick_play:bool, screenshots:bool, versions:bool, config:bool,
-                 coremods:bool, menuworlds:bool, debug_profile:bool,
-                 limit_resource_packs:list[str]=[], limit_saves:list[str]=[],
-                 limit_screenshots:list[str]=[],
-                 limit_menuworlds:list[str]=[]):
+    def __init__(self, prof:GameProfile|str):
         match prof:
             case str():
                 self._prof = prof
@@ -110,7 +109,7 @@ class PortableProfile:
     
     @property
     def mods(self):
-        return self._dirs_exist(["mods", "coremods"])
+        return self._dir_exists("mods")
     
     @property
     def options_txt(self):
@@ -165,9 +164,9 @@ class PortableProfile:
         return pathlist
     
     def export(self, output:str|Path, mods:bool, options_txt:bool,
-               resource_packs:bool, saves:bool, quick_play:bool,
-               screenshots:bool, versions:bool, config:bool, coremods:bool,
-               menuworlds:bool, debug_profile:bool):
+               resource_packs:bool, saves:bool, screenshots:bool,
+               versions:bool, config:bool, coremods:bool, menuworlds:bool,
+               debug_profile:bool):
         b = self.base
 
         if isinstance(output, str):
@@ -240,11 +239,6 @@ class PortableProfile:
                 zip.mkdir("saves")
                 for file in p.rglob("*"):
                     recursive_add_dir(file, p, zip)
-
-            if quick_play and self.quick_play:
-                log.info("Including launcher_quick_play.json")
-                zip.write(b / "launcher_quick_play.json",
-                          "launcher_quick_play.json")
             
             if screenshots and self.screenshots:
                 p = b / "screenshots"
@@ -279,4 +273,4 @@ class PortableProfile:
             
             zip.close()
 
-        
+        return True

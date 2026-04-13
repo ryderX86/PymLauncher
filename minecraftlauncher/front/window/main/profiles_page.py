@@ -43,6 +43,9 @@ from minecraftlauncher.front.qt.models import (
     ProfileSelectionModel, ProfileModel
 )
 from minecraftlauncher.front.qt.widgets import IconPickerButton
+from minecraftlauncher.front.window.profile_exporting.export_profile import (
+    ExportProfileDialog
+)
 from minecraftlauncher import constants
 
 log = logging.getLogger(__name__)
@@ -219,12 +222,12 @@ class ProfilesPage(QWidget):
         button_export.setIcon(resources.symbol("share"))
         button_export.setMaximumWidth(36)
         button_export.setToolTip("Export Current Profile")
-        button_row.addWidget(button_export)
+        # button_row.addWidget(button_export)
         button_import = QPushButton()
         button_import.setIcon(resources.symbol("import"))
         button_import.setMaximumWidth(36)
         button_import.setToolTip("Import Profile")
-        button_row.addWidget(button_import)
+        # button_row.addWidget(button_import)
         # may have to relocate
         left_layout.addWidget(button_row_w)
 
@@ -1064,6 +1067,17 @@ class ProfilesPage(QWidget):
             lambda c: self._clone_profile(prof)
         )
         menu.addAction(clone_prof)
+
+        export_prof = QAction(menu)
+        export_prof.setIcon(resources.symbol("share"))
+        export_prof.setText("Export \"%s\"" % prof.name)
+        if prof.is_default_profile:
+            export_prof.setDisabled(True)
+        else:
+            export_prof.triggered.connect(
+                lambda c: ExportProfileDialog.deploy(prof, self)
+            )
+        # menu.addAction(export_prof)
 
         delete_profile = QWidgetAction(menu)
         delete_profile.setIcon(resources.symbol("trash"))

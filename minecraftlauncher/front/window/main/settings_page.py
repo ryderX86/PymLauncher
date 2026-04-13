@@ -6,7 +6,7 @@ Stub settings page
 from enum import StrEnum
 import logging
 
-from PySide6.QtCore import Qt, QUrl
+from PySide6.QtCore import Qt, QUrl, Signal
 from PySide6.QtGui import QIcon, QDesktopServices
 from PySide6.QtWidgets import (
     QLabel, QVBoxLayout, QWidget, QHBoxLayout, QComboBox, QPushButton,
@@ -22,6 +22,7 @@ log = logging.getLogger(__name__)
 class SettingsPage(QWidget):
     """Settings page (STUB)"""
 
+    settings_changed = Signal()
     def __init__(self, parent=None):
         super().__init__(parent)
         layout = QVBoxLayout(self)
@@ -79,6 +80,26 @@ class SettingsPage(QWidget):
                                  c == Qt.CheckState.Checked)
         )
         layout.addWidget(open_browser_for_login)
+
+        show_logs_w = QWidget()
+        show_logs_w.setContentsMargins(0, 0, 0, 0)
+        show_logs_lo = QHBoxLayout(show_logs_w)
+        show_logs_lo.setContentsMargins(0, 0, 0, 0)
+        show_logs_lo.setAlignment(Qt.AlignmentFlag.AlignLeft)
+        show_logs_tt = TooltipHint(
+            "Show the game's logs on the home page.\n\n"
+            "(Might slow your PC!)"
+        )
+        show_logs_check = QCheckBox("Show game logs on home page")
+        # show_logs_check.setChecked(config.show_logs_on_home)
+        show_logs_check.checkStateChanged.connect(
+            lambda c: config.set("show_logs_on_home",
+                                 c == Qt.CheckState.Checked)
+        )
+        show_logs_lo.addWidget(show_logs_check)
+        show_logs_lo.addWidget(show_logs_tt)
+
+        # layout.addWidget(show_logs_w)
 
         layout.addStretch()
 

@@ -290,8 +290,6 @@ class HomePage(QWidget):
 
         layout.addWidget(info_frame)
 
-        layout.addStretch()
-
         # profile options
         profile_action_frame = QFrame()
         profile_action_row = QHBoxLayout(profile_action_frame)
@@ -340,6 +338,8 @@ class HomePage(QWidget):
         )
         self.version_label.setContentsMargins(10,0,10,0)
         info_layout.addWidget(self.version_label)
+
+        layout.addStretch()
 
         # Progress bar
         self.progress_frame = QFrame()

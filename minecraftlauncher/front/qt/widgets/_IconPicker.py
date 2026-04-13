@@ -4,7 +4,7 @@ import base64
 
 from PySide6.QtCore import Qt, Signal, QSize, QByteArray, QBuffer
 from PySide6.QtGui import (
-    QFocusEvent, QIcon, QPixmap, QImage
+    QFocusEvent, QIcon, QPixmap, QImage, QScreen, QGuiApplication
 )
 from PySide6.QtWidgets import (
     QWidget, QListWidget, QPushButton, QVBoxLayout, QHBoxLayout,
@@ -19,6 +19,8 @@ log = logging.getLogger(__name__)
 
 class IconPicker(QWidget):
     _DEFAULT_ICO_SIZE = 64
+    _DEFAULT_COLUMNS = 8
+    _DEFAULT_ROWS = 6
     _WIN_TYPE = Qt.WindowType.Popup
     _MODALITY = Qt.WindowModality.ApplicationModal
     blank_icon = QIcon()
@@ -49,8 +51,10 @@ class IconPicker(QWidget):
             QSize(self._DEFAULT_ICO_SIZE, self._DEFAULT_ICO_SIZE)
         )
         self._view.setUniformItemSizes(True)
-        self.setFixedWidth(((self._DEFAULT_ICO_SIZE + 2) * 5) + 27)
-        self.setFixedHeight(((self._DEFAULT_ICO_SIZE + 2) * 5))
+        cols = self._DEFAULT_COLUMNS
+        rows = self._DEFAULT_ROWS
+        self.setFixedWidth(((self._DEFAULT_ICO_SIZE + 2) * 8) + (cols * 3))
+        self.setFixedHeight(((self._DEFAULT_ICO_SIZE + 2) * 6) - (rows // 2))
 
     def _set_automated(self, auto:bool):
         self._automated_status = auto
@@ -225,24 +229,35 @@ class IconPicker(QWidget):
                 self._view.setCurrentRow(2)
     
     def show(self):
-        super().show()
         if self._parent and self._parent.parent():
+            try:
+                screen = QGuiApplication.screenAt(
+                    self._parent.parent().mapToGlobal( # type: ignore
+                        self._parent.pos()
+                    )
+                )
+            except Exception as err:
+                log.error("Error raised trying to get screen from "
+                          "QGuiApplication, silently failing instead.")
+                screen = None
+            if not screen:
+                screen = self.screen()
+                log.warning("Couldn't get screen through QGuiApplication")
             geo = self._parent.parent().mapToGlobal(  # type: ignore
                 self._parent.pos()
             )
             x = geo.x() + int(self._parent.width() / 2) - int(self.width() / 2)
             y = geo.y() + self._parent.height()
             outer_x = x + self.width()
-            screen_geo = self.screen().geometry()
+            screen_geo = screen.geometry()
             if x < screen_geo.x():
-                x = 0
-            elif outer_x > screen_geo.width():
-                x -= outer_x - screen_geo.width()
+                x = screen_geo.x()
+            elif outer_x > screen_geo.width() + screen_geo.x():
+                x -= outer_x - screen_geo.width() - screen_geo.x()
             if y < 0:
                 y = 0
-            elif y > screen_geo.height():
-                y -= self.height()
             self.move(int(x), y)
+        super().show()
         self.setFocus()
         return
     

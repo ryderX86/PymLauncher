@@ -43,20 +43,10 @@ class MainWindow(QMainWindow):
         height = config.window_size[1]
         self.resize(*config.window_size)
         geo = self.screen().geometry()
-        if not config.window_coords or len(config.window_coords) != 2:
-            config.window_coords = [-1, -1]
-        if len(config.window_coords) == 2:
-            x = config.window_coords[0]
-            if not isinstance(x, int) or x > geo.width() or x < 0:
-                x = geo.width() // 2 - width // 2
-            y = config.window_coords[1]
-            if not isinstance(y, int) or y > geo.height() or x < 0:
-                y = geo.width() // 2 - height // 2
-        else:
-            geo = self.screen().geometry()
+        if geo.width() <= 1280:
             x = geo.width() // 2 - width // 2
             y = geo.height() // 2 - height // 2
-        self.setGeometry(x, y, *config.window_size)
+            self.setGeometry(x, y, *config.window_size)
 
         self._nav_buttons:dict[str, QPushButton] = {}
         self._build_ui()
@@ -66,10 +56,6 @@ class MainWindow(QMainWindow):
         if self.isMaximized():
             config.maximized = True
         else:
-            if len(config.window_coords) != 2:
-                config.window_coords = [0, 0]
-            config.window_coords[0] = geo.x()
-            config.window_coords[1] = geo.y()
             config.window_size = [geo.width(), geo.height()]
             config.maximized = False
         config.save()
