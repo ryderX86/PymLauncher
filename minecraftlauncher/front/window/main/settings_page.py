@@ -71,6 +71,15 @@ class SettingsPage(QWidget):
         )
         layout.addWidget(tooltips_enabled)
 
+        open_browser_for_login = QCheckBox("Open browser automatically for " \
+                                           "sign-in")
+        open_browser_for_login.setChecked(config.open_browser_for_login)
+        open_browser_for_login.checkStateChanged.connect(
+            lambda c: config.set("open_browser_for_login",
+                                 c == Qt.CheckState.Checked)
+        )
+        layout.addWidget(open_browser_for_login)
+
         layout.addStretch()
 
         buttons_w = QWidget()

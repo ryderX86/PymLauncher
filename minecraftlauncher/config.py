@@ -22,6 +22,7 @@ class PostLaunchBehavior(IntEnum):
 
 """Config Values"""
 window_size = [1100, 700]
+window_coords:list[int] = []
 open_browser_for_login:bool = False
 post_launch_option:PostLaunchBehavior = PostLaunchBehavior.HIDE
 maximized:bool = False

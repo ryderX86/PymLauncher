@@ -125,8 +125,9 @@ class LaunchWorker(QThread):
             jre_name = version_json.get("javaVersion", {}).get("component", "")
             jre_manifest = java_manager.get_jvm_version_manifest(jre_name)
             if not offline_mode:
-                java_exc = java_manager.install_java_version(jre_name,
-                                                            jre_manifest)
+                java_exc = java_manager.install_java_version_threaded(
+                    jre_name, jre_manifest
+                )
             else:
                 self.log.warning("Offline mode active, JRE executable may be "
                                  "broken!")

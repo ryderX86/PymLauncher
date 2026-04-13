@@ -16,6 +16,7 @@ import zipfile
 import lzma
 
 import requests
+from PySide6.QtCore import QThreadPool
 
 from minecraftlauncher.constants import (
     MINECRAFT_DIR,
@@ -29,7 +30,9 @@ from minecraftlauncher.constants import (
     JAVA_MANIFEST_URL,
     offline_mode
 )
-from .download_manager import download, should_download_file
+from .download_manager import (
+    download, should_download_file, BulkDownloadSingleFile, BulkDownloadWorker
+)
 from minecraftlauncher.functions.text import indent
 
 log = logging.getLogger(__name__)
@@ -310,6 +313,132 @@ def install_java_version(name:str, jre_manifest:dict, *,
         if progress_callback:
             progress_callback(completed, total_size)
         continue
+    
+    log.info("Download complete, %d/%d new files." % (downloaded, total_size))
+
+    if "MinecraftJava.exe" in files.keys():
+        return jre_path_default / "MinecraftJava.exe"
+    else:
+        return Path(jre_path_default, *exc_path)
+    
+def install_java_version_threaded(name:str, jre_manifest:dict, *,
+                         progress_callback:Callable|None=None):
+    """Installs specified JRE version from Mojang. Returns javaw.exe path"""
+    pool = QThreadPool.globalInstance()
+    if not pool:
+        log.warning("Couldn't get QThreadPool, downloading single-threaded")
+        return install_java_version(name, jre_manifest,
+                                    progress_callback=progress_callback)
+    path_list = jre_manifest.get("files", {})
+    files = {k: v for k, v in path_list.items() if v["type"] == "file"}
+    dirs:list[str] = [k for k, v in path_list.items()
+                      if v["type"] == "directory"]
+
+    total_size = len(files.keys()) - len(dirs)
+
+    jre_path_default = JAVA_PATH / name
+    jre_path_mojang = MOJANG_JAVA_PATH / name
+
+    match OS:
+        case "windows":
+            exc_path = ["bin", "javaw.exe"]
+        case "osx":
+            exc_path = ["jre.bundle", "Contents", "Home", "bin", "java"]
+        case _:
+            exc_path = ["bin", "java"]
+
+    if jre_path_mojang.exists():
+        # Check mojang launcher's java install
+        valid = True
+        completed = 0
+        for subpath in dirs:
+            dir = Path(jre_path_mojang, *subpath.split("/"))
+            if not (dir.exists() and dir.is_dir()):
+                valid = False
+                break
+        for subpath, finfo in files.items():
+            path = Path(jre_path_mojang *subpath.split("/"))
+            if path.exists() and path.is_file():
+                f_sha1 = hashlib.sha1(path.read_bytes()).hexdigest()
+                e_sha1 = finfo["downloads"]["raw"].get("sha1")
+                if e_sha1 and f_sha1 != e_sha1:
+                    valid = False
+                    break
+            else:
+                valid = False
+                break
+            completed += 1
+            if progress_callback:
+                progress_callback(completed, total_size)
+        if valid:
+            log.info("Found vanilla Java install that matches.")
+            if "MinecraftJava.exe" in files.keys():
+                # this might be horrible but idk yet, YOLO
+                final_path = jre_path_mojang / name / "MinecraftJava.exe"
+            else:
+                final_path = Path(jre_path_mojang, *exc_path)
+            log.info("JRE executable path: '%s'" % str(final_path))
+            return final_path
+        else:
+            log.info("Didn't find matching vanilla Java install.")
+            if progress_callback:
+                progress_callback(0, total_size)
+    
+    jre_path_default.mkdir(exist_ok=True, parents=True)
+    completed = 0
+    downloaded = 0
+    def file_downloaded(i:int):
+        nonlocal completed
+        completed += 1
+
+    download_workers:list[BulkDownloadSingleFile] = []
+
+    for subpath in dirs:
+        dir = jre_path_default / subpath
+        dir.mkdir(parents=True, exist_ok=True)
+    for subpath, finfo in files.items():
+        path = Path(jre_path_default, *subpath.split("/"))
+        e_sha1 = finfo["downloads"]["raw"].get("sha1") # expected sha1
+        if path.exists() and path.is_file():
+            f_sha1 = hashlib.sha1(path.read_bytes()).hexdigest()
+            if e_sha1 and e_sha1 == f_sha1:
+                completed += 1
+                if progress_callback:
+                    progress_callback(completed, total_size)
+                continue
+            elif e_sha1:
+                log.warning("File at '%s' has SHA1 ('%s') that doesn't match "
+                            "expected value '%s'" % (subpath, f_sha1, e_sha1))
+
+        # prioritize lower internet reliance first, then fallback to raw file
+        url = str(finfo.get("downloads", {}).get("lzma", {}).get("url", ""))
+        sha1 = str(finfo.get("downloads", {}).get("lzma", {}).get("sha1", ""))
+        use_lzma = True
+        if not url:
+            url = str(finfo.get("downloads", {}).get("raw", {})["url"])
+            sha1 = str(finfo.get("downloads", {}).get("raw", {})["sha1"])
+            use_lzma = False
+
+        # use the matching hash since we don't load the lzma yet
+        download_workers.append(
+            BulkDownloadSingleFile(url, path, e_sha1, mkdir=True,
+                                   lzma=use_lzma)
+        )
+
+    if progress_callback:
+        progress_callback(completed, total_size)
+        dl_list = BulkDownloadWorker.auto_split(
+            download_workers,
+            lambda i: file_downloaded(i),
+            lambda: progress_callback(completed, total_size)
+        )
+    else:
+        dl_list = BulkDownloadWorker.auto_split(download_workers)
+
+    pool.setMaxThreadCount(75)
+    for dl in dl_list:
+        pool.start(dl)
+    pool.waitForDone(-1)
     
     log.info("Download complete, %d/%d new files." % (downloaded, total_size))
 

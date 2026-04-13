@@ -7,6 +7,7 @@ from datetime import timedelta, datetime
 import logging
 import hashlib
 import time
+import lzma
 
 import requests
 from PySide6.QtCore import QThread, QThreadPool, QRunnable
@@ -137,7 +138,7 @@ def kill_threads():
     global _threads_quit
     _threads_quit = True
 
-_global_bulk_sleep_time = 0.1
+_global_bulk_sleep_time = 0.0
 
 def _bulk_set_sleep(new_time:float):
     global _global_bulk_sleep_time
@@ -152,10 +153,11 @@ class BulkDownloadSingleFile:
     """File hash to check against"""
     _override:bool
     """Should we override the file? (default: `False`)"""
+    _lzma:bool
 
     log = log.getChild("BulkDownloadSingleFile")
     def __init__(self, url:str, path:Path|str, hash:str|None=None,
-                 override:bool=False, mkdir:bool=True):
+                 override:bool=False, mkdir:bool=True, lzma:bool=False):
         """
         Class for a single file to download in a bulk.
         
@@ -180,6 +182,7 @@ class BulkDownloadSingleFile:
                                  % str(self._path)) from err
         self._hash = hash
         self._override = override
+        self._lzma = lzma
             
     def _check_sha1(self):
         assert self._hash
@@ -211,13 +214,21 @@ class BulkDownloadSingleFile:
                 _bulk_set_sleep(2)
                 continue
             else:
-                _bulk_set_sleep(0.1)
-                self._path.write_bytes(resp.content)
+                _bulk_set_sleep(0.0)
+                if self._lzma:
+                    content = lzma.decompress(resp.content)
+                else:
+                    content = resp.content
+                self._path.write_bytes(content)
                 if self._hash:
                     if self._check_sha1():
                         break
                     else:
-                        self.log.error("Download failed, retrying")
+                        self.log.error("Download failed, retrying (SHA-1 " \
+                                       "mismatch)")
+                        resp = None
+                else:
+                    log.warning("SHA-1 doesn't exist for '%s'" % self._path)
             finally:
                 attempts += 1
         if not resp:
@@ -271,8 +282,7 @@ class BulkDownloadWorker(QRunnable):
                    second_callback:Callable|None=None):
         master_list:list[BulkDownloadWorker] = []
         current_list:list[BulkDownloadSingleFile] = []
-        # max_per_wrkr = len(downloads) // 4
-        max_per_wrkr = 1
+        max_per_wrkr = len(downloads) // 12
         cls.log.debug("max per worker: %d" % max_per_wrkr)
         for download in downloads:
             if len(current_list) >= max_per_wrkr:

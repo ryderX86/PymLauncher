@@ -3,10 +3,12 @@ import logging
 import base64
 
 from PySide6.QtCore import Qt, Signal, QSize, QByteArray, QBuffer
-from PySide6.QtGui import QFocusEvent, QIcon, QPixmap, QImage
+from PySide6.QtGui import (
+    QFocusEvent, QIcon, QPixmap, QImage
+)
 from PySide6.QtWidgets import (
     QWidget, QListWidget, QPushButton, QVBoxLayout, QHBoxLayout,
-    QListWidgetItem, QFileDialog
+    QListWidgetItem, QFileDialog, QApplication
 )
 
 from minecraftlauncher.datatypes.GameProfile import GameProfile
@@ -230,6 +232,16 @@ class IconPicker(QWidget):
             )
             x = geo.x() + int(self._parent.width() / 2) - int(self.width() / 2)
             y = geo.y() + self._parent.height()
+            outer_x = x + self.width()
+            screen_geo = self.screen().geometry()
+            if x < screen_geo.x():
+                x = 0
+            elif outer_x > screen_geo.width():
+                x -= outer_x - screen_geo.width()
+            if y < 0:
+                y = 0
+            elif y > screen_geo.height():
+                y -= self.height()
             self.move(int(x), y)
         self.setFocus()
         return

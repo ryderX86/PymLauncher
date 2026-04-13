@@ -295,7 +295,6 @@ def download_assets_threaded(asset_index:dict, *,
     pool.setMaxThreadCount(75)
     for worker in final_dl_list:
         pool.start(worker)
-        sleep(0.1)
     pool.waitForDone(-1)
     return len(download_list)
 
