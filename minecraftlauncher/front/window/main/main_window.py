@@ -43,7 +43,7 @@ class MainWindow(QMainWindow):
         height = config.window_size[1]
         self.resize(*config.window_size)
         geo = self.screen().geometry()
-        if geo.width() <= 1280:
+        if geo.width() <= 1280: # fix for small/scaled displays
             x = geo.width() // 2 - width // 2
             y = geo.height() // 2 - height // 2
             self.setGeometry(x, y, *config.window_size)

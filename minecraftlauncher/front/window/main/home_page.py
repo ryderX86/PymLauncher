@@ -70,21 +70,20 @@ class LaunchWorker(QThread):
             )
         )
 
-        self.status.emit("Checking for assets...")
-        asset_index = asset_manager.filter_assets_downloads(
+        # self.status.emit("Checking for assets...")
+        # asset_index = asset_manager.filter_assets_downloads(
+        #     asset_manager.fetch_asset_index(version_json),
+        #     progress_callback=lambda c, t: self.progress.emit(
+        #         "Checking assets", c, t
+        #     )
+        # )
+        self.status.emit("Downloading assets...")
+        asset_manager.download_assets_threaded(
             asset_manager.fetch_asset_index(version_json),
             progress_callback=lambda c, t: self.progress.emit(
-                "Checking assets", c, t
+                "Downloading assets", c, t
             )
         )
-        if len(asset_index.get("objects", {}).keys()) > 0:
-            self.status.emit("Downloading assets...")
-            asset_manager.download_assets_threaded(
-                asset_index,
-                progress_callback=lambda c, t: self.progress.emit(
-                    "Downloading assets", c, t
-                )
-            )
         
         self.status.emit("Checking log4j config file...")
         log4j_config = asset_manager.check_or_download_logging_config(
@@ -93,7 +92,7 @@ class LaunchWorker(QThread):
 
         self.status.emit("Downloading libraries...")
         libs = library_manager.filter_libraries(version_json)
-        library_manager.download_libraries(
+        library_manager.download_libraries_threaded(
             libs,
             progress_callback=lambda c, t: self.progress.emit(
                 "Downloading libraries", c, t
@@ -125,8 +124,12 @@ class LaunchWorker(QThread):
             jre_name = version_json.get("javaVersion", {}).get("component", "")
             jre_manifest = java_manager.get_jvm_version_manifest(jre_name)
             if not offline_mode:
+                self.status.emit("Downloading Java...")
                 java_exc = java_manager.install_java_version_threaded(
-                    jre_name, jre_manifest
+                    jre_name, jre_manifest,
+                    progress_callback=lambda c, t: self.progress.emit(
+                        "Downloading Java", c, t
+                    )
                 )
             else:
                 self.log.warning("Offline mode active, JRE executable may be "

@@ -335,6 +335,8 @@ def install_java_version_threaded(name:str, jre_manifest:dict, *,
                       if v["type"] == "directory"]
 
     total_size = len(files.keys()) - len(dirs)
+    if progress_callback:
+        progress_callback(0, total_size)
 
     jre_path_default = JAVA_PATH / name
     jre_path_mojang = MOJANG_JAVA_PATH / name
@@ -388,8 +390,10 @@ def install_java_version_threaded(name:str, jre_manifest:dict, *,
     completed = 0
     downloaded = 0
     def file_downloaded(i:int):
-        nonlocal completed
+        nonlocal completed, total_size, progress_callback
         completed += 1
+        if progress_callback:
+            progress_callback(completed, total_size)
 
     download_workers:list[BulkDownloadSingleFile] = []
 
@@ -422,21 +426,22 @@ def install_java_version_threaded(name:str, jre_manifest:dict, *,
         # use the matching hash since we don't load the lzma yet
         download_workers.append(
             BulkDownloadSingleFile(url, path, e_sha1, mkdir=True,
-                                   lzma=use_lzma)
+                                   lzma=use_lzma,
+                                   callback_f=lambda i: file_downloaded(i))
         )
 
-    if progress_callback:
-        progress_callback(completed, total_size)
-        dl_list = BulkDownloadWorker.auto_split(
-            download_workers,
-            lambda i: file_downloaded(i),
-            lambda: progress_callback(completed, total_size)
-        )
-    else:
-        dl_list = BulkDownloadWorker.auto_split(download_workers)
+    # if progress_callback:
+    #     progress_callback(completed, total_size)
+    #     dl_list = BulkDownloadWorker.auto_split(
+    #         download_workers,
+    #         lambda i: file_downloaded(i),
+    #         lambda: progress_callback(completed, total_size)
+    #     )
+    # else:
+    #     dl_list = BulkDownloadWorker.auto_split(download_workers)
 
     pool.setMaxThreadCount(75)
-    for dl in dl_list:
+    for dl in download_workers:
         pool.start(dl)
     pool.waitForDone(-1)
     

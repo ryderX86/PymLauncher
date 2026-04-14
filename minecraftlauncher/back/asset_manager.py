@@ -250,9 +250,17 @@ def download_assets_threaded(asset_index:dict, *,
     objects_dir = ASSETS_DIR / "objects"
     objects_dir.mkdir(parents=True, exist_ok=True)
 
+    if progress_callback:
+        def add_number(i:int):
+            nonlocal processed, download_list, total
+            processed += i
+            progress_callback(processed, total)
+    else:
+        def add_number(i:int):
+            pass
+
     download_list:list[BulkDownloadSingleFile] = []
-    # dumb stupid workaround lmfao
-    processed = {"v": 0}
+    processed = 0
 
     map_virtual_assets:bool = asset_index.get("map_to_resources", False)
     if map_virtual_assets:
@@ -265,35 +273,31 @@ def download_assets_threaded(asset_index:dict, *,
         downloader = BulkDownloadSingleFile(
             f"{RESOURCES_URL}/{prefix}/{file_hash}",
             dest_path,
-            file_hash
+            file_hash,
+            callback_f=add_number
         )
         if map_virtual_assets:
             v_downloader = BulkDownloadSingleFile(
                 f"{RESOURCES_URL}/{prefix}/{file_hash}",
                 VIRTUAL_BASE / virtual_path,
-                file_hash
+                file_hash,
+                callback_f=add_number
             )
-            if v_downloader.needs_download:
-                download_list.append(v_downloader)
-            else:
-                processed["v"] += 1
-        if downloader.needs_download:
-            download_list.append(downloader)
-        else:
-            processed["v"] += 1
+            download_list.append(v_downloader)
+        download_list.append(downloader)
     if not download_list:
         return 0
-    if progress_callback:
-        final_dl_list = BulkDownloadWorker.auto_split(
-            download_list,
-            lambda i: processed.__setitem__("v", processed["v"] + i),
-            lambda: progress_callback(processed["v"], total)
-        )
-    else:
-        final_dl_list = BulkDownloadWorker.auto_split(download_list)
+    # if progress_callback:
+    #     final_dl_list = BulkDownloadWorker.auto_split(
+    #         download_list,
+    #         lambda i: processed.__setitem__("v", processed["v"] + i),
+    #         lambda: progress_callback(processed["v"], total)
+    #     )
+    # else:
+    #     final_dl_list = BulkDownloadWorker.auto_split(download_list)
 
     pool.setMaxThreadCount(75)
-    for worker in final_dl_list:
+    for worker in download_list:
         pool.start(worker)
     pool.waitForDone(-1)
     return len(download_list)

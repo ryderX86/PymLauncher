@@ -37,19 +37,23 @@ MSA_REFRESH_URL = "https://login.live.com/oauth20_token.srf"
 XBOX_AUTH_URL = "https://user.auth.xboxlive.com/user/authenticate"
 XSTS_AUTH_URL = "https://xsts.auth.xboxlive.com/xsts/authorize"
 
-MOJ_AUTH_URL = "https://api.minecraftservices.com/authentication/login_with_xbox"
+MOJ_AUTH_URL = "https://api.minecraftservices.com/authentication" \
+               "/login_with_xbox"
 
 # Mojang API URLs
-LAUNCH_ENTITLEMENTS_URL = "https://api.minecraftservices.com/entitlements/mcstore"
+LAUNCH_ENTITLEMENTS_URL = "https://api.minecraftservices.com/entitlements" \
+                          "/mcstore"
 MOJ_PROF_URL = "https://api.minecraftservices.com/minecraft/profile"
 SKIN_CHANGE_URL = "https://api.minecraftservices.com/minecraft/profile/skins"
 CAPE_URL = "https://api.minecraftservices.com/minecraft/profile/capes/active"
 
 # Game assets URLs
-VERSION_MANIFEST_URL = "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json"
+VERSION_MANIFEST_URL = "https://piston-meta.mojang.com/mc/game" \
+                       "/version_manifest_v2.json"
 RESOURCES_URL = "https://resources.download.minecraft.net"
 LIBRARIES_URL = "https://libraries.minecraft.net"
-JAVA_MANIFEST_URL = "https://launchermeta.mojang.com/v1/products/java-runtime/2ec0cc96c44e5a76b9c8b7c39df7210883d12871/all.json"
+JAVA_MANIFEST_URL = "https://launchermeta.mojang.com/v1/products/java-runtime" \
+                    "/2ec0cc96c44e5a76b9c8b7c39df7210883d12871/all.json"
 
 # Default paths
 _plat = platform.system()
@@ -146,7 +150,7 @@ RES_PATH = Path(_BASE_RES) / "resources"
 # uuids
 PROFILE_MHF_STEVE = "c06f89064c8a49119c29ea1dbd1aab82"
 STEVE_SKIN_URL = ("http://textures.minecraft.net/texture/d5c4ee5ce20aed9e33e866c66"
-              "caa37178606234b3721084bf01d13320fb2eb3f")
+                  "caa37178606234b3721084bf01d13320fb2eb3f")
 
 # UI stuff
 CHECKMARK_DELAY = 1500 # milliseconds

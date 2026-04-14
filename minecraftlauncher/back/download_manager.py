@@ -144,7 +144,7 @@ def _bulk_set_sleep(new_time:float):
     global _global_bulk_sleep_time
     _global_bulk_sleep_time = new_time
 
-class BulkDownloadSingleFile:
+class BulkDownloadSingleFile(QRunnable):
     _url:str
     """File download URL"""
     _path:Path
@@ -157,7 +157,9 @@ class BulkDownloadSingleFile:
 
     log = log.getChild("BulkDownloadSingleFile")
     def __init__(self, url:str, path:Path|str, hash:str|None=None,
-                 override:bool=False, mkdir:bool=True, lzma:bool=False):
+                 override:bool=False, mkdir:bool=True, lzma:bool=False,
+                 callback_f:Callable[[int], None]|None=None,
+                 callback_s:Callable|None=None, check_hash:bool=True):
         """
         Class for a single file to download in a bulk.
         
@@ -167,7 +169,12 @@ class BulkDownloadSingleFile:
         If the parent folder doesn't exist yet, and `mkdir` is `True`,
         the folder will be created upon class init. Otherwise, `__init__()`
         will raise `FileNotFoundError`.
+
+        If `check_hash` is `True`, the file hash will be checked before
+        attempting to download it; otherwise the hash will only be checked
+        after the file has been downloaded and written to disk.
         """
+        super().__init__()
         self._url = url
         if isinstance(path, Path):
             self._path = path
@@ -183,6 +190,9 @@ class BulkDownloadSingleFile:
         self._hash = hash
         self._override = override
         self._lzma = lzma
+        self._cb_f = callback_f
+        self._cb_s = callback_s
+        self._check_hash = check_hash
             
     def _check_sha1(self):
         assert self._hash
@@ -195,8 +205,14 @@ class BulkDownloadSingleFile:
                 return False
         return True
     
+    def run(self):
+        if _threads_quit:
+            self.log.debug("Quitting thread early")
+            return
+        self.download()
+    
     def download(self):
-        if self._path.exists() and self._path.is_file():
+        if self._check_hash and self._path.exists() and self._path.is_file():
             if self._check_sha1():
                 return 0
             self.log.debug("File exists but SHA1 doesn't match, deleting.")
@@ -234,6 +250,11 @@ class BulkDownloadSingleFile:
         if not resp:
             raise RuntimeError("Failed to download file from '%s' to '%s'"
                                % (self._url, str(self._path)))
+        else:
+            if self._cb_f:
+                self._cb_f(1)
+            if self._cb_s:
+                self._cb_s()
         return 1
         
 
