@@ -20,12 +20,11 @@ from .account_page import AccountPage
 from .account_select import AccountSelect
 from .utilities_page import UtilitiesPage
 
-log = logging.getLogger(__name__)
-
 class MainWindow(QMainWindow):
     """Primary application window"""
 
     login_requested = Signal()
+    status_update = Signal(str)
 
     NAV_ITEMS = [
         ("Home", "home"),
@@ -168,7 +167,7 @@ class MainWindow(QMainWindow):
             self.settings_page
         ]
 
-        self.utilities_page.fabric_installed.connect(
+        self.utilities_page.modloader_installed.connect(
             self.profiles_page.refresh_version_combo
         )
 
@@ -204,8 +203,3 @@ class MainWindow(QMainWindow):
     
     def set_status(self, message:str):
         self.status.showMessage(message)
-
-    def show(self) -> None:
-        if config.maximized:
-            return self.showMaximized()
-        return super().show()

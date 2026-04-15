@@ -2,7 +2,7 @@
 Common functions for downloading files.
 """
 from pathlib import Path
-from typing import Literal, Callable
+from typing import Literal, Callable, TypeVar, overload, Iterable
 from datetime import timedelta, datetime
 import logging
 import hashlib
@@ -13,9 +13,10 @@ import requests
 from PySide6.QtCore import QThread, QThreadPool, QRunnable
 
 log = logging.getLogger(__name__)
+T = TypeVar("T")
 
-def _download(url:str, max_retries:int, timeout:int, _retries:int=0, *,
-              hash:str|None=None):
+def _download(url: str, max_retries: int, timeout: int, _retries: int = 0, *,
+              hash: str | None = None) -> requests.Response:
     try:
         resp = requests.get(url, timeout=timeout)
         resp.raise_for_status()
@@ -27,26 +28,22 @@ def _download(url:str, max_retries:int, timeout:int, _retries:int=0, *,
         else:
             log.warning("Downloading '%s' failed. Retrying for %d/%d"
                         % (url, _retries + 1, max_retries))
-            time.sleep(1)
+            time.sleep(0.2)
             # return the same exact thing but bump _retries by 1
             return _download(url, max_retries, timeout, _retries + 1,
                              hash=hash)
     else:
-        if (isinstance(hash, str)
-            and hashlib.sha1(resp.content).hexdigest() == hash):
-            return resp
-        elif isinstance(hash, str):
-            # checking again because that'd mean the first "if" failed, but
-            # if we go to this and we actually have a hash, that means it
-            # didn't match the expected hash since that was the second
-            # part of the initial if statement
-            log.warning("Download '%s' gave an unexpected hash!\
-                        Retrying for %d/%d" % (url, _retries + 1, max_retries))
-            time.sleep(1)
-            return _download(url, max_retries, timeout, _retries + 1,
-                             hash=hash)
+        if isinstance(hash, str):
+            if hashlib.sha1(resp.content).hexdigest() == hash:
+                return resp
+            else:
+                log.warning("Download from '%s' gave an unexpected hash! "
+                            "Retrying for %d/%d"
+                            % (url, _retries + 1, max_retries))
+                time.sleep(0.2)
+                return _download(url, max_retries, timeout, _retries + 1,
+                                hash=hash)
         else:
-            # we just didn't have a hash lol!!!
             return resp
 
 def download(url:str, max_retries:int=2, timeout:int=30, *,
@@ -85,7 +82,8 @@ def _check_file_size(path:str|Path, size:int):
         return False
     return path.stat().st_size == size
 
-def file_exists_or_age(path:str|Path, max_age:float|int|timedelta=86400.0):
+def file_exists_or_age(
+        path: str | Path, max_age: float | int | timedelta = 86400.0):
     """
     Return `True` if the file exists and is under the age specified in
     `max_age` (seconds).
@@ -101,12 +99,12 @@ def file_exists_or_age(path:str|Path, max_age:float|int|timedelta=86400.0):
     real_max_age:float = (datetime.now() - max_age).timestamp()
     return path.stat().st_mtime > real_max_age
 
-def should_download_file(path:str|Path, *,
-                         hash:str|None=None, size:int|None=None,
-                         hash_type:Literal['sha1', 'sha256']="sha1"):
+def should_download_file(
+        path: str | Path, *, hash: str | None = None, size: int | None = None,
+        hash_type: Literal['sha1', 'sha256'] = "sha1"):
     """
     Checks if a file should be downloaded based on either existance, hash,
-    size, or all of the above.
+    size, or some/all of the above.
 
     **WARNING:** SHA-256 not implemented yet.
     """
@@ -132,34 +130,33 @@ def should_download_file(path:str|Path, *,
         size_match = True
     return not bool(hash_match and size_match)
 
-_threads_quit = False
+def filter_downloads(
+    downloads: list[T], filters: Iterable[Callable[[list[T]], list[T]]]
+    ):
+    for filter in filters:
+        downloads = filter(downloads)
+    return downloads
 
-def kill_threads():
-    global _threads_quit
-    _threads_quit = True
+class RunnableDownloader(QRunnable):
+    threads_quit = False
+    sleep_time = 0.0
 
-_global_bulk_sleep_time = 0.0
-
-def _bulk_set_sleep(new_time:float):
-    global _global_bulk_sleep_time
-    _global_bulk_sleep_time = new_time
-
-class BulkDownloadSingleFile(QRunnable):
-    _url:str
+    _url: str
     """File download URL"""
-    _path:Path
+    _path: Path
     """File final location"""
-    _hash:str|None
+    _hash: str | None
     """File hash to check against"""
-    _override:bool
+    _override: bool
     """Should we override the file? (default: `False`)"""
-    _lzma:bool
+    _lzma: bool
 
     log = log.getChild("BulkDownloadSingleFile")
-    def __init__(self, url:str, path:Path|str, hash:str|None=None,
-                 override:bool=False, mkdir:bool=True, lzma:bool=False,
-                 callback_f:Callable[[int], None]|None=None,
-                 callback_s:Callable|None=None, check_hash:bool=True):
+    def __init__(
+            self, url: str, path: Path | str, hash: str | None = None,
+            override: bool = False, mkdir: bool = True, lzma: bool = False,
+            callback_f: Callable[[int], None] | None = None,
+            check_hash: bool = True):
         """
         Class for a single file to download in a bulk.
         
@@ -191,22 +188,23 @@ class BulkDownloadSingleFile(QRunnable):
         self._override = override
         self._lzma = lzma
         self._cb_f = callback_f
-        self._cb_s = callback_s
         self._check_hash = check_hash
             
     def _check_sha1(self):
-        assert self._hash
+        if not self._hash:
+            self.log.warning("Called SHA check function without a present SHA")
+            return True
         return _check_file_sha1(self._path, self._hash)
     
     @property
     def needs_download(self) -> bool:
-        if self._path.exists() and self._path.is_file():
+        if self._hash and self._path.exists() and self._path.is_file():
             if self._check_sha1():
                 return False
         return True
     
     def run(self):
-        if _threads_quit:
+        if self.threads_quit:
             self.log.debug("Quitting thread early")
             return
         self.download()
@@ -227,10 +225,10 @@ class BulkDownloadSingleFile(QRunnable):
                 self.log.error("Failed to get file from '%s': %s"
                                % (self._url, str(err)))
                 time.sleep(1)
-                _bulk_set_sleep(2)
+                self.sleep_time = 2
                 continue
             else:
-                _bulk_set_sleep(0.0)
+                self.sleep_time = 0
                 if self._lzma:
                     content = lzma.decompress(resp.content)
                 else:
@@ -253,72 +251,8 @@ class BulkDownloadSingleFile(QRunnable):
         else:
             if self._cb_f:
                 self._cb_f(1)
-            if self._cb_s:
-                self._cb_s()
         return 1
-        
-
-class BulkDownloadWorker(QRunnable):
-    log = log.getChild("BulkDownloadWorker")
-
-    def __init__(self, downloads:list[BulkDownloadSingleFile],
-                 first_callback:Callable[[int], None]|None=None,
-                 second_callback:Callable|None=None):
-        """
-        QThreadPool worker for bulk downloads. Don't call this directly.
-        Use `auto_split()` instead and start each one in the resulting list.
-        """
-        super().__init__()
-        self._download_list = downloads
-        self._fcallback = first_callback
-        self._scallback = second_callback
-        self._download_total = 0
-
-    def run(self):
-        total = len(self._download_list)
-        downloaded = 0
-        processed = 0
-        self.log.info("Starting bulk download.")
-        for download in self._download_list:
-            if _threads_quit:
-                self.log.info("Shutting down thread early.")
-                return
-            download_increase = download.download()
-            downloaded += download_increase
-            processed += 0
-            if self._fcallback:
-                self._fcallback(1)
-            if self._scallback:
-                self._scallback()
-            if download_increase > 0:
-                time.sleep(_global_bulk_sleep_time)
-                
-        self.log.info("Done. Downloaded %d new files out of %d."
-                      % (downloaded, total))
-        self._download_total = downloaded
     
     @classmethod
-    def auto_split(cls, downloads:list[BulkDownloadSingleFile],
-                   first_callback:Callable[[int], None]|None=None,
-                   second_callback:Callable|None=None):
-        master_list:list[BulkDownloadWorker] = []
-        current_list:list[BulkDownloadSingleFile] = []
-        max_per_wrkr = len(downloads) // 12
-        cls.log.debug("max per worker: %d" % max_per_wrkr)
-        for download in downloads:
-            if len(current_list) >= max_per_wrkr:
-                master_list.append(cls(
-                    [*current_list],
-                    first_callback,
-                    second_callback
-                ))
-                del current_list
-                current_list = []
-            current_list.append(download)
-        if len(current_list) > 0:
-            master_list.append(cls(
-                current_list,
-                first_callback,
-                second_callback
-            ))
-        return master_list
+    def kill_all(cls):
+        cls.threads_quit = True

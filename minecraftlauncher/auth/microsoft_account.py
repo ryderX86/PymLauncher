@@ -76,9 +76,8 @@ class MicrosoftAccount:
 
     @property
     def expires_in(self) -> float:
-        return ((self.acquired_at + self._expires_in)
-                -
-                datetime.now().timestamp()) or 0.0
+        return (
+            (self.acquired_at + self._expires_in) - datetime.now().timestamp())
     
     @expires_in.setter
     def expires_in(self, new_val:int):
@@ -115,7 +114,7 @@ class MicrosoftAccount:
     
     @property
     def is_active(self):
-        return self.expires_in > 20
+        return self.expires_in > 20.0
     
     def original_token(self):
         """

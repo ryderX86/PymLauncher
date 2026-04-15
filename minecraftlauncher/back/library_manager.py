@@ -25,8 +25,8 @@ from minecraftlauncher.constants import (
     OS_VER,
     LIBRARIES_URL
 )
-from .download_manager import (
-    download, should_download_file, _check_file_sha1, BulkDownloadSingleFile
+from .download_helpers import (
+    download, should_download_file, _check_file_sha1, RunnableDownloader
 )
 
 log = logging.getLogger(__name__)
@@ -177,7 +177,9 @@ def _get_lib_filepath(library:dict):
 
 def parse_lib_path(url:str, name:str):
     """Returns a tuple of `("<lib url>", "<lib fp>")`"""
-    if (not url) or (not name):
+    if not url:
+        url = "https://libraries.minecraft.net/"
+    if not name:
         return ("", "")
     if url.endswith("/"):
         url = url[:-1]
@@ -311,7 +313,7 @@ def download_libraries_threaded(libraries:list[dict], *,
 
         if url and path:
             destination = Path(LIBRARIES_BASE, *path.split("/"))
-            download_list.append(BulkDownloadSingleFile(
+            download_list.append(RunnableDownloader(
                 url, destination, sha1 or None, callback_f=passed_callback
             ))
 
@@ -331,15 +333,21 @@ def _get_natives_classifier(lib:dict) -> str|None:
     Handles both `downloads.classifiers` and `natives` styles.
     """
     natives_map:dict = lib.get("natives", {})
-    if not natives_map:
-        return None
-    
-    classifier = natives_map.get(OS)
-    if not classifier:
-        return None
-    
     arch_bits = "64" if ARCH in ("x86_64", "arm64") else "32"
-    return classifier.replace("${arch}", arch_bits)
+    if natives_map:
+        classifier = natives_map.get(OS)
+        if classifier:
+            return classifier.replace("${arch}", arch_bits)
+    classifiers = lib.get("downloads", {}).get("classifiers", {})
+    if not classifiers:
+        return None
+    classifiers_keys = [*classifiers.keys()]
+    if f"natives-{OS}" in classifiers_keys:
+        return f"natives-{OS}"
+    elif f"natives-{OS}-{arch_bits}" in classifiers_keys:
+        return f"natives-{OS}-{arch_bits}"
+    else:
+        return None
 
 def download_natives(libraries: list[dict]):
     """Download native libs for platform."""
@@ -438,13 +446,26 @@ def build_classpath(libraries:list[dict], client_jar_path:str|Path):
                     log.warning("Skipping duplicate library: '%s'"
                                 % lib.get("name", "--Unknown Library--"))
                     continue
+        classifiers:dict = lib.get("downloads", {}).get("classifiers", {})
+        if classifiers:
+            native_name = _get_natives_classifier(lib)
+            native_info = classifiers.get(native_name, {})
+            if native_info:
+                path = native_info.get("path", "")
+                name = native_info.get("name", "")
+                if path:
+                    jar = Path(LIBRARIES_BASE, *path.split("/"))
+                    if jar.exists() and jar.is_file():
+                        entries.append(str(jar))
+                        continue
         url, path = parse_lib_path(lib.get("url", ""), lib.get("name", ""))
         jar = Path(LIBRARIES_BASE, *path.split("/"))
         if jar.exists() and jar.is_file():
             entries.append(str(jar))
         else:
-            log.warning("Couldn't find library '%s', skipping"
-                        % lib.get("name", "--Unknown Library--"))
+            log.warning("Couldn't find library '%s', skipping... "
+                        "(tried path '%s')"
+                        % (lib.get("name", "unidentified"), str(jar)))
     
     entries.append(client_jar_path)
     cp_string = CLASSPATH_SEPARATOR.join(entries)

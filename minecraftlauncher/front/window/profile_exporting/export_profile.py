@@ -77,9 +77,9 @@ class ExportProfileDialog(QDialog):
     def _build_ui(self):
         self._layout = QVBoxLayout(self)
         
-        fmt_sel = QComboBox()
-        fmt_sel.addItem("Vanilla", "zip_fmt")
-        self._layout.addWidget(fmt_sel)
+        self.fmt_sel = QComboBox()
+        self.fmt_sel.addItem("Vanilla", "default")
+        self._layout.addWidget(self.fmt_sel)
 
         output_w = QWidget()
         output_w.setContentsMargins(0, 0, 0, 0)
@@ -207,7 +207,8 @@ class ExportProfileDialog(QDialog):
             )
             if overwrite != QMessageBox.StandardButton.Yes:
                 return
-        self.profile.export(self._destination, **self._includes)
+        self.profile.export(
+            self.fmt_sel.currentData(), self._destination, **self._includes)
         self.accept()
 
     def _browse_dest(self):

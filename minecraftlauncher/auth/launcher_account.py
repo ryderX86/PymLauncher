@@ -7,16 +7,16 @@ import logging
 import requests
 import requests.exceptions
 
-from minecraftlauncher.datatypes.MicrosoftAccount import MicrosoftAccount
-from minecraftlauncher.datatypes.XboxToken import XboxToken
-from minecraftlauncher.datatypes.XstsToken import XstsToken
-from minecraftlauncher.datatypes.MinecraftToken import MinecraftToken
-from minecraftlauncher.datatypes.MinecraftProfile import MinecraftProfile
+from minecraftlauncher.auth.microsoft_account import MicrosoftAccount
+from minecraftlauncher.auth.xbox_token import XboxToken
+from minecraftlauncher.auth.xsts_token import XstsToken
+from minecraftlauncher.auth.minecraft_token import MinecraftToken
+from minecraftlauncher.auth.minecraft_profile import MinecraftProfile
 from minecraftlauncher import constants
 
 log = logging.getLogger(__name__)
 
-class LauncherProfile:
+class LauncherAccount:
     msa: MicrosoftAccount
     xbox: XboxToken|None
     token: MinecraftToken|None
@@ -79,8 +79,9 @@ class LauncherProfile:
             self.demo_mode = self.token.owns_game
 
     def refresh(self):
-        if self.token:
-            return False
+        if self.token and self.token.is_active and self.msa.is_active:
+            log.debug("Skipping refresh since we don't need it")
+            return True
         if not self.msa_valid:
             success = self.msa.refresh()
             if not success:

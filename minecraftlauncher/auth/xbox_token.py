@@ -8,23 +8,21 @@ import requests
 import requests.exceptions
 
 from minecraftlauncher.datatypes.JWT import JWT, decode_jwt
-from minecraftlauncher.datatypes.MicrosoftAccount import MicrosoftAccount
-from minecraftlauncher.datatypes.XboxToken import XboxToken
+from minecraftlauncher.auth.microsoft_account import MicrosoftAccount
 from minecraftlauncher.constants import (AZURE_CLIENT_ID, AZURE_SCOPE,
-                                         XSTS_AUTH_URL, MSA_REFRESH_URL)
+                                         XBOX_AUTH_URL, MSA_REFRESH_URL)
 from minecraftlauncher import constants
-from minecraftlauncher.exceptions.datatypes import XstsAuthError
 
 log = logging.getLogger(__name__)
 
-class XstsToken:
+class XboxToken:
     json:dict
     """
-    Full JSON Xbox Live XSTS token
+    Full JSON Xbox Live token
     """
     token:str
     """
-    Xbox Live XSTS token (not the raw JSON, use `.as_json()` or `.json` for that)
+    Xbox Live token (not the raw JSON, use `.as_json()` or `.json` for that)
     """
     def __init__(self, xbl_token:dict):
         if type(xbl_token) is str:
@@ -40,37 +38,37 @@ class XstsToken:
                            .fromisoformat(xbl_token["NotAfter"])
                            .timestamp())
         """
-        Unix timestamp version of `NotAfter` in the XSTS token
+        Unix timestamp version of `NotAfter` in the XBL token
         """
         self.acquired_at = (datetime
                             .fromisoformat(xbl_token["IssueInstant"])
                             .timestamp())
         """
-        Unix timestamp version of `IssueInstant` in the XSTS token
+        Unix timestamp version of `IssueInstant` in the XBL token
         """
 
     @classmethod
-    def auth(cls, xbl_token:XboxToken):
-        if xbl_token.expires_in < 20:
-            raise ValueError("Xbox Live token expired alredy!")
+    def auth(cls, msa:MicrosoftAccount):
+        if msa.expires_in < 20:
+            msa.refresh()
 
         payload = {
             "Properties": {
-                "SandboxId": "RETAIL",
-                "UserTokens": [
-                    xbl_token.token
-                ]
+                "AuthMethod": "RPS",
+                "SiteName": "user.auth.xboxlive.com",
+                "RpsTicket": "d=%s" % msa.access_token
             },
-            "RelyingParty": "rp://api.minecraftservices.com/",
+            "RelyingParty": "http://auth.xboxlive.com",
             "TokenType": "JWT"
         }
+        
 
         connection_attempts = 0
         response = None
         while connection_attempts < 3:
             connection_attempts += 1
             try:
-                response = requests.post(XSTS_AUTH_URL, json=payload)
+                response = requests.post(XBOX_AUTH_URL, json=payload)
                 response.raise_for_status()
                 break
             except (requests.exceptions.ConnectionError,
@@ -85,14 +83,9 @@ class XstsToken:
                 log.info("Waiting 5 seconds before next attempt...")
                 time.sleep(5)
             except requests.HTTPError as exc:
-                if exc.errno == 401:
-                    if response is None:
-                        raise TypeError("Response was given but is still none?")
-                    raise XstsAuthError(response.json())
-                else:
-                    log.error("Failed to refresh MSA token; response code %s"
+                log.error("Failed to refresh MSA token; response code %s"
                           % exc.errno)
-                    return False
+                return False
             # TODO: remove this when verified that the loop won't
             # infinitely continue
             if connection_attempts < 4:

@@ -18,7 +18,7 @@ from PySide6.QtCore import (
 )
 from PySide6.QtGui import (
     QGuiApplication, QValidator, QIcon, QPixmap, QAction, QContextMenuEvent,
-    QMouseEvent, QSinglePointEvent, QPixelFormat
+    QMouseEvent, QSinglePointEvent, QPixelFormat, QShortcut, QKeySequence
 )
 from PySide6.QtWidgets import (
     QComboBox, QFileDialog, QFormLayout, QFrame, QHBoxLayout, QLabel,
@@ -65,17 +65,21 @@ screen = QGuiApplication.primaryScreen()
 
 MapIndex = ProfileModel.MapIndex
 
-class ProfileVersionTextValidator(QValidator):
+class VersionTextValidator(QValidator):
+    log = log.getChild("VersionTextValidator")
+
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.ver_list = version_manager.get_version_list()
+        self.ver_list = []
 
-    def _refresh_versions(self):
+    def load(self):
         self.ver_list = version_manager.get_version_list()
     
-    def validate(self, a0:str|None,
+    def validate(self, a0:str,
                  a1:int) -> tuple[QValidator.State, str, int]:
         ver_ids = [v.id for v in self.ver_list]
+        if not ver_ids:
+            return self.State.Intermediate, a0, a1
         if not a0:
             return self.State.Intermediate, ver_ids[0], 0
         if a0 in ["latest-release", "latest-snapshot"]:
@@ -161,6 +165,7 @@ class VersionJsonBackgroundDownloader(QThread):
 
 class ProfilesPage(QWidget):
     """Profile page"""
+    status_update = Signal(str)
     def __init__(self, parent=None):
         super().__init__(parent)
         self.log = log.getChild("ProfilesPage")
@@ -175,7 +180,20 @@ class ProfilesPage(QWidget):
         self._dirty = False
         self._loaded = False
         self._build_ui()
+        if constants.OS != "osx":
+            key_seq = QKeySequence(
+                Qt.Modifier.CTRL | Qt.Key.Key_S) # type: ignore
+        else:
+            key_seq = QKeySequence(
+                Qt.Modifier.META | Qt.Key.Key_S) # type: ignore
+        shortcut = QShortcut(key_seq, self)
+        shortcut.activated.connect(self._ctrl_s)
+        shortcut.setContext(Qt.ShortcutContext.WindowShortcut)
         self._bg_worker:VersionJsonBackgroundDownloader|None=None
+
+    def _ctrl_s(self):
+        if self.save_button.isEnabled():
+            self._save()
 
     @property
     def _selected_uuid(self):
@@ -330,7 +348,7 @@ class ProfilesPage(QWidget):
         version_view = self.version_combo.view()
         assert version_view
         version_view.setAutoScroll(False)
-        self._version_id_validator = ProfileVersionTextValidator()
+        self._version_id_validator = VersionTextValidator()
         self.version_combo.setValidator(self._version_id_validator)
         self.version_combo.currentIndexChanged.connect(self._dirty_check)
         self.version_combo.currentIndexChanged.connect(self._args_changer)
@@ -345,7 +363,6 @@ class ProfilesPage(QWidget):
         version_row.addWidget(self.version_combo, 1)
         version_row.addWidget(refresh_versions_button)
         self.form.addRow("Version:", version_row)
-        self.populate_version_combo()
         
         game_dir_row = QHBoxLayout()
         self.game_dir_input = QLineEdit()
@@ -477,17 +494,35 @@ class ProfilesPage(QWidget):
         self.res_combo_box.clear()
         resolution_list = [str(w) + "x" + str(h)
                            for w, h in COMMON_RESOLUTIONS]
-        resolution_list.insert(0, "Auto")
+        screen = self.screen()
+        geo = screen.geometry()
         if screen:
-            size = screen.size()
-            sw, sh = size.width(), size.height()
-            for frac in [1.0, .75, .5, .25]:
+            sw, sh = geo.width(), geo.height()
+            for frac in [1.0, .8, .75, .6, .5, .25]:
                 w = int(sw * frac)
                 h = int(sh * frac)
                 res = f"{w}x{h}"
                 if res not in resolution_list:
                     self.log.debug("Adding resolution %s to list" % res)
                     resolution_list.append(res)
+            new_res_list = []
+            for res in resolution_list:
+                xy = res.split("x")
+                x = int(xy[0])
+                y = int(xy[1])
+                if x > geo.width() or y > geo.height():
+                    continue
+                new_res_list.append(res)
+            resolution_list = new_res_list
+
+        def sort(resolution:str):
+            xy = resolution.split("x")
+            if len(xy) < 2:
+                return 0
+            return int(xy[0])
+        
+        resolution_list.sort(key=sort)
+        resolution_list.insert(0, "Auto")
         self.res_combo_box.addItems(resolution_list)
         self.res_combo_box.validator().set_resolutions( # type: ignore
             resolution_list
@@ -722,7 +757,9 @@ class ProfilesPage(QWidget):
                 self.mods_folder_input.setText(folder)
 
     def _load(self):
-        profile_manager.profiles = load_launcher_profiles()
+        self._version_id_validator.load()
+        self.populate_version_combo()
+        load_launcher_profiles()
         # for name, icon in resources.get_all_default_icons().items():
         #     self.icon_menu.addItem(icon, name, name)
 
@@ -733,7 +770,7 @@ class ProfilesPage(QWidget):
         self.version_combo.clear()
         self.version_combo.addItems(["latest-release", "latest-snapshot"])
         game_versions = version_manager.get_version_list(override=True)
-        self._version_id_validator._refresh_versions()
+        self._version_id_validator.load()
         for ver in game_versions:
             id = ver.id
             ver_type = ver.type
@@ -771,7 +808,7 @@ class ProfilesPage(QWidget):
         # refresh game versions (just in case)
         # TODO: is this necessary?
         game_versions = version_manager.get_version_list()
-        self._version_id_validator._refresh_versions()
+        self._version_id_validator.load()
         for ver in game_versions:
             id = ver.id
             ver_type = ver.type
@@ -926,14 +963,6 @@ class ProfilesPage(QWidget):
             profile_manager.delete_single_profile(profile)
             del profile
 
-    def get_selected_profile(self) -> GameProfile:
-        prof = profile_manager.get_current_profile()
-        if not prof:
-            raise Exception(
-                "Tried to get current profile before profiles were loaded."
-            )
-        return prof
-
     @property
     def current_jvm_args(self):
         return self.jvm_args_input.text()
@@ -945,7 +974,7 @@ class ProfilesPage(QWidget):
         else:
             version_id = version_id
         self._bg_worker = VersionJsonBackgroundDownloader(
-            version_id, self.get_selected_profile()
+            version_id, prof
         )
 
         def set_args_final(args:str):
@@ -1077,7 +1106,7 @@ class ProfilesPage(QWidget):
             export_prof.triggered.connect(
                 lambda c: ExportProfileDialog.deploy(prof, self)
             )
-        # menu.addAction(export_prof)
+        menu.addAction(export_prof)
 
         delete_profile = QWidgetAction(menu)
         delete_profile.setIcon(resources.symbol("trash"))

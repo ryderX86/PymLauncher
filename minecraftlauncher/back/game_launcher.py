@@ -218,12 +218,13 @@ def build_launch_command(version_json:dict, player_name:str, player_uuid:str,
         raise ValueError("'version_json' missing expected value for 'assets'"
                          " or 'assetsIndex'")
     
-    if game_dir and not os.path.isdir(game_dir):
-        try:
-            Path(game_dir).resolve().mkdir(parents=True, exist_ok=True)
-        except Exception as err:
-            raise ValueError("'game_dir' value '%s' is an invalid path"
-                             % game_dir) from err
+    if game_dir:
+        if not os.path.isdir(game_dir):
+            try:
+                Path(game_dir).resolve().mkdir(parents=True, exist_ok=True)
+            except Exception as err:
+                raise ValueError("'game_dir' value '%s' is an invalid path"
+                                % game_dir) from err
     else:
         game_dir = str(MINECRAFT_DIR)
 

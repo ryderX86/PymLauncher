@@ -23,6 +23,7 @@ class SettingsPage(QWidget):
     """Settings page (STUB)"""
 
     settings_changed = Signal()
+    status_update = Signal(str)
     def __init__(self, parent=None):
         super().__init__(parent)
         layout = QVBoxLayout(self)
@@ -39,7 +40,7 @@ class SettingsPage(QWidget):
 
         post_launch_w = QWidget()
         post_launch_lo = QHBoxLayout(post_launch_w)
-        post_launch_lo.setContentsMargins(0, 0, 0, 0)
+        post_launch_lo.setContentsMargins(0, 0, 4, 0)
         tooltip = TooltipHint(
             "How you want the launcher to behave after the game opens.\n\n"
             "\"Close launcher completely\" may increase system resources "
@@ -47,14 +48,23 @@ class SettingsPage(QWidget):
             "will be completely unable to detect crashes and automatically "
             "show you logs."
         )
-        post_launch_lo.addWidget(tooltip)
         post_launch_l = QLabel("After Minecraft opens:")
         post_launch_lo.addWidget(post_launch_l)
         self.post_launch_options = QComboBox()
+        self.post_launch_options.setProperty("compact", True)
         post_launch_lo.addWidget(self.post_launch_options)
+        post_launch_lo.addWidget(tooltip)
         post_launch_lo.addStretch()
         
         layout.addWidget(post_launch_w)
+
+        open_browser_for_login = QCheckBox("Open browser automatically for " \
+                                           "sign-in")
+        open_browser_for_login.setChecked(config.open_browser_for_login)
+        open_browser_for_login.checkStateChanged.connect(
+            lambda c: config.set(
+                "open_browser_for_login", c == Qt.CheckState.Checked))
+        layout.addWidget(open_browser_for_login)
 
         # Visual
         visual_label = QLabel("Visual")
@@ -72,15 +82,6 @@ class SettingsPage(QWidget):
         )
         layout.addWidget(tooltips_enabled)
 
-        open_browser_for_login = QCheckBox("Open browser automatically for " \
-                                           "sign-in")
-        open_browser_for_login.setChecked(config.open_browser_for_login)
-        open_browser_for_login.checkStateChanged.connect(
-            lambda c: config.set("open_browser_for_login",
-                                 c == Qt.CheckState.Checked)
-        )
-        layout.addWidget(open_browser_for_login)
-
         show_logs_w = QWidget()
         show_logs_w.setContentsMargins(0, 0, 0, 0)
         show_logs_lo = QHBoxLayout(show_logs_w)
@@ -93,9 +94,8 @@ class SettingsPage(QWidget):
         show_logs_check = QCheckBox("Show game logs on home page")
         # show_logs_check.setChecked(config.show_logs_on_home)
         show_logs_check.checkStateChanged.connect(
-            lambda c: config.set("show_logs_on_home",
-                                 c == Qt.CheckState.Checked)
-        )
+            lambda c: config.set(
+                "show_logs_on_home", c == Qt.CheckState.Checked))
         show_logs_lo.addWidget(show_logs_check)
         show_logs_lo.addWidget(show_logs_tt)
 
@@ -107,6 +107,10 @@ class SettingsPage(QWidget):
         buttons_lo = QHBoxLayout(buttons_w)
         buttons_lo.addStretch()
 
+        open_dir_btn = QPushButton("Open Data Folder")
+        open_dir_btn.clicked.connect(self._open_data_folder)
+        buttons_lo.addWidget(open_dir_btn)
+
         open_config_btn = QPushButton("Edit Config File")
         open_config_btn.clicked.connect(self._open_settings_file)
         open_config_btn.setToolTip("<i>Requires restart</i>")
@@ -117,8 +121,12 @@ class SettingsPage(QWidget):
     def _open_settings_file(self):
         log.debug("Opened launcher settings file with default app")
         QDesktopServices.openUrl(
-            QUrl.fromLocalFile(constants.LAUNCHER_CONFIG_FILE)
-        )
+            QUrl.fromLocalFile(constants.LAUNCHER_CONFIG_FILE))
+
+    def _open_data_folder(self):
+        log.debug("Opened data folder with file explorer")
+        QDesktopServices.openUrl(
+            QUrl.fromLocalFile(constants.LAUNCHER_DATA_DIR))
 
     def build(self):
         self.post_launch_options.addItem(

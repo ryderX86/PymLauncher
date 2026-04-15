@@ -1,4 +1,5 @@
 from pathlib import Path
+from logging.handlers import MemoryHandler
 import logging
 import sys
 import os
@@ -10,7 +11,7 @@ from PySide6.QtWidgets import QApplication
 
 # pyinstaller uses sys.frozen to indicate if we're running compiled or not,
 # doesn't exist in python normally
-DEV = bool(getattr(sys, 'frozen', False) == False)
+DEV = bool(getattr(sys, '__compiled__', False) == False)
 
 # pyinstaller workaround for windows, since logging uses stdout at times:
 if sys.stdout is None:
@@ -25,14 +26,17 @@ class _LoggingFormatter(logging.Formatter):
         record.name = record.name.replace("minecraftlauncher.", "")
         return super().format(record)
 root_logger = logging.getLogger()
+FORMATTER = _LoggingFormatter(
+    "[%(levelname)s] %(name)s: %(message)s")
+MEMORY_HANDLER = MemoryHandler(capacity=1000, flushLevel=logging.DEBUG)
 if DEV:
     logging.basicConfig(level=logging.DEBUG)
-    root_logger.handlers[0].setFormatter(_LoggingFormatter(
-        "[%(levelname)s] %(name)s: %(message)s"
-    ))
+    root_logger.handlers[0].setFormatter(FORMATTER)
     logging.info("Not running frozen, dev mode active")
     _urllib_logger = logging.getLogger("urllib3")
     _urllib_logger.setLevel(logging.CRITICAL)
+else:
+    root_logger.addHandler(MEMORY_HANDLER)
 
 _Q_LOGGER = logging.getLogger("Qt")
 _Q_LOGGER.setLevel(logging.DEBUG)

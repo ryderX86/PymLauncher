@@ -23,7 +23,7 @@ from minecraftlauncher.back import (version_manager, asset_manager,
                                     account_manager)
 from minecraftlauncher.exceptions.datatypes import InvalidVersionIdError
 from minecraftlauncher.constants import MINECRAFT_DIR, offline_mode
-from minecraftlauncher.datatypes.LauncherProfile import LauncherProfile
+from minecraftlauncher.auth import LauncherAccount
 from minecraftlauncher.front import styles, resources
 from minecraftlauncher.front.qt.models import ProfileSelectionModel
 
@@ -32,7 +32,8 @@ log = logging.getLogger(__name__)
 class LaunchWorker(QThread):
     """Background worker for downloading game files and launching."""
 
-    progress = Signal(str, int, int) # step label, current, total
+    progress = Signal(
+        str, float, float, bool) # step label, current, total, is mb
     finished = Signal(bool, str) # successful, message
     status = Signal(str) # status text
     game_closed = Signal(str, str)
@@ -45,7 +46,7 @@ class LaunchWorker(QThread):
     log = log.getChild("LaunchWorker")
 
     def __init__(self, version_id:str, profile_data:GameProfile,
-                 auth_info:LauncherProfile, parent=None):
+                 auth_info:LauncherAccount, parent=None):
         super().__init__(parent)
         self.version_id = version_id
         self.profile_data = profile_data
@@ -66,9 +67,7 @@ class LaunchWorker(QThread):
         jar_path = version_manager.download_client_jar(
             version_json,
             progress_callback=lambda c, t: self.progress.emit(
-                f"{self.version_id}.jar", c, t
-            )
-        )
+                f"{self.version_id}.jar", c/1_000_000, t/1_000_000, True))
 
         # self.status.emit("Checking for assets...")
         # asset_index = asset_manager.filter_assets_downloads(
@@ -81,9 +80,7 @@ class LaunchWorker(QThread):
         asset_manager.download_assets_threaded(
             asset_manager.fetch_asset_index(version_json),
             progress_callback=lambda c, t: self.progress.emit(
-                "Downloading assets", c, t
-            )
-        )
+                "Downloading assets", c, t, False))
         
         self.status.emit("Checking log4j config file...")
         log4j_config = asset_manager.check_or_download_logging_config(
@@ -95,9 +92,7 @@ class LaunchWorker(QThread):
         library_manager.download_libraries_threaded(
             libs,
             progress_callback=lambda c, t: self.progress.emit(
-                "Downloading libraries", c, t
-            )
-        )
+                "Downloading libraries", c, t, False))
         library_manager.download_natives(libs)
         natives_dir = MINECRAFT_DIR / "bin" / self.version_id
         natives_dir = library_manager.extract_natives(libs, natives_dir)
@@ -109,13 +104,14 @@ class LaunchWorker(QThread):
                 success = subprocess.run(
                     [profile_jre.replace("javaw", "java"), "-version"],
                     stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE
-                )
+                    stderr=subprocess.PIPE)
             except subprocess.CalledProcessError as err:
-                self.log.error("Java exited with code %d:\n%s"
-                               % (err.returncode, str(err.output)))
-                self.log.info("Aborting launch, and notifying user of invalid "
-                              "JRE location.")
+                self.log.error(
+                    "Java exited with code %d:\n%s"
+                    % (err.returncode, str(err.output)))
+                self.log.info(
+                    "Aborting launch, and notifying user of invalid "
+                    "JRE location.")
                 self.finished.emit(False, str(err.output))
                 return
             else:
@@ -128,7 +124,7 @@ class LaunchWorker(QThread):
                 java_exc = java_manager.install_java_version_threaded(
                     jre_name, jre_manifest,
                     progress_callback=lambda c, t: self.progress.emit(
-                        "Downloading Java", c, t
+                        "Downloading Java", c, t, False
                     )
                 )
             else:
@@ -195,7 +191,11 @@ class LaunchWorker(QThread):
         sub_logger = logging.getLogger(Path(cmd[0]).name)
         self._p = game_launcher.launch_game(cmd,
                                             cwd=self.profile_data.game_dir)
-        self.finished.emit(True, "Minecraft launched successfully.")
+        if self._p.poll() is None:
+            self.finished.emit(True, "Minecraft launched successfully.")
+        else:
+            self.log.warning("Game hasn't given a return code, did it launch?")
+            self.finished.emit(True, "Unknown status")
 
         # reverse this when reading:
         stdout_cache:list[str] = []
@@ -203,8 +203,7 @@ class LaunchWorker(QThread):
         if self._p.stdout:
             for line in iter(self._p.stdout.readline, ""):
                 sub_logger.debug(
-                    line[:-1] # skip newline
-                )
+                    line[:-1]) # skip newline
                 stdout_cache.insert(0, line[:-1])
 
                 # memory usage
@@ -232,6 +231,7 @@ class HomePage(QWidget):
     """
     game_open = Signal()
     game_closed = Signal(str)
+    status_update = Signal(str)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -336,10 +336,12 @@ class HomePage(QWidget):
         profile_action_row.addStretch()
 
         self.version_label = QLabel("Version: [unknown]")
-        self.version_label.setStyleSheet(
-            f"font-size: 13px; color: {styles.TEXT_SECONDARY};"
-        )
+        # self.version_label.setStyleSheet(
+        #     f"font-size: 13px; color: {styles.TEXT_SECONDARY};"
+        # )
+        self.version_label.setProperty("secondary", True)
         self.version_label.setContentsMargins(10,0,10,0)
+        self.version_label.setOpenExternalLinks(True)
         info_layout.addWidget(self.version_label)
 
         layout.addStretch()
@@ -442,8 +444,11 @@ class HomePage(QWidget):
             self.play_button.setDisabled(True)
             return
         if prof_exists:
+            if not offline_mode:
+                self.play_button.setText("Launch Game")
+            else:
+                self.play_button.setText("Launch Game (offline)")
             self.progress_label.setText("Ready to launch.")
-            self.play_button.setText("Launch Game")
             self.play_button.setDisabled(False)
         else:
             self.progress_label.setText("Ready to install.")
@@ -463,7 +468,7 @@ class HomePage(QWidget):
 
     def install_launch_game(self, version_id:str,
                             profile_data:GameProfile,
-                            auth_info:LauncherProfile):
+                            auth_info:LauncherAccount):
         """Start download/launch process in a background thread"""
         log.debug("Preparing to install/launch game...")
         self.progress_bar.setValue(0)
@@ -477,11 +482,15 @@ class HomePage(QWidget):
         log.debug("Starting background worker for install...")
         self._worker.start()
 
-    def _on_progress(self, label:str, current:int, total:int):
+    def _on_progress(self, label:str, current:float, total:float, use_mb:bool):
         if total > 0:
             progress = int(current/total*100)
             self.progress_bar.setValue(progress)
-            self.progress_label.setText(f"{label}: {current}/{total}")
+            if use_mb:
+                self.progress_label.setText(f"{label}: {current}MB/{total}MB")
+            else:
+                self.progress_label.setText(
+                    f"{label}: {int(current)}/{int(total)}")
     
     def _on_status(self, text:str):
         self.progress_label.setText(text)

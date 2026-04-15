@@ -1,5 +1,5 @@
 from pathlib import Path
-from enum import IntEnum
+from enum import IntEnum, StrEnum
 import json
 import os
 import zipfile
@@ -15,24 +15,11 @@ if args._exporting_debug:
 else:
     log.setLevel(logging.INFO)
 
-def recursive_add_dir(path:Path, stop_at:Path, zip:zipfile.ZipFile):
+def pack_file(path:Path, stop_at:Path, zip:zipfile.ZipFile):
     """
-    Recursively add directories to a ZIP file. Returns the final path of the
-    nested folders.
+    Add files deep into an archive without having to parse the directory every
+    single time.
     """
-    def try_make_folder(f:str):
-        if f in zip.namelist():
-            return False
-        try:
-            zip.mkdir(f)
-        except FileExistsError:
-            log.warning("Threw an error since folder exists! Ignoring...")
-            return False
-        except Exception as err:
-            err.add_note("ZIP file error for %s" % f)
-            raise
-        else:
-            return True
     if path.is_file():
         file = path.resolve()
         path = path.parent
@@ -43,28 +30,28 @@ def recursive_add_dir(path:Path, stop_at:Path, zip:zipfile.ZipFile):
     stop_at = stop_at.parent.resolve()
     if str(stop_at) not in str(path):
         raise ValueError("Paths must match at beginning!")
-    folders = str(path).replace(str(stop_at), "")
-    while folders.startswith(constants.OS_PATH_DELIM):
-        folders = folders[1:]
-    folder_list = folders.split(constants.OS_PATH_DELIM)
-    try_make_folder(folder_list[0])
-    last_folder = folder_list[0]
-    for folder in folder_list[1:]:
-        last_folder = last_folder + f"/{folder}"
-        try_make_folder(last_folder)
+    dest_dir = str(path).replace(str(stop_at), "")
+    while dest_dir.startswith(constants.OS_PATH_DELIM):
+        dest_dir = dest_dir[1:]
     if file:
         try:
-            zip.write(file, last_folder + "/" + file.name)
+            zip.write(file, dest_dir + "/" + file.name)
         except Exception as err:
             err.add_note("File at \"%s\" caused the above error." % str(file))
             raise
-    return folders
-    
+    return dest_dir
+
+class ExportType(StrEnum):
+    DEFAULT = "default"
+    MODRINTH = "modrinth"
 
 class PortableProfile:
     class PathType(IntEnum):
         DIR = 0
         FILE = 1
+
+    type ExportType = ExportType
+    
     def __init__(self, prof:GameProfile|str):
         match prof:
             case str():
@@ -163,10 +150,11 @@ class PortableProfile:
                     pathlist.append(path)
         return pathlist
     
-    def export(self, output:str|Path, mods:bool, options_txt:bool,
-               resource_packs:bool, saves:bool, screenshots:bool,
-               versions:bool, config:bool, coremods:bool, menuworlds:bool,
-               debug_profile:bool):
+    def export_default(
+            self, output:str|Path, mods:bool, options_txt:bool,
+            resource_packs:bool, saves:bool, screenshots:bool,
+            versions:bool, config:bool, coremods:bool, menuworlds:bool,
+            debug_profile:bool):
         b = self.base
 
         if isinstance(output, str):
@@ -196,7 +184,7 @@ class PortableProfile:
                     mod = mod.resolve()
                     if mod.parent != p:
                         try:
-                            recursive_add_dir(mod, p, zip)
+                            pack_file(mod, p, zip)
                         except Exception as err:
                             err.add_note(
                                 "ZIP file open at time of exception: \"%s\""
@@ -220,7 +208,7 @@ class PortableProfile:
                 else:
                     p = b / "texturepacks"
                     zip.mkdir("texturepacks")
-                log.info("Taking resource packs from \"%s\"" % str(p))
+                log.info("Taking resource packs from '%s'" % str(p))
                 for pack in [*p.glob("*")]:
                     if pack.is_file():
                         if pack.suffix != ".zip":
@@ -231,14 +219,14 @@ class PortableProfile:
                             continue
                         zip.mkdir("%s/%s" % (p.name, pack.name))
                         for path in pack.rglob("*"):
-                            recursive_add_dir(path, p, zip)
+                            pack_file(path, p, zip)
             
             if saves and self.saves:
                 p = b / "saves"
                 log.info("Taking save files from '%s'" % str(p))
                 zip.mkdir("saves")
                 for file in p.rglob("*"):
-                    recursive_add_dir(file, p, zip)
+                    pack_file(file, p, zip)
             
             if screenshots and self.screenshots:
                 p = b / "screenshots"
@@ -253,19 +241,21 @@ class PortableProfile:
                 for file in p.rglob("*.json"):
                     if file.parent == p:
                         continue
-                    recursive_add_dir(file, p, zip)
+                    elif file.parent.name != file.stem:
+                        continue
+                    pack_file(file, p, zip)
             
             if config and self.config:
                 log.info("Including mod config files")
                 p = b / "config"
                 for file in p.rglob("*"):
-                    recursive_add_dir(file, p, zip)
+                    pack_file(file, p, zip)
             
             if menuworlds and self.menuworlds:
                 log.info("Including menuworlds mod data")
                 p = b / "menuworlds"
                 for file in p.rglob("*"):
-                    recursive_add_dir(file, p, zip)
+                    pack_file(file, p, zip)
             
             if debug_profile and self.debug_profile:
                 log.info("Including debug (F3) profile")
@@ -274,3 +264,21 @@ class PortableProfile:
             zip.close()
 
         return True
+    
+    def export(
+            self, type:ExportType, output:str|Path, mods:bool,
+            options_txt:bool, resource_packs:bool, saves:bool,
+            screenshots:bool, versions:bool, config:bool, coremods:bool,
+            menuworlds:bool, debug_profile:bool):
+        match type:
+            case ExportType.DEFAULT:
+                return self.export_default(
+                    output, mods, options_txt, resource_packs, saves,
+                    screenshots, versions, config, coremods, menuworlds,
+                    debug_profile)
+            # case ExportType.MODRINTH:
+            #     return self.export_modrinth(
+            #         output, mods, options_txt, resource_packs, saves,
+            #         screenshots, versions, config, coremods, menuworlds,
+            #         debug_profile
+            #     )

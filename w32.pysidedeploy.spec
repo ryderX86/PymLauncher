@@ -7,7 +7,7 @@ title = Launcher
 project_dir = .
 
 # source file entry point path. default = main.py
-input_file = minecraftlauncher\__main__.py
+input_file = minecraftlauncher
 
 # directory where the executable output is generated
 exec_directory = .
@@ -45,7 +45,7 @@ mode = standalone
 
 # specify any extra nuitka arguments
 # eg = extra_args = --show-modules --follow-stdlib
-extra_args = --noinclude-qt-translations --python-flag=-m --python-flag=isolated --python-flag=-P --remove-output --windows-console-mode=attach --output-filename=launcher.exe
+extra_args = --noinclude-qt-translations --python-flag=-m --python-flag=isolated --python-flag=-P --remove-output --windows-console-mode=disable --output-filename=launcher.exe --no-deployment-flag=self-execution
 
 [buildozer]
 

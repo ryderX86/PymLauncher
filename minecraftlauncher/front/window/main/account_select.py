@@ -83,6 +83,14 @@ class AccountSelect(QComboBox):
         if email:
             account_manager.set_active_account(email)
             self.account_changed.emit(email)
+
+    def next_account(self):
+        add_idx = self.count() - 1
+        idx = self.currentIndex()
+        if idx + 1 >= add_idx:
+            if self.count() < 2:
+                return self.setCurrentIndex(1)
+            self.setCurrentIndex(idx - 1)
         
     # stop user scrolling to "add account"
     def wheelEvent(self, e):

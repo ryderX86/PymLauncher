@@ -4,7 +4,7 @@ import logging
 import json
 
 from minecraftlauncher.constants import LAUNCHER_DATA_DIR, MINECRAFT_DIR
-from minecraftlauncher.back.download_manager import (
+from minecraftlauncher.back.download_helpers import (
     download, should_download_file, file_exists_or_age
 )
 

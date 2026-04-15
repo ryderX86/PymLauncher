@@ -1,15 +1,19 @@
 from typing import Any
 from functools import lru_cache
 from zipfile import ZipFile
+from io import BytesIO
 import logging
+import lzma
+import zlib
 import json
 import xml
 
 from minecraftlauncher.constants import LAUNCHER_DATA_DIR, MINECRAFT_DIR
-from minecraftlauncher.back.download_manager import (
+from minecraftlauncher.back.download_helpers import (
     download, should_download_file, file_exists_or_age
 )
 from minecraftlauncher.functions.text import indent
+from ..version_manager import VERSION_DIR
 
 FALLBACK_DOMAIN = "maven.creeperhost.net"
 
@@ -32,17 +36,32 @@ will be at `/version.json` and the client will be LZMA compressed at
 `/data/client.lzma`
 """
 LEGACY_DOWNLOAD_URL = "https://maven.neoforged.net/releases/net/neoforged/forge/" \
-                      "VERSION/neoforge-VERSION-installer.jar"
+                      "VERSION/forge-VERSION-installer.jar"
+
+LOADER_MANIFEST_PATH = LAUNCHER_DATA_DIR / "neoforge-versions.json"
 
 log = logging.getLogger(__name__)
 
-_versions_list:dict[str, str] = {}
+_versions_list:dict[str, list] = {}
 
 @lru_cache(maxsize=1)
 def get_master(force_refresh:bool=False):
     global _versions_list
     if _versions_list and not force_refresh:
         return _versions_list
+    elif LOADER_MANIFEST_PATH.exists() and not force_refresh:
+        manifest_text = LOADER_MANIFEST_PATH.read_text()
+        try:
+            manifest = json.loads(manifest_text)
+        except json.JSONDecodeError as err:
+            log.error(
+                "Failed to read neoforge-versions.json, redownloading...\n",
+                exc_info=err)
+            LOADER_MANIFEST_PATH.unlink()
+        else:
+            _versions_list = manifest
+        finally:
+            del manifest_text
     log.debug("Grabbing NeoForge version manifest")
     _versions_list = {}
     response = download(VERSION_MANIFEST_URL)
@@ -57,22 +76,21 @@ def get_master(force_refresh:bool=False):
     for v in versions:
         full_id = v.split("-")
         id_ = full_id[0]
-        if id_[:1].isdecimal():
+        if id_[:2].isdecimal():
             ids = id_.split(".")
-            if int(id_[:1]) >= 26:
-                if ids[2] != "0":
-                    len_ = 2
-                else:
-                    len_= 1
-                id_ = ".".join(ids[:len_])
+            if int(id_[:2]) >= 26:
+                id_ = ".".join(ids[:3])
             else:
-                id_ = "1." + ".".join(ids[:1])
+                id_ = ".".join(["1", *ids[:2]])
         elif id_[1] == ".":
+            log.debug("Skipping NeoForge version %s" % v)
             continue # april fools version
         else:
             log.warning("Unknown version type: %s" % v)
             continue
-        _versions_list[id_] = v
+        if id_ not in _versions_list:
+            _versions_list[id_] = []
+        _versions_list[id_].append(v)
     
     # legacy version list
     response = download(LEGACY_VERSIONS_MANIFEST)
@@ -91,7 +109,12 @@ def get_master(force_refresh:bool=False):
         if id_[0] != "1":
             # unfortunately i have no idea what mc version 47.1.82 is for
             continue
-        _versions_list[id_] = neo
+        if id_ not in _versions_list:
+            _versions_list[id_] = []
+        _versions_list[id_].append(neo)
+    
+    log.info("Successfully fetched & parsed NeoForge versions, saving to disk")
+    LOADER_MANIFEST_PATH.write_text(json.dumps(_versions_list))
     return _versions_list
 
 @lru_cache(maxsize=1)
@@ -100,24 +123,65 @@ def get_minecraft_versions():
     return [*get_master().keys()]
 
 @lru_cache(maxsize=4)
-def get_neoforge_versions(mc_id:str):
-    versions = []
-    for mc, neo in get_master().items():
-        if mc != mc_id:
-            continue
-        versions.append(neo)
-    return versions
+def filter_neoforge_versions(mc_id:str):
+    if mc_id in _versions_list:
+        return _versions_list[mc_id]
+    return []
 
-def install(neoforge_version:str, override=False):
-    log.debug("Install requested for neoforge-%s" % neoforge_version)
-    if neoforge_version not in get_master():
-        if neoforge_version not in get_master(True):
+def get_neoforge_versions(override: bool = False):
+    vers = []
+    for ver_list in get_master(override).values():
+        vers.extend(ver_list)
+    return vers
+
+def install(neoforge_version: str, override: bool = False):
+    if override:
+        log.info(
+            "User requested re-install for neoforge-%s" % neoforge_version)
+    else:
+        log.debug("Install requested for neoforge-%s" % neoforge_version)
+
+    if neoforge_version[0:2] != "1.":
+        url = DOWNLOAD_URL.replace("VERSION", neoforge_version)
+        dest_dir = VERSION_DIR / f"neoforge-{neoforge_version}"
+        dest_path = dest_dir / f"neoforge-{neoforge_version}.json"
+        dest_path_client = dest_dir / f"neoforge-{neoforge_version}.jar"
+    else:
+        url = LEGACY_DOWNLOAD_URL.replace("VERSION", neoforge_version)
+        inf = neoforge_version.split("-")
+        neoforge_version_id = '-'.join([inf[0], "forge", inf[1]])
+        dest_dir = VERSION_DIR / neoforge_version_id
+        dest_path = dest_dir / f"{neoforge_version_id}.json"
+        dest_path_client = dest_dir / f"{neoforge_version_id}.jar"
+
+    if dest_path.exists() and not override:
+        raise FileExistsError(str(dest_path))
+    if neoforge_version not in get_neoforge_versions():
+        if neoforge_version not in get_neoforge_versions(True):
             raise RuntimeError("Couldn't find NeoForge version %s"
                                % neoforge_version)
     
-    if neoforge_version[0:1] != "1.":
-        url = DOWNLOAD_URL.replace("VERSION", neoforge_version)
-    else:
-        url = LEGACY_DOWNLOAD_URL.replace("VERSION", neoforge_version)
+    if not dest_dir.exists():
+        dest_dir.mkdir(parents=True, exist_ok=True)
     
-    
+    resp = download(url)
+    b = BytesIO(resp.content)
+
+    with ZipFile(b) as zipf:
+        with zipf.open("version.json") as text:
+            try:
+                ver_info = json.load(text)
+            except json.JSONDecodeError as err:
+                err.add_note(
+                    "Couldn't read verison.json from '%s.zip'"
+                    % dest_path.stem)
+                raise
+            else:
+                dest_path.write_text(json.dumps(ver_info))
+
+        with zipf.open("data/client.lzma") as client:
+            # TODO: reverse engineer fatjar
+            pass
+
+    log.info("Installed NeoForge version %s" % dest_path.stem)
+    return True

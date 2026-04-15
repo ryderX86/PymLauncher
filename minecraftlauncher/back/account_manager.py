@@ -10,8 +10,8 @@ import requests
 
 from minecraftlauncher.constants import (SKIN_CHANGE_URL, LAUNCHER_DATA_DIR,
                                          MINECRAFT_DIR)
-from minecraftlauncher.datatypes.MicrosoftAccount import MicrosoftAccount
-from minecraftlauncher.datatypes.LauncherProfile import LauncherProfile
+from minecraftlauncher.auth.microsoft_account import MicrosoftAccount
+from minecraftlauncher.auth.launcher_account import LauncherAccount
 from minecraftlauncher.functions.text import indent
 from minecraftlauncher import DEV
 
@@ -23,7 +23,7 @@ SKIN_METADATA_PATH = SKINS_CACHE_DIR / "skins_meta.json"
 
 save_accounts_mixin:Callable|None = None
 
-accounts:list[LauncherProfile] = []
+accounts:list[LauncherAccount] = []
 active_account:str|None = None
 
 def save_accounts(accounts_:list|None=None, *,
@@ -57,8 +57,8 @@ def save_accounts(accounts_:list|None=None, *,
     log.debug("Saved %s accounts to cache file." % len(accounts))
     return
 
-def save_or_replace_account(lp:LauncherProfile,
-                            accounts_:list[LauncherProfile]|None=None):
+def save_or_replace_account(lp:LauncherAccount,
+                            accounts_:list[LauncherAccount]|None=None):
     """Add or replace account into cache and save to disk."""
     global accounts
     if accounts_:
@@ -104,9 +104,11 @@ def load_accounts():
     raw_accounts = accounts_file.get("accounts", [])
     refreshed_account = False
     for raw_acc in raw_accounts:
-        acc = LauncherProfile.from_json(raw_acc)
-        if acc.refresh():
-            refreshed_account = True
+        acc = LauncherAccount.from_json(raw_acc)
+        if not acc.token_valid or not acc.msa_valid:
+            success = acc.refresh()
+            if success:
+                refreshed_account = True
         accounts.append(acc)
     active_account = accounts_file.get("active")
     if len(accounts) > 0 and not active_account:
@@ -146,7 +148,7 @@ def set_active_account(email:str) -> bool:
     log.debug("Set active account to %s" % email)
     return True
 
-def update_account(account:LauncherProfile):
+def update_account(account:LauncherAccount):
     global accounts
 
     for i in range(len(accounts)):
@@ -157,7 +159,7 @@ def update_account(account:LauncherProfile):
     
     accounts.append(account)
 
-def fetch_account(email:str) -> LauncherProfile|None:
+def fetch_account(email:str) -> LauncherAccount|None:
     for acc in accounts:
         if acc.msa.email == email:
             return acc

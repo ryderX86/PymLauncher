@@ -1,18 +1,24 @@
 from dataclasses import dataclass, field, InitVar
 from datetime import datetime
 from pathlib import Path
+from enum import StrEnum
 from typing import Any
 import logging
 import json
 
 import requests
 
-from .game_version_enums import GameVersionType
 from minecraftlauncher.back import version_manager
-from minecraftlauncher.back.download_manager import download
+from minecraftlauncher.back.download_helpers import download
 from minecraftlauncher.constants import MINECRAFT_DIR
 
 log = logging.getLogger(__name__)
+
+class GameVersionType(StrEnum):
+    RELEASE = "release"
+    SNAPSHOT = "snapshot"
+    ALPHA = "old_alpha"
+    BETA = "old_beta"
 
 @dataclass
 class GameVersionStub:

@@ -9,12 +9,12 @@ from PySide6.QtGui import QImage
 import requests
 import requests.exceptions
 
-from minecraftlauncher.datatypes.MinecraftToken import MinecraftToken
+from minecraftlauncher.auth.minecraft_token import MinecraftToken
 from minecraftlauncher.constants import (
     MOJ_PROF_URL, STEVE_SKIN_URL, LAUNCHER_DATA_DIR
 )
 from minecraftlauncher import constants
-from . import try_request
+from ..datatypes import try_request
 
 log = logging.getLogger(__name__)
 

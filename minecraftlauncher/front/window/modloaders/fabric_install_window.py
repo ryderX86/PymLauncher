@@ -92,6 +92,11 @@ class FabricInstallWindow(QDialog):
             self._set_button_disabled
         )
         return
+    
+    def exec(self):
+        self.show()
+        self.load()
+        return super().exec()
 
     def _game_ver_dd_txt_change(self, text:str):
         if text:

@@ -16,7 +16,7 @@ from PySide6.QtWidgets import (QApplication, QFileDialog, QFrame, QGridLayout,
 from minecraftlauncher import style, qapp
 from minecraftlauncher.front.resources import symbol
 from minecraftlauncher.back import account_manager
-from minecraftlauncher.datatypes.LauncherProfile import LauncherProfile
+from minecraftlauncher.auth import LauncherAccount
 from minecraftlauncher.functions.error_box import error_box
 from minecraftlauncher.constants import CHECKMARK_DELAY
 
@@ -27,12 +27,13 @@ class AccountPage(QWidget):
 
     logout_requested = Signal()
     skin_upload = Signal()
+    status_update = Signal()
 
     log = log.getChild("AccountPage")
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self._account_info:LauncherProfile|None = None
+        self._account_info:LauncherAccount|None = None
         self._build_ui()
 
     def build(self):
@@ -42,16 +43,18 @@ class AccountPage(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(40, 40, 40, 40)
         layout.setSpacing(20)
+        layout.addStretch()
 
         self.title = QLabel("<username or email>")
         self.title.setProperty("heading", True)
         layout.addWidget(self.title)
 
+        layout.addStretch()
+
         # Account info stuff
         info_group = QGroupBox("Account Info")
         info_layout = QGridLayout(info_group)
-        info_layout.setSpacing(10)
-        info_layout.setVerticalSpacing(1)
+        info_layout.setSpacing(10)        
 
         info_layout.addWidget(QLabel("Email:"), 0, 0)
         self.email_label = QLabel("<email>")
@@ -82,6 +85,9 @@ class AccountPage(QWidget):
 
         info_layout.addLayout(uuid_row, 2, 1)
 
+        for i in range(info_layout.rowCount()):
+            info_layout.setRowMinimumHeight(i, 48)
+
         layout.addWidget(info_group)
 
         # TODO: Skin selection/preview
@@ -93,7 +99,7 @@ class AccountPage(QWidget):
         logout_button.clicked.connect(self._on_logout)
         layout.addWidget(logout_button)
 
-    def set_account_info(self, info:LauncherProfile):
+    def set_account_info(self, info:LauncherAccount):
         """Update account info displayed on page"""
         self._account_info = info
         self.email_label.setText(info.msa.email)

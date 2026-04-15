@@ -55,6 +55,9 @@ QLabel {{
     color: {TEXT_PRIMARY};
     border: none;
 }}
+QLabel[secondary="true"] {{
+    color: {TEXT_SECONDARY};
+}}
 QLabel[heading="true"] {{
     font-size: 20px;
     font-weight: 700;
@@ -269,6 +272,12 @@ QComboBox ::item:selected {{
     color: {TEXT_PRIMARY};
 }}
 
+QComboBox[compact="true"] {{
+    padding: 4px 12px;
+    min-height: 1em;
+    max-height: 1em;
+}}
+
 QComboBox[icons_only="true"] ::item {{
     height: 56px;
 }}
@@ -373,14 +382,20 @@ QListView[profiles="true"]::item {{
     margin: 2px 0;
 }}
 QListView[profiles="true"]::item:selected {{
-    background-color: {ACCENT_DIM};
-    color: white;
+    background-color: {ACCENT};
 }}
 QListView[profiles="true"]::item:hover {{
     background-color: {BG_SURFACE_LIGHT};
 }}
 QListView[profiles="true"]::item:hover:selected {{
-    background-color: {ACCENT_HOVER};
+    background-color: {ACCENT_PRESS};
+}}
+QListView[profiles="true"]::item:disabled {{
+    background-color: {BG_SURFACE_LIGHT};
+    color: {TEXT_MUTED};
+}}
+QListView[profiles="true"]::item:hover:disabled {{
+    background-color: {ACCENT_PRESS};
 }}
 
 /* Tab */

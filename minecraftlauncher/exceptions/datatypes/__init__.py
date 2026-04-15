@@ -1,5 +1,3 @@
-from .XstsAuthError import XstsAuthError
-
 class ProfileError(Exception):
     pass
 

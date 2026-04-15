@@ -19,7 +19,7 @@ from minecraftlauncher.constants import (
     LOG4J_VULN_MIN_TIME, LOG4J_116_5_FIX_MAX_TIME, LOG4J_17_112_FIX_MAX_TIME
 )
 from minecraftlauncher.datatypes.game_version import GameVersionStub
-from .download_manager import download
+from .download_helpers import download
 
 log = logging.getLogger(__name__)
 
@@ -146,25 +146,6 @@ def _build_local_version_list(exclude:list[GameVersionStub]|None=None):
             continue
         ver_list.append(version_info)
     return ver_list
-
-@lru_cache(maxsize=1)
-def get_installed_versions():
-    return _build_local_version_list()
-
-@lru_cache(maxsize=1)
-def get_latest_installed():
-    versions_initial = get_installed_versions()
-    versions = []
-    for v in versions_initial:
-        if v.jar_path.exists():
-            versions.append(v)
-    if len(versions) < 1:
-        raise RuntimeError("No versions installed!")
-    latest_version_installed = versions[0]
-    for v in versions:
-        if latest_version_installed.timestamp < v.timestamp:
-            latest_version_installed = v
-    return latest_version_installed
 
 def get_version_list(include_snapshots:bool=True,
                      include_old:bool=True,
@@ -471,9 +452,7 @@ def version_exists(id:str):
     
     Returns a bool
     """
-    if id in _manifest_cache["versions"]:
-        return True
-    elif (VERSION_DIR / id).exists():
+    if id in [a.get("id", "") for a in _manifest_cache["versions"]]:
         return True
     elif (VERSION_DIR / id / f"{id}.json").exists():
         try:
@@ -482,6 +461,15 @@ def version_exists(id:str):
             return False
         else:
             return True
+    return False
+
+def is_vanilla(id:str):
+    """
+    Check if a version ID points towards a Mojang release, or a modded version
+    locally installed.
+    """
+    if id in [a.get("id", "") for a in _manifest_cache["versions"]]:
+        return True
     return False
 
 def check_fabric_mod_arg_support(version_id:str):

@@ -30,8 +30,8 @@ from minecraftlauncher.constants import (
     JAVA_MANIFEST_URL,
     offline_mode
 )
-from .download_manager import (
-    download, should_download_file, BulkDownloadSingleFile, BulkDownloadWorker
+from .download_helpers import (
+    download, should_download_file, RunnableDownloader
 )
 from minecraftlauncher.functions.text import indent
 
@@ -158,8 +158,9 @@ def get_jvm_version_manifest(version:str):
                 if mf_sha1 == sha1:
                     return json.loads(manifest_path.read_text())
                 else:
-                    log.warning("JRE manifest at '%s' is outdated or \
-                                corrupted, redownloading...")
+                    log.warning(
+                        "JRE manifest at '%s' is outdated or "
+                        "corrupted, redownloading..." % str(manifest_path))
                     manifest_path.unlink()
             else:
                 mf_text = manifest_path.read_text()
@@ -395,7 +396,7 @@ def install_java_version_threaded(name:str, jre_manifest:dict, *,
         if progress_callback:
             progress_callback(completed, total_size)
 
-    download_workers:list[BulkDownloadSingleFile] = []
+    download_workers:list[RunnableDownloader] = []
 
     for subpath in dirs:
         dir = jre_path_default / subpath
@@ -425,7 +426,7 @@ def install_java_version_threaded(name:str, jre_manifest:dict, *,
 
         # use the matching hash since we don't load the lzma yet
         download_workers.append(
-            BulkDownloadSingleFile(url, path, e_sha1, mkdir=True,
+            RunnableDownloader(url, path, e_sha1, mkdir=True,
                                    lzma=use_lzma,
                                    callback_f=lambda i: file_downloaded(i))
         )

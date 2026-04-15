@@ -8,12 +8,12 @@ import requests
 import requests.exceptions
 
 from minecraftlauncher.datatypes.JWT import JWT, decode_jwt
-from minecraftlauncher.datatypes.XstsToken import XstsToken
+from minecraftlauncher.auth.xsts_token import XstsToken
 from minecraftlauncher.constants import (AZURE_CLIENT_ID, AZURE_SCOPE,
                                          MOJ_AUTH_URL, MSA_REFRESH_URL,
                                          LAUNCH_ENTITLEMENTS_URL)
 from minecraftlauncher import constants
-from minecraftlauncher.exceptions.datatypes import XstsAuthError
+from .exceptions import xsts_auth_error
 
 log = logging.getLogger(__name__)
 

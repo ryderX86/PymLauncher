@@ -1,4 +1,5 @@
 from datetime import datetime
+from logging.handlers import RotatingFileHandler
 import time
 import logging
 import sys
@@ -7,23 +8,42 @@ from PySide6.QtCore import QThread
 from PySide6.QtGui import QFont
 from PySide6.QtWidgets import QApplication, QMessageBox
 
-from minecraftlauncher import config
-from minecraftlauncher import set_qapp
-from minecraftlauncher.functions.error_box import error_box
-from minecraftlauncher.front import resources
-from minecraftlauncher.front.styles import STYLESHEET, FONT
-from minecraftlauncher.front.window.loading_blocker import LoadingBlockerWindow
-from minecraftlauncher.front.window.main.main_window import MainWindow
-from minecraftlauncher.front.window.login.login_window import LoginWindow
-from minecraftlauncher.front.window.game_error import ErrorDisplay
-from minecraftlauncher.back import (account_manager, profile_manager,
-                                    version_manager, java_manager,
-                                    download_manager)
-from minecraftlauncher.datatypes.MicrosoftAccount import MicrosoftAccount
-from minecraftlauncher.datatypes.LauncherProfile import LauncherProfile
+from . import config, constants, FORMATTER, DEV, MEMORY_HANDLER
+from . import set_qapp
+from .functions.error_box import error_box
+from .front import resources
+from .front.styles import STYLESHEET, FONT
+from .front.window.loading_blocker import LoadingBlockerWindow
+from .front.window.main.main_window import MainWindow
+from .front.window.login import LoginWindow
+from .front.window.game_error import ErrorDisplay
+from .back import (
+    account_manager, download_helpers, profile_manager, version_manager,
+    java_manager)
+from .auth import MicrosoftAccount, LauncherAccount
 
 log = logging.getLogger(__name__ if __name__ != "__main__"
                         else "minecraftlauncher")
+
+log_dir = constants.LAUNCHER_DATA_DIR / "logs"
+log_file = log_dir / "latest.log"
+if not log_dir.exists():
+    log_dir.mkdir()
+
+if not DEV:
+    log.info("Running frozen, we're compiled")
+    fh = RotatingFileHandler(log_file, backupCount=4)
+    fh.setLevel(logging.DEBUG)
+    fh.setFormatter(FORMATTER)
+    if log_file.exists():
+        fh.doRollover()
+    MEMORY_HANDLER.setLevel(logging.DEBUG)
+    MEMORY_HANDLER.setTarget(fh)
+    MEMORY_HANDLER.flush()
+    root_logger = logging.getLogger()
+    root_logger.removeHandler(MEMORY_HANDLER)
+    root_logger.addHandler(fh)
+    del root_logger
 
 class App:
     """Controller"""
@@ -56,7 +76,7 @@ class App:
         )
 
         self.main_window.destroyed.connect(
-            download_manager.kill_threads
+            download_helpers.RunnableDownloader.kill_all
         )
 
         self.main_window.home_page.game_crash.connect(
@@ -93,7 +113,6 @@ class App:
         self.buildall()
         self.log.debug("Attempt to load accounts from cache...")
         self.lb_window.set_text("Authenticating")
-        self.lb_window.update()
         accounts, _ = account_manager.load_accounts()
         if accounts:
             self.close_if_login_aborted = False
@@ -129,7 +148,7 @@ class App:
         dialog.show()
         dialog.exec()
     
-    def _on_login_complete(self, launcher_profile:LauncherProfile):
+    def _on_login_complete(self, launcher_profile:LauncherAccount):
         if launcher_profile:
             self.close_if_login_aborted = False
         self.lb_window.open()
@@ -161,7 +180,7 @@ class App:
         active = account_manager.fetch_account(account_manager.active_account)
         assert active
 
-        profile = self.main_window.profiles_page.get_selected_profile()
+        profile = profile_manager.get_current_profile()
         if not profile:
             error_box("No active profile!")
             return
@@ -183,8 +202,25 @@ class App:
         )
 
     def _on_account_changed(self, email:str):
+        if self.lb_window.isVisible():
+            self.lb_window.accept()
         if email in [a.msa.email for a in account_manager.accounts]:
             account_manager.active_account = email
+            acc = account_manager.fetch_account(email)
+            assert acc
+            if (not acc.msa_valid) or (not acc.token or (not acc.token.is_active)):
+                self.lb_window.open()
+                if acc.refresh():
+                    log.debug("Refreshed %s" % email)
+                    self.lb_window.accept()
+                    account_manager.save_or_replace_account(acc)
+                else:
+                    log.debug(
+                        "Couldn't refresh %s, prompting user to relog" % email)
+                    dialog = LoginWindow(self.lb_window)
+                    dialog.rejected.connect(
+                        self.main_window.account_dropdown.next_account)
+                    return dialog.exec()
         else:
             self.log.warning("Couldn't find the active account in accounts!")
         self._refresh_account_ui()
@@ -208,6 +244,9 @@ class App:
         exit(0)
 
 def main():
+    if "-m" in sys.argv:
+        log.info("-m specified, not running App().run()")
+        return
     app = App()
     sys.exit(app.run())
 

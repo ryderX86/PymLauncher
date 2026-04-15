@@ -5,19 +5,21 @@ Handles downloading the asset index and individual asset objects
 for a given Minecraft version.
 """
 from datetime import datetime, timedelta
+from pathlib import Path
 from typing import Callable
 from time import sleep
 import hashlib
 import json
 import logging
 import os
+from xml.etree import ElementTree
 
 import requests
 from PySide6.QtCore import QThreadPool, QDeadlineTimer
 
 from minecraftlauncher.constants import RESOURCES_URL, MINECRAFT_DIR
-from minecraftlauncher.back.download_manager import (
-    download, BulkDownloadSingleFile, BulkDownloadWorker
+from minecraftlauncher.back.download_helpers import (
+    download, RunnableDownloader
 )
 
 log = logging.getLogger(__name__)
@@ -75,12 +77,33 @@ def fetch_asset_index(version_json:dict) -> dict:
 
     return resp.json()
 
+def patch_logging_config(path: Path):
+    PATTERN = r"[%d{HH:mm:ss}] [%t/%level]: %msg{nolookups}%n"
+    xml = ElementTree.fromstring(path.read_text())
+    patched = False
+    elements = [*xml.iter("XMLLayout"), *xml.iter("LegacyXMLLayout")]
+    for c in elements:
+        c.clear()
+        c.tag = "PatternLayout"
+        c.set("pattern", PATTERN)
+        patched = True
+    if patched:
+        log.debug("Patched '%s' with non-XML config" % path.name)
+        new_path = path.parent / (''.join([path.stem, "_patched", path.suffix]))
+        new_path.write_bytes(ElementTree.tostring(xml))
+        return new_path
+    else:
+        log.warning("Couldn't patch logging config")
+    return path
+
 def check_or_download_logging_config(version_json:dict) -> str:
     """
     Check for the client logging info and if it doesn't exist, download it.
     
     Returns the complete argument to add to the JVM args if there's a logging
     config for the client, or a blank str otherwise.
+
+    Also tries to patch the config to not use XML layouts
     """
     p = ("<PatternLayout pattern=\"[%d{HH:mm:ss}] [%t/%level]: "
          "%msg{nolookups}%n\"/>")
@@ -103,26 +126,25 @@ def check_or_download_logging_config(version_json:dict) -> str:
         dest_folder.mkdir(parents=True, exist_ok=True)
 
     dest_path = dest_folder / name
-    dest_path_patched = dest_folder / (name[:-4] + "_patched.xml")
-    output = arg.replace("${path}", str(dest_path_patched))
+    dest_path_patched = dest_path.parent / ''.join(
+        [dest_path.stem, '_patched', dest_path.suffix])
 
     if dest_path.exists() and dest_path.is_file():
         f_sha1 = hashlib.sha1(dest_path.read_bytes()).hexdigest()
-        if f_sha1 == sha1:
-            if not dest_path_patched.exists():
-                dest_path_patched.write_text(dest_path.read_text().replace(
-                    "<LegacyXMLLayout />", p
-                ))
-            return output
+        if f_sha1 != sha1:
+            dest_path.unlink()
+    if not dest_path.exists():
+        try:
+            resp = download(url, hash=sha1)
+            dest_path.write_bytes(resp.content)
+        except Exception as err:
+            raise
 
-    try:
-        resp = download(url, hash=sha1)
-    except Exception as err:
-        raise
-
-    dest_path.write_bytes(resp.content)
-    dest_path_patched.write_text(resp.text.replace("<LegacyXMLLayout />", p))
-    return output
+    if not dest_path_patched.exists():
+        path = patch_logging_config(dest_path)
+        return arg.replace("${path}", str(path))
+    else:
+        return arg.replace("${path}", str(dest_path_patched))
 
 def filter_assets_downloads(asset_index:dict, *,
                             progress_callback:Callable[[int, int], None]|None=None):
@@ -259,7 +281,7 @@ def download_assets_threaded(asset_index:dict, *,
         def add_number(i:int):
             pass
 
-    download_list:list[BulkDownloadSingleFile] = []
+    download_list:list[RunnableDownloader] = []
     processed = 0
 
     map_virtual_assets:bool = asset_index.get("map_to_resources", False)
@@ -270,14 +292,14 @@ def download_assets_threaded(asset_index:dict, *,
         prefix = file_hash[:2]
         dest_dir = objects_dir / prefix
         dest_path = dest_dir / file_hash
-        downloader = BulkDownloadSingleFile(
+        downloader = RunnableDownloader(
             f"{RESOURCES_URL}/{prefix}/{file_hash}",
             dest_path,
             file_hash,
             callback_f=add_number
         )
         if map_virtual_assets:
-            v_downloader = BulkDownloadSingleFile(
+            v_downloader = RunnableDownloader(
                 f"{RESOURCES_URL}/{prefix}/{file_hash}",
                 VIRTUAL_BASE / virtual_path,
                 file_hash,
