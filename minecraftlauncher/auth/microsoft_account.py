@@ -7,10 +7,11 @@ import logging
 import requests
 import requests.exceptions
 
-from minecraftlauncher.datatypes.JWT import JWT, decode_jwt
-from minecraftlauncher.constants import (AZURE_CLIENT_ID, AZURE_SCOPE,
-                                         XBOX_AUTH_URL, MSA_REFRESH_URL)
-from minecraftlauncher import constants
+from minecraftlauncher.datatypes import JWT, decode_jwt
+from minecraftlauncher.constants import (
+    AZURE_CLIENT_ID, AZURE_SCOPE, XBOX_AUTH_URL, MSA_REFRESH_URL)
+from minecraftlauncher import constants, session
+from .auth_error import AuthError, AuthStep
 
 log = logging.getLogger(__name__)
 
@@ -36,19 +37,8 @@ class MicrosoftAccount:
     """
     access_token:str
     refresh_token:str
-    _id_token:str
-    # Should also accept none but I want to proceed with openid
-    # for making storing/identifying the account easier
-    """
-    Original `id_token` JWT provided in the token
-    """
-    id_token:dict
-    """
-    Decoded `id_token` JWT payload
-    """
 
     # The following is NOT included in the MS API response:
-    email:str
     acquired_at:float
     def __init__(self, msa_info:dict):
         self.acquired_at = msa_info.get("acquired_at",
@@ -59,19 +49,8 @@ class MicrosoftAccount:
         self._expires_in = msa_info["expires_in"]
         self.access_token = msa_info["access_token"]
         self.refresh_token = msa_info["refresh_token"]
-        self._id_token = msa_info["id_token"]
         self._other_token_info = {k:v for k, v in msa_info.items()
                             if k not in KNOWN_MSA_DICT_VALS}
-
-        # if dict, assume we're loading from the stored account
-        if isinstance(self._id_token, str):
-            self.id_token = decode_jwt(self._id_token).payload
-        elif isinstance(self._id_token, dict):
-            self.id_token = self._id_token
-        else:
-            self.id_token = {"email": "unknown-email@example.co"}
-        self.email = self.id_token["email"]
-
         return
 
     @property
@@ -93,7 +72,6 @@ class MicrosoftAccount:
             "expires_in": self._expires_in,
             "access_token": self.access_token,
             "refresh_token": self.refresh_token,
-            "id_token": self._id_token,
             **self._other_token_info
         }
     
@@ -106,7 +84,6 @@ class MicrosoftAccount:
             "acquired_at": self.acquired_at,
             "access_token": self.access_token,
             "refresh_token": self.refresh_token,
-            "id_token": self.id_token,
             "uuid": uuid,
             "username": username,
             **self._other_token_info
@@ -139,7 +116,7 @@ class MicrosoftAccount:
         while connection_attempts < 3:
             connection_attempts += 1
             try:
-                response = requests.post(MSA_REFRESH_URL, data=form_data)
+                response = session.post(MSA_REFRESH_URL, data=form_data)
                 response.raise_for_status()
                 break
             except (requests.exceptions.ConnectionError,
@@ -156,7 +133,8 @@ class MicrosoftAccount:
             except requests.HTTPError as exc:
                 log.error("Failed to refresh MSA token; response code %s"
                           % exc.response.status_code)
-                return False
+                return AuthError(AuthStep.MSA, exc.response.status_code,
+                                 exc.response.text)
             # TODO: remove this when verified that the loop won't
             # infinitely continue
             if connection_attempts < 4:
@@ -164,21 +142,20 @@ class MicrosoftAccount:
                 print("(.datatypes.MicrosoftAccount....refresh())")
 
         if response is None:
-            return False
+            return AuthError(AuthStep.MSA, "N/A", "No response")
         elif len(response.text) < 5: # safe number i guess
-            return False
+            return AuthError(AuthStep.MSA, "N/A", response.text)
         
         new_token = response.json()
         self.acquired_at = datetime.now().timestamp()
 
         if not new_token.get("access_token"):
-            return False
+            return AuthError(
+                AuthStep.MSA, new_token.get("error", "N/A"),
+                new_token.get("error_description", "No description given."))
 
         self.access_token = new_token.get("access_token", self.access_token)
         self.refresh_token = new_token.get("refresh_token", self.refresh_token)
-        self._id_token = new_token.get("id_token", self._id_token)
-        if new_token.get("id_token") is not None:
-            self.id_token = decode_jwt(new_token["id_token"]).payload
         self.expires_in = new_token.get("expires_in", self._expires_in)
 
         return True

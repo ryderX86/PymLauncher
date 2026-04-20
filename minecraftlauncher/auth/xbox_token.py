@@ -7,11 +7,12 @@ import time
 import requests
 import requests.exceptions
 
-from minecraftlauncher.datatypes.JWT import JWT, decode_jwt
+from minecraftlauncher.datatypes import JWT, decode_jwt
 from minecraftlauncher.auth.microsoft_account import MicrosoftAccount
 from minecraftlauncher.constants import (AZURE_CLIENT_ID, AZURE_SCOPE,
                                          XBOX_AUTH_URL, MSA_REFRESH_URL)
-from minecraftlauncher import constants
+from minecraftlauncher import constants, session
+from .auth_error import AuthError, AuthStep
 
 log = logging.getLogger(__name__)
 
@@ -50,6 +51,7 @@ class XboxToken:
     @classmethod
     def auth(cls, msa:MicrosoftAccount):
         if msa.expires_in < 20:
+            log.warning("MSA account wasn't refreshed before trying Xbox auth")
             msa.refresh()
 
         payload = {
@@ -61,14 +63,20 @@ class XboxToken:
             "RelyingParty": "http://auth.xboxlive.com",
             "TokenType": "JWT"
         }
-        
+
+        headers = {
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "x-xbl-contract-version": "1",
+        }
 
         connection_attempts = 0
         response = None
         while connection_attempts < 3:
             connection_attempts += 1
             try:
-                response = requests.post(XBOX_AUTH_URL, json=payload)
+                response = session.post(
+                    XBOX_AUTH_URL, json=payload, headers=headers)
                 response.raise_for_status()
                 break
             except (requests.exceptions.ConnectionError,
@@ -83,9 +91,10 @@ class XboxToken:
                 log.info("Waiting 5 seconds before next attempt...")
                 time.sleep(5)
             except requests.HTTPError as exc:
-                log.error("Failed to refresh MSA token; response code %s"
-                          % exc.errno)
-                return False
+                log.error("Failed to refresh MSA token; response code %d"
+                          % exc.response.status_code)
+                return AuthError(
+                    AuthStep.XBL, exc.response.status_code, exc.response.text)
             # TODO: remove this when verified that the loop won't
             # infinitely continue
             if connection_attempts < 4:
@@ -105,6 +114,10 @@ class XboxToken:
     @property
     def user_hash(self):
         return self.json["DisplayClaims"]["xui"][0]["uhs"]
+    
+    @property
+    def gamertag(self):
+        return self.json["DisplayClaims"]["xui"][0].get("gtg")
     
     def as_json(self):
         return self.json

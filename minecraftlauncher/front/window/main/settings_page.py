@@ -15,7 +15,7 @@ from PySide6.QtWidgets import (
 
 from minecraftlauncher import config, constants
 from minecraftlauncher.front import resources
-from minecraftlauncher.front.qt.widgets import TooltipHint
+from minecraftlauncher.front.qt.widgets import TooltipHint, Section
 
 log = logging.getLogger(__name__)
 
@@ -24,19 +24,21 @@ class SettingsPage(QWidget):
 
     settings_changed = Signal()
     status_update = Signal(str)
-    def __init__(self, parent=None):
+    def __init__(self, parent = None):
         super().__init__(parent)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(40, 40, 40, 40)
 
         title = QLabel("Settings")
         title.setProperty("heading", True)
+        title.setStyleSheet(
+            ";".join([title.styleSheet(), "margin-left: -0.2em;"]))
         layout.addWidget(title)
 
         # Behavior
-        behavior_label = QLabel("Behavior")
-        behavior_label.setProperty("section", True)
-        layout.addWidget(behavior_label)
+        behavior = Section("Behavior")
+        behavior.setProperty("section", True)
+        layout.addWidget(behavior)
 
         post_launch_w = QWidget()
         post_launch_lo = QHBoxLayout(post_launch_w)
@@ -55,8 +57,8 @@ class SettingsPage(QWidget):
         post_launch_lo.addWidget(self.post_launch_options)
         post_launch_lo.addWidget(tooltip)
         post_launch_lo.addStretch()
-        
-        layout.addWidget(post_launch_w)
+
+        behavior.addWidget(post_launch_w)
 
         open_browser_for_login = QCheckBox("Open browser automatically for " \
                                            "sign-in")
@@ -64,12 +66,47 @@ class SettingsPage(QWidget):
         open_browser_for_login.checkStateChanged.connect(
             lambda c: config.set(
                 "open_browser_for_login", c == Qt.CheckState.Checked))
-        layout.addWidget(open_browser_for_login)
+        behavior.addWidget(open_browser_for_login)
+
+        copy_code_for_login = QCheckBox("Copy sign-in code to clipboard")
+        copy_code_for_login.setChecked(config.copy_code_for_login)
+        copy_code_for_login.checkStateChanged.connect(
+            lambda c: config.set(
+                "copy_code_for_login", c == Qt.CheckState.Checked))
+        behavior.addWidget(copy_code_for_login)
+
+        # Downloads
+        downloads = Section("Downloads")
+        downloads.setProperty("section", True)
+        layout.addWidget(downloads)
+
+        redownload_w = QWidget()
+        redownload_lo = QHBoxLayout(redownload_w)
+        redownload_lo.setContentsMargins(0, 0, 0, 0)
+        rd_tooltip = TooltipHint(
+            "How you want the launcher to behave with a lack of hash\n\n"
+            "If you don't know what a file hash is, leave this at the default "
+            "option (\"Always redownload\"), unless you have a very bad "
+            "or unstable internet connection.\n\n"
+            "\"Redownload once\" will redownload the libraries/client JAR, "
+            "then set it back to \"Never redownload\" if the game closes with "
+            "a return code of 0."
+        )
+        rd_label = QLabel("When a file doesn't have a hash:")
+        redownload_lo.addWidget(rd_label)
+        self.redownload_option = QComboBox()
+        self.redownload_option.setProperty("compact", True)
+        redownload_lo.addWidget(rd_label)
+        redownload_lo.addWidget(self.redownload_option)
+        redownload_lo.addWidget(rd_tooltip)
+        redownload_lo.addStretch()
+
+        downloads.addWidget(redownload_w)
 
         # Visual
-        visual_label = QLabel("Visual")
-        visual_label.setProperty("section", True)
-        layout.addWidget(visual_label)
+        visual = Section("Visual")
+        visual.setProperty("section", True)
+        layout.addWidget(visual)
 
         tooltips_enabled = QCheckBox("Show Tooltip Icons")
         tooltips_enabled.setChecked(config.tooltip_icons_enabled)
@@ -80,7 +117,7 @@ class SettingsPage(QWidget):
         tooltips_enabled.checkStateChanged.connect(
             lambda c: TooltipHint.refresh_visibility()
         )
-        layout.addWidget(tooltips_enabled)
+        visual.addWidget(tooltips_enabled)
 
         show_logs_w = QWidget()
         show_logs_w.setContentsMargins(0, 0, 0, 0)
@@ -100,6 +137,21 @@ class SettingsPage(QWidget):
         show_logs_lo.addWidget(show_logs_tt)
 
         # layout.addWidget(show_logs_w)
+
+        # dev options
+        if constants.DEV:
+            dev = Section("DEV")
+
+            console_game_logs = QCheckBox("Show game logs in native console")
+            console_game_logs.setChecked(bool(config.dev_game_logs_in_console))
+            console_game_logs.checkStateChanged.connect(
+                lambda c: config.set(
+                    "dev_game_logs_in_console", c == Qt.CheckState.Checked
+                )
+            )
+            dev.addWidget(console_game_logs)
+
+            layout.addWidget(dev)
 
         layout.addStretch()
 
@@ -149,6 +201,31 @@ class SettingsPage(QWidget):
         self.post_launch_options.currentIndexChanged.connect(
             self._on_post_launch_options_change
         )
+        self.redownload_option.addItem(
+            "Always redownload (default)",
+            config.JarRedownloadBehavior.REDOWNLOAD
+        )
+        self.redownload_option.addItem(
+            "Redownload once (not recommended)",
+            config.JarRedownloadBehavior.REDOWNLOAD_ONCE
+        )
+        self.redownload_option.addItem(
+            "Never redownload (not recommended)",
+            config.JarRedownloadBehavior.NEVER
+        )
+        match config.redownload_option:
+            case config.JarRedownloadBehavior.NEVER:
+                self.redownload_option.setCurrentIndex(2)
+            case config.JarRedownloadBehavior.REDOWNLOAD:
+                self.redownload_option.setCurrentIndex(0)
+            case config.JarRedownloadBehavior.REDOWNLOAD_ONCE:
+                self.redownload_option.setCurrentIndex(1)
+        self.redownload_option.currentIndexChanged.connect(
+            self._on_redownload_option_change)
 
-    def _on_post_launch_options_change(self, i:int):
+    def _on_post_launch_options_change(self, i: int):
         config.post_launch_option = config.PostLaunchBehavior(i)
+    
+    def _on_redownload_option_change(self, i: int):
+        data: int = self.redownload_option.itemData(i)
+        config.redownload_option = config.JarRedownloadBehavior(data)

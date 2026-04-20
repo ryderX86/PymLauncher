@@ -7,10 +7,10 @@ title = Launcher
 project_dir = .
 
 # source file entry point path. default = main.py
-input_file = minecraftlauncher
+input_file = C:\Users\User\Documents\dev\minecraftlauncher-py\minecraftlauncher
 
 # directory where the executable output is generated
-exec_directory = .
+exec_directory = .\dist
 
 # application icon
 icon = ./resources/_dist/icon.ico
@@ -27,9 +27,9 @@ packages = Nuitka==4.0.8
 android_packages = buildozer==1.5.0,cython==0.29.33
 
 [qt]
-qml_files = 
-modules = Core,Gui,Svg,SvgWidgets,Widgets
-plugins = accessiblebridge,egldeviceintegrations,generic,iconengines,imageformats,platforminputcontexts,platforms,platforms/darwin,platformthemes,styles,wayland-decoration-client,wayland-graphics-integration-client,wayland-shell-integration,xcbglintegrations
+qml_files = .\resources\3d\alex\Alex.qml,.\resources\3d\alex\scene.qml,.\reosurces\3d\steve\Steve.qml,.\reosurces\3d\steve\scene.qml
+modules = Core,Gui,Qml,Quick,Quick3D,QuickWidgets,Svg,SvgWidgets,Widgets
+plugins = accessiblebridge,egldeviceintegrations,generic,iconengines,imageformats,platforminputcontexts,platforms,platforms/darwin,platformthemes,styles,wayland-decoration-client,wayland-graphics-integration-client,wayland-shell-integration,xcbglintegrations,renderers,renderplugins,sceneparsers,geometryloaders,assetimporters
 excluded_qml_plugins = 
 
 [android]
@@ -45,7 +45,9 @@ mode = standalone
 
 # specify any extra nuitka arguments
 # eg = extra_args = --show-modules --follow-stdlib
-extra_args = --noinclude-qt-translations --python-flag=-m --python-flag=isolated --python-flag=-P --remove-output --windows-console-mode=disable --output-filename=launcher.exe --no-deployment-flag=self-execution
+extra_args = --noinclude-qt-translations --python-flag=-m --python-flag=isolated --remove-output --windows-console-mode=disable --output-filename=launcher.exe --no-deployment-flag=self-execution
+
+#  --user-package-configuration-file = ./scripts/w32.nuitka.yaml
 
 [buildozer]
 

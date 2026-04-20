@@ -5,12 +5,12 @@ import os
 import zipfile
 import logging
 
-from minecraftlauncher.datatypes.GameProfile import GameProfile
+from minecraftlauncher.datatypes.launch_profile import GameProfile
 from minecraftlauncher.back import profile_manager
 from minecraftlauncher import constants, args
 
 log = logging.getLogger(__name__)
-if args._exporting_debug:
+if args.exporting_debug:
     log.setLevel(logging.DEBUG)
 else:
     log.setLevel(logging.INFO)
@@ -150,7 +150,81 @@ class PortableProfile:
                     pathlist.append(path)
         return pathlist
     
-    def export_default(
+    @classmethod
+    def import_profile(cls, file: str | Path, target_dir: str | Path,
+                       overwrite: bool = False):
+        if isinstance(file, str):
+            file = Path(file)
+        if not file.exists() and not file.is_file():
+            raise FileNotFoundError(file)
+        if isinstance(target_dir, str):
+            target_dir = Path(target_dir)
+        if not target_dir.exists():
+            try:
+                target_dir.mkdir(parents=True, exist_ok=True)
+            except Exception as err:
+                raise ValueError("Invalid file path: %s" % target_dir) from err
+        
+        with zipfile.ZipFile(file, "r") as zip:
+            filenames = [f.filename for f in zip.filelist]
+            if "profile.json" not in filenames:
+                return False
+            profile_json_raw = zip.open("profile.json").read().decode()
+            try:
+                profile_json = json.loads(profile_json_raw)
+            except json.JSONDecodeError as err:
+                log.error("Failed to decode JSON in portable profile:",
+                          exc_info=err)
+                zip.close()
+                return False
+            match profile_json.get("_FORMAT", "?"):
+                case "beachhorse":
+                    cls.import_beachhorse(
+                        profile_json, zip, target_dir, overwrite)
+                    return
+                case _:
+                    raise ValueError(
+                        "Unknown format: %s" % profile_json.get(
+                            "_FORMAT", "unidentified format"
+                            )
+                        )
+                
+    @classmethod
+    def import_beachhorse(cls, profile_info:dict, zip: zipfile.ZipFile,
+                          target_dir: Path, overwrite: bool):
+        ...
+        # filenames = [f.filename for f in zip.filelist]
+        # for path in profile_info["_PATHS"]:
+        #     match path[0]:
+        #         case "?":
+        #             OPTIONAL = True
+        #             path = path[1:]
+        #         case _:
+        #             OPTIONAL = False
+        #     IS_FILE = "." in path
+            
+        #     if path not in filenames:
+        #         if OPTIONAL:
+        #             log.debug(
+        #                 "skipping filepath '%s' since it's optional and "
+        #                 "wasn't found" % path)
+        #             continue
+        #         else:
+        #             raise FileNotFoundError(path)
+            
+        #     p = target_dir / path
+        #     if p.exists() and (p.is_file() or p.is_dir()) and not overwrite:
+        #             zip.close()
+        #             raise FileExistsError(str(p))
+        #     elif p.exists() and (p.is_file() or p.is_dir()):
+        #         log.debug("Overwriting '%s'" % str(p))
+        #     if IS_FILE:
+        #         zip.extract(path, p)
+        #     else:
+        #         zip.filelist
+        
+    
+    def export_beachhorse(
             self, output:str|Path, mods:bool, options_txt:bool,
             resource_packs:bool, saves:bool, screenshots:bool,
             versions:bool, config:bool, coremods:bool, menuworlds:bool,
@@ -171,7 +245,7 @@ class PortableProfile:
             return True
         
         log.debug("Opening \"%s\" as NEW archive" % str(output))
-        with zipfile.ZipFile(output, "x") as zip:
+        with zipfile.ZipFile(output, "x", zipfile.ZIP_ZSTANDARD) as zip:
             if mods and self.mods:
                 p = b / "mods"
                 zip.mkdir("mods")
@@ -260,6 +334,33 @@ class PortableProfile:
             if debug_profile and self.debug_profile:
                 log.info("Including debug (F3) profile")
                 zip.write(b / "debug-profile.json", "debug-profile.json")
+
+            profile_dump = self.prof.to_dict()
+            profile_dump["_FORMAT"] = "beachhorse"
+            profile_dump["_PATHS"] = []
+            if mods:
+                profile_dump["_PATHS"].append("mods")
+            if options_txt:
+                profile_dump["_PATHS"].append("options.txt")
+            if resource_packs:
+                profile_dump["_PATHS"].append("?resourcepacks")
+                profile_dump["_PATHS"].append("?texturepacks")
+            if saves:
+                profile_dump["_PATHS"].append("saves")
+            if screenshots:
+                profile_dump["_PATHS"].append("screenshots")
+            if versions:
+                profile_dump["_PATHS"].append("versions")
+            if config:
+                profile_dump["_PATHS"].append("config")
+            if coremods:
+                profile_dump["_PATHS"].append("coremods")
+            if menuworlds:
+                profile_dump["_PATHS"].append("menuworlds")
+            if debug_profile:
+                profile_dump["_PATHS"].append("debug_profile.json")
+            profile_json = json.dumps(profile_dump)
+            zip.writestr("profile.json", profile_json)
             
             zip.close()
 
@@ -272,7 +373,7 @@ class PortableProfile:
             menuworlds:bool, debug_profile:bool):
         match type:
             case ExportType.DEFAULT:
-                return self.export_default(
+                return self.export_beachhorse(
                     output, mods, options_txt, resource_packs, saves,
                     screenshots, versions, config, coremods, menuworlds,
                     debug_profile)

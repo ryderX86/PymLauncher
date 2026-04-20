@@ -15,9 +15,6 @@ class JWT:
 
         if "alg" not in header.keys():
             raise TypeError("Missing 'alg' from JWT header!")
-        
-    
-        
 
 def decode_jwt(jwt:str) -> JWT:
     """

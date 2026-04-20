@@ -5,20 +5,24 @@ Page with account info, skin management, log out button.
 """
 import logging
 import os
+import shiboken6
+import time
 
-from PySide6.QtCore import Qt, Signal, QTimer
-from PySide6.QtGui import QPixmap, QClipboard
-from PySide6.QtWidgets import (QApplication, QFileDialog, QFrame, QGridLayout,
-                             QGroupBox, QHBoxLayout, QLabel, QListWidget,
-                             QListWidgetItem, QMessageBox, QPushButton,
-                             QVBoxLayout, QWidget, QStyle)
+from PySide6.QtCore import QSize, Qt, Signal, QTimer, QUrl, QObject
+from PySide6.QtGui import QPixmap, QClipboard, QSurfaceFormat, QImage
+from PySide6.QtQml import QQmlImageProviderBase
+from PySide6.QtWidgets import (
+    QApplication, QFileDialog, QFrame, QGridLayout, QGroupBox, QHBoxLayout,
+    QLabel, QListWidget, QListWidgetItem, QMessageBox, QPushButton,
+    QVBoxLayout, QWidget, QStyle)
 
 from minecraftlauncher import style, qapp
 from minecraftlauncher.front.resources import symbol
 from minecraftlauncher.back import account_manager
-from minecraftlauncher.auth import LauncherAccount
+from minecraftlauncher.auth import LauncherAccount, MinecraftProfile
 from minecraftlauncher.functions.error_box import error_box
 from minecraftlauncher.constants import CHECKMARK_DELAY
+from minecraftlauncher.front.window.skin_change import SkinChange
 
 log = logging.getLogger(__name__)
 
@@ -45,28 +49,39 @@ class AccountPage(QWidget):
         layout.setSpacing(20)
         layout.addStretch()
 
-        self.title = QLabel("<username or email>")
+        preview_w = QWidget()
+        preview_w.setContentsMargins(0, 0, 0, 0)
+        preview_layout = QHBoxLayout(preview_w)
+        preview_layout.setContentsMargins(0, 0, 0, 0)
+        preview_layout.setSpacing(40)
+
+        self.title = QLabel("<username or gamertag>")
         self.title.setProperty("heading", True)
-        layout.addWidget(self.title)
+        preview_layout.addWidget(self.title)
+
+        self.change_skin_button = QPushButton("Change skin")
+        self.change_skin_button.setMaximumWidth(250)
+        self.change_skin_button.clicked.connect(self._change_skin)
+        preview_layout.addWidget(self.change_skin_button, 0)
+
+        layout.addWidget(preview_w)
 
         layout.addStretch()
 
         # Account info stuff
         info_group = QGroupBox("Account Info")
         info_layout = QGridLayout(info_group)
-        info_layout.setSpacing(10)        
+        info_layout.setSpacing(0)
 
-        info_layout.addWidget(QLabel("Email:"), 0, 0)
-        self.email_label = QLabel("<email>")
-        self.email_label.setStyleSheet("font-weight: 600;")
-        info_layout.addWidget(self.email_label, 0, 1)
-
-        info_layout.addWidget(QLabel("Username:"), 1, 0)
+        info_layout.addWidget(QLabel("Username:"), 0, 0)
         self.username_label = QLabel("<username>")
         self.username_label.setStyleSheet("font-weight: 600;")
-        info_layout.addWidget(self.username_label, 1, 1)
+        self.username_label.setTextInteractionFlags(
+            Qt.TextInteractionFlag.TextSelectableByMouse
+        )
+        info_layout.addWidget(self.username_label, 0, 1)
 
-        info_layout.addWidget(QLabel("UUID:"), 2, 0)
+        info_layout.addWidget(QLabel("UUID:"), 1, 0)
         uuid_row = QHBoxLayout()
         uuid_row.setSpacing(10)
         self.uuid_label = QLabel("<uuid1-uuid2-uuid3-uuid4-uuid5>")
@@ -83,7 +98,23 @@ class AccountPage(QWidget):
         self.copy_uuid_button.clicked.connect(self._copy_uuid)
         uuid_row.addWidget(self.copy_uuid_button)
 
-        info_layout.addLayout(uuid_row, 2, 1)
+        info_layout.addLayout(uuid_row, 1, 1)
+
+        info_layout.addWidget(QLabel("Xbox Gamertag:"), 2, 0)
+        self.gtg_label = QLabel("<gamertag>")
+        self.gtg_label.setStyleSheet("font-weight: 600;")
+        self.gtg_label.setTextInteractionFlags(
+            Qt.TextInteractionFlag.TextSelectableByMouse
+        )
+        info_layout.addWidget(self.gtg_label, 2, 1)
+
+        info_layout.addWidget(QLabel("XUID:"), 3, 0)
+        self.xuid_label = QLabel("<xuid>")
+        self.xuid_label.setStyleSheet("font-weight: 600;")
+        self.xuid_label.setTextInteractionFlags(
+            Qt.TextInteractionFlag.TextSelectableByMouse
+        )
+        info_layout.addWidget(self.xuid_label, 3, 1)
 
         for i in range(info_layout.rowCount()):
             info_layout.setRowMinimumHeight(i, 48)
@@ -92,24 +123,41 @@ class AccountPage(QWidget):
 
         # TODO: Skin selection/preview
 
-        # Logout
+        # Management area
+        manage_w = QWidget()
+        manage = QHBoxLayout(manage_w)
+        manage.addStretch()
+
+        mg_accounts_button = QPushButton("Manage accounts")
+        mg_accounts_button.setFixedWidth(160)
+        # mg_accounts_button.clicked.connect(self._manage_accounts)
+        mg_accounts_button.setDisabled(True)
+        manage.addWidget(mg_accounts_button)
+
         logout_button = QPushButton("Log out")
         logout_button.setProperty("danger", True)
         logout_button.setFixedWidth(160)
         logout_button.clicked.connect(self._on_logout)
-        layout.addWidget(logout_button)
+        manage.addWidget(logout_button)
+
+        layout.addWidget(manage_w)
 
     def set_account_info(self, info:LauncherAccount):
         """Update account info displayed on page"""
         self._account_info = info
-        self.email_label.setText(info.msa.email)
+        self.gtg_label.setText(info.gamertag)
         username = info.username
-        if not username:
-            username = "None"
+        if not username and not info.demo_mode:
+            log.warning("Player has no username!")
+            username = "[no username]"
             self.username_label.setProperty("danger", True)
+        elif info.demo_mode:
+            username = "[demo user]"
         self.username_label.setText(username)
         self.uuid_label.setText(info.uuid)
         self.title.setText(username)
+        self.xuid_label.setText(info.xuid)
+        self.change_skin_button.setDisabled(info.demo_mode)
     
     def _copy_uuid(self):
         uuid_text = self.uuid_label.text()
@@ -140,3 +188,11 @@ class AccountPage(QWidget):
             self.logout_requested.emit()
         else:
             self.log.debug("Logout aborted by user.")
+
+    def _change_skin(self):
+        log.debug("Showing skin change dialog")
+        if self._account_info:
+            self.dialog = SkinChange(self._account_info)
+            self.dialog.skin_changed.connect(self.skin_upload.emit)
+            self.dialog.exec()
+            self.dialog.deleteLater()

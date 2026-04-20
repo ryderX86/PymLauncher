@@ -7,12 +7,14 @@ import logging
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QResizeEvent
-from PySide6.QtWidgets import (QHBoxLayout, QMainWindow, QPushButton,
-                             QStackedWidget, QVBoxLayout, QWidget, QLabel,
-                             QStatusBar, QFrame)
+from PySide6.QtWidgets import (
+    QHBoxLayout, QMainWindow, QPushButton, QStackedWidget, QVBoxLayout,
+    QWidget, QLabel, QStatusBar, QFrame)
 
 from minecraftlauncher import config
 from minecraftlauncher.front import styles
+from minecraftlauncher.back import account_manager
+from minecraftlauncher.constants import LAUNCHER_VERSION
 from .home_page import HomePage
 from .profiles_page import ProfilesPage
 from .settings_page import SettingsPage
@@ -58,6 +60,7 @@ class MainWindow(QMainWindow):
             config.window_size = [geo.width(), geo.height()]
             config.maximized = False
         config.save()
+        account_manager.save_accounts()
 
     def closeEvent(self, a0):
         self._save_config()
@@ -110,7 +113,7 @@ class MainWindow(QMainWindow):
         self.account_dropdown.add_account_requested.connect(
             self.login_requested.emit
         )
-        top_bar_layout.addWidget(self.account_dropdown, 1)
+        top_bar_layout.addWidget(self.account_dropdown)
 
         root_layout.addWidget(top_bar)
 
@@ -173,6 +176,7 @@ class MainWindow(QMainWindow):
 
         self.home_page.game_open.connect(self._process_game_open)
         self.home_page.game_closed.connect(self._process_game_closed)
+        self.account_page.skin_upload.connect(self.account_dropdown.refresh)
 
         for page in self.page_list:
             self.pages.addWidget(page)
@@ -185,6 +189,11 @@ class MainWindow(QMainWindow):
         self.status = QStatusBar()
         self.setStatusBar(self.status)
         self.status.showMessage("Ready to go")
+        self.status.setSizeGripEnabled(False)
+        ver_label = QLabel(LAUNCHER_VERSION)
+        ver_label.setContentsMargins(0, 0, 6, 0)
+        ver_label.setProperty("secondary", True)
+        self.status.addPermanentWidget(ver_label, 0)
 
         self._navigate("home")
 

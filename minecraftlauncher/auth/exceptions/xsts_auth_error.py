@@ -9,8 +9,10 @@ class XstsAuthError(Exception):
                 case 2148916227:
                     reason = "This account is banned from Xbox Live."
                 case 2148916233:
-                    reason = "This account doesn't have an Xbox Live account."
-                    reason += "\nPlease go to minecraft.net and sign in to create one."
+                    reason = (
+                        "This account doesn't have an Xbox Live account."
+                        "\nPlease go to minecraft.net and sign in to create "
+                        "one.")
                 case 2148916235:
                     reason = "Xbox Live is not available in the account's region"
                 case 2148916236:

@@ -11,7 +11,7 @@ from PySide6.QtWidgets import (
     QListWidgetItem, QFileDialog, QApplication
 )
 
-from minecraftlauncher.datatypes.GameProfile import GameProfile
+from minecraftlauncher.datatypes.launch_profile import GameProfile
 from minecraftlauncher.front import resources
 from minecraftlauncher.functions.error_box import error_box
 

@@ -1,3 +1,5 @@
+from xml.etree import ElementTree
+from xml import etree
 from functools import lru_cache
 from typing import LiteralString, overload
 from enum import StrEnum
@@ -9,6 +11,9 @@ import zipfile
 from PySide6.QtCore import Qt, QFile, QSize
 from PySide6.QtGui import QIcon, QPixmap, QImage
 from PySide6.QtSvg import QSvgRenderer
+import qrcode
+import qrcode.constants
+import qrcode.image.svg
 
 from . import _resources_bundled
 from minecraftlauncher.args import resource_debug
@@ -258,3 +263,21 @@ def icon_from_qimg(img:QImage, scale_pixels:bool=False):
         _icon_cache[img_id] = ico
         return _icon_cache[img_id]
     return ico
+
+def link_to_qrcode(link:str):
+    factory = qrcode.image.svg.SvgPathFillImage
+
+    qr = qrcode.QRCode(
+        box_size=10,
+        image_factory=factory,
+        error_correction=qrcode.constants.ERROR_CORRECT_M)
+    qr.add_data(link)
+    qr.make()
+    svg_el = qr.make_image()
+    wh = svg_el.pixel_size
+    svg = svg_el.to_string().decode()
+    svg = svg.replace("mm", "px")
+    pix = QPixmap()
+    pix.loadFromData(svg.encode())
+    pix = pix.scaledToWidth(wh // 2)
+    return pix

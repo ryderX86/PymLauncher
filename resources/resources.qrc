@@ -2,7 +2,7 @@
     <qresource prefix="/profile">
         <file alias="bedrock.png">icon/profile_icons/bedrock.png</file>
         <file alias="bookshelf.png">icon/profile_icons/bookshelf.png</file>
-        <file alias="brick.png">icon/profile_icons/bricks.png</file>
+        <file alias="brick.png">icon/profile_icons/brick.png</file>
         <file alias="creeper_head.png">icon/profile_icons/creeper_head.png</file>
         <file alias="default.png">icon/profile_icons/default.png</file>
         <file alias="dirt.png">icon/profile_icons/dirt.png</file>
@@ -247,7 +247,56 @@
         <file>icon/symbol/trash-disabled.svg</file>
         <file>icon/symbol/trash-disabled-dark.svg</file>
     </qresource>
-    <qresource prefix="/animation">
-        <file alias="load.svg">icon/animate/load.svg</file>
+    <qresource prefix="/3d/steve">
+        <file alias="Steve.qml">3d/steve/Steve.qml</file>
+        <file alias="scene.qml">3d/steve/scene.qml</file>
+    </qresource>
+    <qresource prefix="/3d/alex">
+        <file alias="Alex.qml">3d/alex/Alex.qml</file>
+        <file alias="scene.qml">3d/alex/scene.qml</file>
+    </qresource>
+    <qresource prefix="/3d/steve/meshes">
+        <file alias="meshes_0__mesh.mesh">3d/steve/meshes/meshes_0__mesh.mesh</file>
+        <file alias="meshes_1__mesh.mesh">3d/steve/meshes/meshes_1__mesh.mesh</file>
+        <file alias="meshes_2__mesh.mesh">3d/steve/meshes/meshes_2__mesh.mesh</file>
+        <file alias="meshes_3__mesh.mesh">3d/steve/meshes/meshes_3__mesh.mesh</file>
+        <file alias="meshes_4__mesh.mesh">3d/steve/meshes/meshes_4__mesh.mesh</file>
+        <file alias="meshes_5__mesh.mesh">3d/steve/meshes/meshes_5__mesh.mesh</file>
+        <file alias="meshes_6__mesh.mesh">3d/steve/meshes/meshes_6__mesh.mesh</file>
+        <file alias="meshes_7__mesh.mesh">3d/steve/meshes/meshes_7__mesh.mesh</file>
+        <file alias="meshes_8__mesh.mesh">3d/steve/meshes/meshes_8__mesh.mesh</file>
+        <file alias="meshes_9__mesh.mesh">3d/steve/meshes/meshes_9__mesh.mesh</file>
+        <file alias="meshes_10__mesh.mesh">3d/steve/meshes/meshes_10__mesh.mesh</file>
+        <file alias="meshes_11__mesh.mesh">3d/steve/meshes/meshes_11__mesh.mesh</file>
+        <file alias="meshes_12__mesh.mesh">3d/steve/meshes/meshes_12__mesh.mesh</file>
+    </qresource>
+    <qresource prefix="/3d/alex/meshes">
+        <file alias="meshes_0__mesh.mesh">3d/alex/meshes/meshes_0__mesh.mesh</file>
+        <file alias="meshes_1__mesh.mesh">3d/alex/meshes/meshes_1__mesh.mesh</file>
+        <file alias="meshes_2__mesh.mesh">3d/alex/meshes/meshes_2__mesh.mesh</file>
+        <file alias="meshes_3__mesh.mesh">3d/alex/meshes/meshes_3__mesh.mesh</file>
+        <file alias="meshes_4__mesh.mesh">3d/alex/meshes/meshes_4__mesh.mesh</file>
+        <file alias="meshes_5__mesh.mesh">3d/alex/meshes/meshes_5__mesh.mesh</file>
+        <file alias="meshes_6__mesh.mesh">3d/alex/meshes/meshes_6__mesh.mesh</file>
+        <file alias="meshes_7__mesh.mesh">3d/alex/meshes/meshes_7__mesh.mesh</file>
+        <file alias="meshes_8__mesh.mesh">3d/alex/meshes/meshes_8__mesh.mesh</file>
+        <file alias="meshes_9__mesh.mesh">3d/alex/meshes/meshes_9__mesh.mesh</file>
+        <file alias="meshes_10__mesh.mesh">3d/alex/meshes/meshes_10__mesh.mesh</file>
+        <file alias="meshes_11__mesh.mesh">3d/alex/meshes/meshes_11__mesh.mesh</file>
+        <file alias="meshes_12__mesh.mesh">3d/alex/meshes/meshes_12__mesh.mesh</file>
+    </qresource>
+    <qresource prefix="/3d/steve/animations">
+        <file alias="cape_rotation_0.qad">3d/steve/animations/cape_rotation_0.qad</file>
+        <file alias="left_Arm_rotation_0.qad">3d/steve/animations/left_Arm_rotation_0.qad</file>
+        <file alias="left_Leg_rotation_0.qad">3d/steve/animations/left_Leg_rotation_0.qad</file>
+        <file alias="right_Arm_rotation_0.qad">3d/steve/animations/right_Arm_rotation_0.qad</file>
+        <file alias="right_Leg_rotation_0.qad">3d/steve/animations/right_Leg_rotation_0.qad</file>
+    </qresource>
+    <qresource prefix="/3d/alex/animations">
+        <file alias="cape_rotation_0.qad">3d/alex/animations/cape_rotation_0.qad</file>
+        <file alias="left_Arm_rotation_0.qad">3d/alex/animations/left_Arm_rotation_0.qad</file>
+        <file alias="left_Leg_rotation_0.qad">3d/alex/animations/left_Leg_rotation_0.qad</file>
+        <file alias="right_Arm_rotation_0.qad">3d/alex/animations/right_Arm_rotation_0.qad</file>
+        <file alias="right_Leg_rotation_0.qad">3d/alex/animations/right_Leg_rotation_0.qad</file>
     </qresource>
 </RCC>

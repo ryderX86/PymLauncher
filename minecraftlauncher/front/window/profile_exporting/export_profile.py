@@ -12,7 +12,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtSvgWidgets import QSvgWidget
 
-from minecraftlauncher.datatypes.GameProfile import GameProfile
+from minecraftlauncher.datatypes.launch_profile import GameProfile
 from minecraftlauncher.back import fabric, version_manager
 from minecraftlauncher.back.profile_exporting import PortableProfile
 from minecraftlauncher.front import resources

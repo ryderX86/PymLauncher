@@ -12,13 +12,13 @@ import logging
 import os
 import re
 
-import requests
-
 from minecraftlauncher.constants import (
     VERSION_MANIFEST_URL, MINECRAFT_DIR, offline_mode, LOG4J_FIX_TIME,
     LOG4J_VULN_MIN_TIME, LOG4J_116_5_FIX_MAX_TIME, LOG4J_17_112_FIX_MAX_TIME
 )
 from minecraftlauncher.datatypes.game_version import GameVersionStub
+from minecraftlauncher.config import redownload_option
+from minecraftlauncher import session
 from .download_helpers import download
 
 log = logging.getLogger(__name__)
@@ -81,11 +81,11 @@ def fetch_version_manifest(force_refresh:bool=False):
     if _manifest_cache.get("versions", []) and not force_refresh:
         return _manifest_cache
     
-    log.debug("Looking for existing version manifest")
+    log.info("Looking for existing version manifest")
     mf_path = MINECRAFT_DIR / "versions" / "version_manifest_v2.json"
     if mf_path.exists():
-        log.debug("Found it! Checking age...")
-        max_age = (datetime.now() - timedelta(days=1)).timestamp()
+        log.info("Found it! Checking age...")
+        max_age = (datetime.now() - timedelta(hours=1)).timestamp()
         if mf_path.stat().st_mtime > max_age:
             mf_text = mf_path.read_text()
             try:
@@ -95,15 +95,16 @@ def fetch_version_manifest(force_refresh:bool=False):
                 log.info("Failed to read version manifest! Re-downloading...")
                 mf_path.unlink()
             else:
+                log.info("Using existing versions cache.")
                 _manifest_cache = mf
                 return _manifest_cache
         else:
-            log.debug("Existing manifest is too old, getting a new one.")
-    
+            log.info("Existing manifest is too old, getting a new one.")
+
     log.info("Fetching version manifest from '%s'" % VERSION_MANIFEST_URL)
     VERSION_DIR.mkdir(parents=True, exist_ok=True)
     try:
-        resp = requests.get(VERSION_MANIFEST_URL, timeout=30)
+        resp = session.get(VERSION_MANIFEST_URL, timeout=30)
     except:
         log.error("Failed to get version manifest!")
         return _manifest_cache
@@ -137,6 +138,12 @@ def _build_local_version_list(exclude:list[GameVersionStub]|None=None):
             log.warning("Failed to parse JSON in '%s':" % str(json_path),
                         exc_info=err)
             continue
+        if ("downloads" not in ver_json
+                and "inheritsFrom" not in ver_json
+                and not jar_path.exists()):
+            log.warning(
+                "Version '%s' has no jar file and doesn't inherit from "
+                "anything!" % folder.name)
         version_info = GameVersionStub(folder.name,
                                        ver_json.get("type", "release"),
                                        json_path, True,
@@ -198,8 +205,11 @@ def get_version_list(include_snapshots:bool=True,
         versions.append(new_ver)
     versions.extend(_build_local_version_list(versions))
     _version_list_cache = versions
+    # forge is expected to always appear at the bottom unfortuantely, since for
+    # some ungodly reason before more recent versions they always set the time
+    # to 1 DECADE before unix epoch (also 1 decade before???? WHY)
     versions.sort(key=lambda v: v.timestamp, reverse=True)
-    log.debug("Done refreshing versions")
+    log.info("Parsed complete versions list successfully.")
     return versions
 
 def get_latest_release() -> str:
@@ -292,8 +302,10 @@ def _resolve_inheritence(version_json:dict, recursion:int=0, *,
         return version_json
     
     parent_id:str = version_json["inheritsFrom"]
-    log.debug("Game version '%s' inherits from '%s'"
-              % (version_json["id"], parent_id))
+    log.info(
+        "Game version '%s' inherits from '%s'"
+        % (version_json["id"], parent_id)
+    )
     
     parent_json = fetch_version_json(parent_id)
     parent_json = _resolve_inheritence(parent_json, recursion=recursion + 1)
@@ -341,8 +353,7 @@ def resolve_inheritence(version_json:dict):
 
     If the chain exceeds 20 *(an already far, far excessive amount)*, then a
     `RecursionError` is raised.
-
-    <sub>Stub function that calls `_resolve_inheritence()`.</sub>
+    <br><sub>Stub function that calls `_resolve_inheritence()`.</sub>
     """
     return _resolve_inheritence(version_json)
 
@@ -392,6 +403,10 @@ def download_client_jar(version_json:dict, *,
         else:
             log.warning("'%s.jar' SHA1 doesn't match expected: '%s' != '%s'"
                         % (ver_id, sha1, str(expected_sha1)))
+    elif jar_path.exists() and jar_path.is_file() and not redownload_option:
+        log.info("Skipping download for '%s.jar' since it exists and option is"
+                 "to not redownload")
+        return jar_path
     
     url = client_info["url"]
     total_size = client_info.get("size", 0)
@@ -399,7 +414,7 @@ def download_client_jar(version_json:dict, *,
 
     ver_dir.mkdir(parents=True, exist_ok=True)
 
-    resp = requests.get(url, stream=True, timeout=60)
+    resp = session.get(url, stream=True, timeout=60)
     resp.raise_for_status()
 
     downloaded = 0
@@ -492,60 +507,3 @@ def check_fabric_mod_arg_support(version_id:str):
         if i >= 12:
             return True
     return False
-
-def log4j_fix(version_info:dict|GameVersionStub):
-    """
-    Returns the log4j fix for the version given, as well as a bool as to if
-    the client may be vulnerable regardless or not to notify the user.
-    """
-    max_dt = datetime.fromisoformat(LOG4J_FIX_TIME).timestamp()
-    dt_112_1165 = datetime.fromisoformat(LOG4J_116_5_FIX_MAX_TIME).timestamp()
-    dt_17_112 = datetime.fromisoformat(LOG4J_17_112_FIX_MAX_TIME).timestamp()
-    min_dt = datetime.fromisoformat(LOG4J_VULN_MIN_TIME)
-    t = rt = min_ = datetime.min.timestamp()
-    
-    client_unverified = False
-    if isinstance(version_info, dict):
-        version_info = resolve_inheritence(version_info)
-        if version_info.get("releaseTime"):
-            rt = datetime.fromisoformat(
-                version_info["releaseTime"]
-            ).timestamp()
-        if version_info.get("time"):
-            t = datetime.fromisoformat(version_info["time"]).timestamp()
-        if (not version_info.get("releaseTime")
-            and not version_info.get("time")):
-            log.warning("Couldn't get release time! Client may be vulnerable.")
-            client_unverified = True
-    else:
-        rt = version_info.timestamp
-        t = version_info.build_timestamp
-    # get the oldest timestamp:
-    if t != min_ and rt != min_:
-        ts = min(rt, t)
-    elif t != min_ and rt > t:
-        ts = t
-    elif rt != min_ and t > rt:
-        ts = rt
-    else:
-        log.warning("Couldn't get timestamp! Client may be vulnerable.")
-        client_unverified = True
-        ts = t
-
-    FIX = None
-
-    if ts >= max_dt:
-        return "", client_unverified
-    elif ts < max_dt and ts >= dt_112_1165:
-        FIX = "112_1165"
-    elif ts < dt_112_1165 and ts >= dt_17_112:
-        FIX = "17_112"
-    elif ts < dt_17_112:
-        return "", client_unverified
-    else:
-        raise
-
-    if FIX is None:
-        client_unverified = True
-        return "", client_unverified
-    

@@ -10,10 +10,10 @@ import requests
 
 from minecraftlauncher.constants import (SKIN_CHANGE_URL, LAUNCHER_DATA_DIR,
                                          MINECRAFT_DIR)
-from minecraftlauncher.auth.microsoft_account import MicrosoftAccount
-from minecraftlauncher.auth.launcher_account import LauncherAccount
+from minecraftlauncher.auth import MicrosoftAccount, LauncherAccount
+from minecraftlauncher.auth.encryption import data_load_hook, data_save_hook
 from minecraftlauncher.functions.text import indent
-from minecraftlauncher import DEV
+from minecraftlauncher import DEV, session
 
 log = logging.getLogger(__name__)
 
@@ -21,13 +21,11 @@ ACCOUNTS_FILE = LAUNCHER_DATA_DIR / "accounts.bin"
 SKINS_CACHE_DIR = LAUNCHER_DATA_DIR / "skin_cache"
 SKIN_METADATA_PATH = SKINS_CACHE_DIR / "skins_meta.json"
 
-save_accounts_mixin:Callable|None = None
-
 accounts:list[LauncherAccount] = []
 active_account:str|None = None
 
 def save_accounts(accounts_:list|None=None, *,
-                  active_email:str|None=None):
+                  active_gtg:str|None=None, return_unencrypted:bool=False):
     """
     Save account data to disk.
 
@@ -41,20 +39,21 @@ def save_accounts(accounts_:list|None=None, *,
     LAUNCHER_DATA_DIR.mkdir(parents=True, exist_ok=True)
 
     json_indent = 4 if DEV else 0
-    payload = json.dumps({
-        "active": active_email or active_account,
+    payload_str = json.dumps({
+        "active": active_gtg or active_account,
         "accounts": [acc.serialize() for acc in accounts],
         "last_saved": datetime.now().timestamp()
     }, indent=json_indent)
 
-    if isinstance(save_accounts_mixin, Callable):
-        # If we have OS-dependant methods for encrypting,
-        # let's use them here, else just skip it.
-        payload = save_accounts_mixin(payload)
-    
-    ACCOUNTS_FILE.write_text(payload, "utf-8")
+    if return_unencrypted:
+        log.warning("Returning unencrypted accounts.bin to var (not saving)")
+        return payload_str
 
-    log.debug("Saved %s accounts to cache file." % len(accounts))
+    payload = data_save_hook(payload_str)
+    
+    ACCOUNTS_FILE.write_bytes(payload)
+
+    log.info("Saved %s accounts to cache file." % len(accounts))
     return
 
 def save_or_replace_account(lp:LauncherAccount,
@@ -67,20 +66,27 @@ def save_or_replace_account(lp:LauncherAccount,
     
     index = 0
     found_account = False
+    xuid = ""
+    gtg = ""
     for acc in accounts:
-        new_email = lp.msa.email
-        email = acc.msa.email
-        if new_email == email:
+        new_xuid = lp.xuid
+        xuid = acc.xuid
+        gtg = acc.gamertag
+        if new_xuid == xuid:
             index = accounts.index(acc)
             found_account = True
             break
     if found_account:
-        log.debug("Account with E-mail '%s' replaced in cache"
-                  % lp.msa.email)
+        if xuid == lp.xuid:
+            log.debug("Account '%s' replaced in cache"
+                    % lp.gamertag)
+        else:
+            log.debug("Account '%s' replaced in cache w/ new gtg: '%s'"
+                      % (gtg, lp.gamertag))
         accounts[index] = lp
     else:
-        log.debug("Adding account with E-mail '%s' to accounts cache."
-                  % lp.msa.email)
+        log.debug("Adding account '%s' to accounts cache."
+                  % lp.gamertag)
         accounts.append(lp)
     save_accounts()
 
@@ -94,7 +100,12 @@ def load_accounts():
     if accounts and active_account:
         return accounts, active_account
     
-    payload = ACCOUNTS_FILE.read_text(encoding="utf-8")
+    payload_bytes = ACCOUNTS_FILE.read_bytes()
+    if payload_bytes[0:1] == b"{":
+        payload = payload_bytes.decode("utf-8")
+    else:
+        payload = data_load_hook(payload_bytes)
+
     try:
         accounts_file = json.loads(payload)
     except json.JSONDecodeError as err:
@@ -112,14 +123,18 @@ def load_accounts():
         accounts.append(acc)
     active_account = accounts_file.get("active")
     if len(accounts) > 0 and not active_account:
-        active_account = accounts[0].msa.email
+        active_account = accounts[0].gamertag
         log.warning("No active account set in cache file, setting to '%s'."
                     % active_account)
+        refreshed_account = True # lol
     if refreshed_account:
         save_accounts()
+    log.info(
+        "Loaded %d account(s) from '%s'" % (len(accounts), ACCOUNTS_FILE.name)
+    )
     return accounts, active_account
 
-def remove_account(email:str) -> bool:
+def remove_account(gamertag:str) -> bool:
     """
     Remove an account by E-mail; return `True` if removed, otherwise return
     `False`, then save the account cache.
@@ -128,24 +143,24 @@ def remove_account(email:str) -> bool:
 
     i:int|None = None
     for acc in accounts:
-        if acc.msa.email == email:
+        if acc.gamertag == gamertag:
             i = accounts.index(acc)
             break
     if isinstance(i, int):
         del accounts[i]
-        log.info("Removed %s from accounts cache." % email)
+        log.info("Removed %s from accounts cache." % gamertag)
         save_accounts()
         return True
     else:
         return False
     
-def set_active_account(email:str) -> bool:
+def set_active_account(gamertag:str) -> bool:
     global active_account
 
-    if email not in [acc.msa.email for acc in accounts]:
+    if gamertag not in [acc.gamertag for acc in accounts]:
         raise ValueError("LauncherProfile '%s' not in cache!")
-    active_account = email
-    log.debug("Set active account to %s" % email)
+    active_account = gamertag
+    log.debug("Set active account to %s" % gamertag)
     return True
 
 def update_account(account:LauncherAccount):
@@ -153,15 +168,15 @@ def update_account(account:LauncherAccount):
 
     for i in range(len(accounts)):
         acc = accounts[i]
-        if acc.msa.email == account.msa.email:
+        if acc.gamertag == account.gamertag:
             accounts[i] = account
             return
     
     accounts.append(account)
 
-def fetch_account(email:str) -> LauncherAccount|None:
+def fetch_account(gamertag:str) -> LauncherAccount|None:
     for acc in accounts:
-        if acc.msa.email == email:
+        if acc.gamertag == gamertag:
             return acc
     return None
 
@@ -300,7 +315,7 @@ def set_skin(access_token:str, skin_path:str|Path, variant:str="classic"):
         "variant": variant,
         "file": ("skin.png", skin_bytes, "image/png")
     }
-    resp = requests.post(SKIN_CHANGE_URL, headers=headers, files=files)
+    resp = session.post(SKIN_CHANGE_URL, headers=headers, files=files)
 
     if resp.status_code in (200, 204):
         log.info("Successfully changed skin to '%s'" % skin_path.name)

@@ -1,8 +1,11 @@
 """
 QSS stylesheet
 """
+from colorsys import rgb_to_hsv, hsv_to_rgb
 
 from PySide6.QtGui import QFont
+
+from minecraftlauncher.front.rgb import hex_to_rgb, rgb_to_hex
 
 # Colors
 BG_DARKEST = "#111111"
@@ -28,7 +31,103 @@ BORDER_LIGHT = "#3a3a3a"
 DANGER = "#e74c3c"
 DANGER_HOVER = "#c0392b"
 
-STYLESHEET = f"""
+def mk_accent_hover(r: float, g: float, b: float):
+    h, s, v = rgb_to_hsv(r, g, b)
+    s = max(s * 0.95, 0)
+    v = min(v * 1.1, 1)
+    nr, ng, nb = hsv_to_rgb(h, s, v)
+    return rgb_to_hex(nr, ng, nb)
+
+def mk_accent_light(r: float, g: float, b: float):
+    h, s, v = rgb_to_hsv(r, g, b)
+    s = max(s * 0.9, 0)
+    v = min(v * 1.15, 1)
+    nr, ng, nb = hsv_to_rgb(h, s, v)
+    return rgb_to_hex(nr, ng, nb)
+
+def mk_accent_lighter(r: float, g: float, b: float):
+    h, s, v = rgb_to_hsv(r, g, b)
+    s = max(s * 0.8, 0)
+    v = min(v * 1.25, 1)
+    nr, ng, nb = hsv_to_rgb(h, s, v)
+    return rgb_to_hex(nr, ng, nb)
+
+def mk_accent_press(r: float, g: float, b: float):
+    h, s, v = rgb_to_hsv(r, g, b)
+    s = min(v * 1.25, 1)
+    v = max(s * 0.75, 0)
+    nr, ng, nb = hsv_to_rgb(h, s, v)
+    return rgb_to_hex(nr, ng, nb)
+
+def mk_accent_dim(r: float, g: float, b: float):
+    h, s, v = rgb_to_hsv(r, g, b)
+    s = min(v * 1.33, 1)
+    v = max(s * 0.77, 0)
+    nr, ng, nb = hsv_to_rgb(h, s, v)
+    return rgb_to_hex(nr, ng, nb)
+
+def compile_colors(**kwargs):
+    bg_darkest = kwargs.get("bg_darkest", BG_DARKEST).strip("#")
+    bg_dark = kwargs.get("bg_dark", BG_DARK).strip("#")
+    bg_surface = kwargs.get("bg_surface", BG_SURFACE).strip("#")
+    bg_surface_light = kwargs.get(
+        "bg_surface_light", BG_SURFACE_LIGHT).strip("#")
+    bg_input = kwargs.get("bg_input", BG_INPUT).strip("#")
+    
+    accent = kwargs.get("accent", ACCENT).strip("#")
+    if accent != ACCENT:
+        r, g, b = hex_to_rgb(accent)
+        accent_lighter = mk_accent_lighter(r, g, b)
+        print(accent_lighter)
+        accent_light = mk_accent_light(r, g, b)
+        print(accent_light)
+        accent_hover = mk_accent_hover(r, g, b)
+        print(accent_hover)
+        accent_press = mk_accent_press(r, g, b)
+        print(accent_press)
+        accent_dim = mk_accent_dim(r, g, b)
+        print(accent_dim)
+    else:
+        accent_lighter = ACCENT_LIGHTER.strip("#")
+        accent_light = ACCENT_LIGHT.strip("#")
+        accent_hover = ACCENT_HOVER.strip("#")
+        accent_press = ACCENT_PRESS.strip("#")
+        accent_dim = ACCENT_DIM.strip("#")
+    
+    text_primary = kwargs.get("text_primary", TEXT_PRIMARY).strip("#")
+    text_secondary = kwargs.get("text_secondary", TEXT_SECONDARY).strip("#")
+    text_muted = kwargs.get("text_muted", TEXT_MUTED).strip("#")
+
+    border = kwargs.get("border", BORDER).strip("#")
+    border_light = kwargs.get("border_light", BORDER_LIGHT).strip("#")
+
+    danger = kwargs.get("danger", DANGER).strip("#")
+    danger_hover = kwargs.get("danger_hover", DANGER_HOVER).strip("#")
+
+    return {
+        "BG_DARKEST": "#" + bg_darkest,
+        "BG_DARK": "#" + bg_dark,
+        "BG_SURFACE": "#" + bg_surface,
+        "BG_SURFACE_LIGHT": "#" + bg_surface_light,
+        "BG_INPUT": "#" + bg_input,
+
+        "ACCENT": "#" + accent,
+        "ACCENT_LIGHTER": "#" + accent_lighter,
+        "ACCENT_LIGHT": "#" + accent_light,
+        "ACCENT_HOVER": "#" + accent_hover,
+        "ACCENT_PRESS": "#" + accent_press,
+        "ACCENT_DIM": "#" + accent_dim,
+
+        "TEXT_PRIMARY": "#" + text_primary,
+        "TEXT_SECONDARY": "#" + text_secondary,
+        "TEXT_MUTED": "#" + text_muted,
+        "BORDER": "#" + border,
+        "BORDER_LIGHT": "#" + border_light,
+        "DANGER": "#" + danger,
+        "DANGER_HOVER": "#" + danger_hover
+    }
+
+template = """
 /* Main */
 QWidget {{
     background-color: {BG_DARKEST};
@@ -71,7 +170,6 @@ QLabel[subheading="true"] {{
 QLabel[section="true"] {{
     font-size: 14px;
     font-weight: 700;
-    padding-bottom: 4px;
 }}
 
 /* Interactive */
@@ -177,6 +275,13 @@ QPushButton[nav="true"][active="true"] {{
     background: {BG_SURFACE_LIGHT};
     color: {ACCENT};
     border-left: 3px solid {ACCENT};
+}}
+
+QRadioButton::indicator::unchecked {{
+    image: url(:/icon/symbol/circle.svg);
+}}
+QRadioButton::indicator::checked {{
+    image: url(:/icon/symbol/circle-fill.svg);
 }}
 
 QMenu {{
@@ -398,6 +503,15 @@ QListView[profiles="true"]::item:hover:disabled {{
     background-color: {ACCENT_PRESS};
 }}
 
+QListWidget[icons="true"]::item, QListView[icons="true"]::item {{
+    padding: 2px 2px;
+}}
+
+QListWidget[icons="true"]::item::icon, QListView[icons="true"]::item::icon {{
+    margin-top: 4px;
+    margin-bottom: 4px;
+}}
+
 /* Tab */
 QTabWidget::pane {{
     border: 1px solid {BORDER};
@@ -468,6 +582,10 @@ QDialog {{
     background-color: {BG_DARKEST};
 }}
 """
+
+def regen_styles(): return template.format(**globals())
+
+STYLESHEET = regen_styles()
 
 FONT = QFont()
 FONT.setFamilies(["Segoe UI", "Inter", "Roboto", "sans-serif"])

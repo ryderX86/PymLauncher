@@ -3,8 +3,11 @@ minecraftlauncher.front.window.main.utilities_page
 
 Game management utilities
 """
+import logging
+import uuid
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, Signal, QTimer, QUrl
+from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
     QLabel, QVBoxLayout, QWidget, QPushButton
 )
@@ -12,6 +15,10 @@ from PySide6.QtWidgets import (
 from . import HRow
 from minecraftlauncher.front.window.modloaders import (
     FabricInstallWindow, NeoForgeInstallWindow)
+from minecraftlauncher.back import account_manager
+from minecraftlauncher import constants
+
+log = logging.getLogger(__name__)
 
 class UtilitiesPage(QWidget):
     """Utilities page (STUB)"""
@@ -46,6 +53,18 @@ class UtilitiesPage(QWidget):
 
         layout.addWidget(fabric_row)
 
+        if constants.DEV:
+            debug_row = HRow(self)
+            debug_row.setAlignment(
+                Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
+            )
+            d_label = QLabel("Debug utilities:")
+            dump_accs_btn = QPushButton("See accounts.bin")
+            dump_accs_btn.clicked.connect(self._dump_accs)
+            debug_row.addWidget(d_label)
+            debug_row.addWidget(dump_accs_btn)
+            layout.addWidget(debug_row)
+
         # nf_row = HRow(self)
         # nf_row.setAlignment(
         #     Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
@@ -62,3 +81,22 @@ class UtilitiesPage(QWidget):
 
     def build(self):
         pass
+
+    # literally zero reason for this to even take up memory in prod
+    if constants.DEV:
+        # TODO: just spawn a qdialog for it or something, save an SSD lol
+        def _dump_accs(self):
+            accounts_list = account_manager.save_accounts(return_unencrypted=True)
+            assert accounts_list
+            b = accounts_list.encode("utf-8")
+            dump_path = constants.LAUNCHER_DATA_DIR / f"temp-{uuid.uuid4()}.json"
+            log.debug("Writing to %s" % dump_path)
+            dump_path.write_bytes(b)
+            log.debug("Opening with QDesktopServices")
+            uri = QUrl.fromLocalFile(dump_path)
+            QDesktopServices.openUrl(uri)
+            log.debug("Waiting a second then deleting the file...")
+            def delete_temp_file():
+                log.debug("deleting file")
+                dump_path.unlink()
+            QTimer.singleShot(1000, delete_temp_file)

@@ -26,10 +26,7 @@ from minecraftlauncher.back import (
     version_manager, asset_manager, library_manager, java_manager,
     game_launcher
 )
-from minecraftlauncher.datatypes.game_version import GameVersionStub
-from minecraftlauncher.datatypes.GameProfile import GameProfile
-# from minecraftlauncher.front.icons.profile import (ICO, icon_from_name,
-#                                                    icon_from_b64)
+from minecraftlauncher.datatypes import GameProfile, GameVersionStub
 
 log = logging.getLogger(__name__)
 
@@ -187,8 +184,8 @@ def set_current_profile_uuid(uid:str):
 def set_current_profile(prof:GameProfile):
     global _current_profile
     # print(inspect.stack()[1].function)
-    log.info("Switching profile to '%s' (ID: %s)"
-             % (prof.name, prof.uuid))
+    log.debug("Switching profile to '%s' (ID: %s)"
+              % (prof.name, prof.uuid))
     _current_profile = prof
     for func in _profile_switch_handlers:
         func(prof)
@@ -401,8 +398,8 @@ def load_launcher_profiles():
                 uid = str(uuid.uuid4())
                 profs[uid] = GameProfile("", type="latest-snapshot",
                                          version_id="latest-snapshot")
-            log.debug("Loaded %d profiles from 'launcher_profiles.json'"
-                      % len(profs))
+            log.info("Loaded %d profiles from 'launcher_profiles.json'"
+                     % len(profs))
             profiles = profs
     else:
         log.info("Couldn't find 'launcher_profiles.json', generating new one.")

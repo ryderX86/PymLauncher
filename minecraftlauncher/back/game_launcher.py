@@ -4,6 +4,7 @@ minecraftlauncher.back.game_launcher
 Builds the launch command for Minecraft, performs argument-template
 substitution, and starts the game process.
 """
+from string import Template
 from pathlib import Path
 from time import sleep
 import logging
@@ -14,12 +15,7 @@ import platform
 import uuid
 
 from minecraftlauncher.constants import (
-    LAUNCHER_NAME,
-    LAUNCHER_VERSION,
-    MINECRAFT_DIR,
-    OS,
-    CLASSPATH_SEPARATOR,
-    DEFAULT_JVM_ARGS
+    LAUNCHER_NAME, LAUNCHER_VERSION, MINECRAFT_DIR, OS, DEFAULT_JVM_ARGS, DEV
 )
 from minecraftlauncher.back.library_manager import _evaluate_rules
 from .library_manager import build_classpath, filter_libraries
@@ -27,12 +23,16 @@ from .java_manager import find_java_exc
 
 log = logging.getLogger(__name__)
 
+_args_cache: dict[str, str] = {}
+
 def _substitute(template:str, values:dict[str, str]):
-    """Replace `${key}` placeholder in `template` with values from `values`"""
-    result = template
-    for key, val in values.items():
-        result = result.replace("${%s}" % key, str(val))
-    return result.strip()
+    values = {k: v for k, v in values.items() if v is not None}
+    t = Template(template)
+    subbed = t.safe_substitute(values)
+    # unfrozen only so auth tokens don't get leaked into logs when built:
+    if DEV and "${" in subbed:
+        log.warning("Unsubstituted template leftover in string: '%s'" % subbed)
+    return subbed
 
 def _process_jvm_arg_entry(entry, values:dict[str, str]):
     """
@@ -141,21 +141,23 @@ def _build_legacy_args(version_json:dict, values:dict[str, str],
         "--assetsDir ${assets_root} --userProperties {} "
         "--userType msa"
     )
-    game_args = [_substitute(arg, values) for arg in raw_game_args.split()]
+    game_args = _substitute(raw_game_args, values).split()
 
     jar_path = MINECRAFT_DIR / "versions" / version_json["id"] / f"{version_json["id"]}.jar"
 
     default_jvm_args = [
-        f"-Djava.library.path={values.get("natives_directory", "")}",
+        f"-Djava.library.path={values["natives_directory"]}",
         f"-Dminecraft.launcher.brand={LAUNCHER_NAME}",
         f"-Dminecraft.launcher.version={LAUNCHER_VERSION}",
         f"-Dminecraft.client.jar={jar_path}",
-        "-cp", values.get("classpath", ""),
+        "-cp", values["classpath"],
     ]
 
     return default_jvm_args, game_args
 
 def default_user_jvm_args_factory(version_json:dict):
+    if version_json["id"] in _args_cache:
+        return _args_cache[version_json["id"]]
     args = version_json.get("arguments", {})
     if args.get("default-user-jvm", []):
         jvm_args = []
@@ -182,6 +184,7 @@ def default_user_jvm_args_factory(version_json:dict):
         # if "-XX:UseZGC" in jvm_args and "-XX:UseG1GC" in jvm_args:
         #     i = jvm_args.index("-XX:UseG1GC")
         #     del jvm_args[i]
+        _args_cache[version_json["id"]] = " ".join(jvm_args)
         return " ".join(jvm_args)
     return DEFAULT_JVM_ARGS
 

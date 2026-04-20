@@ -7,13 +7,14 @@ import time
 import requests
 import requests.exceptions
 
-from minecraftlauncher.datatypes.JWT import JWT, decode_jwt
+from minecraftlauncher.datatypes import JWT, decode_jwt
 from minecraftlauncher.auth.xsts_token import XstsToken
-from minecraftlauncher.constants import (AZURE_CLIENT_ID, AZURE_SCOPE,
-                                         MOJ_AUTH_URL, MSA_REFRESH_URL,
-                                         LAUNCH_ENTITLEMENTS_URL)
-from minecraftlauncher import constants
+from minecraftlauncher.constants import (
+    AZURE_CLIENT_ID, AZURE_SCOPE, MOJ_AUTH_URL, MSA_REFRESH_URL,
+    LAUNCH_ENTITLEMENTS_URL, MOJ_AUTH_URL_ALT)
+from minecraftlauncher import constants, session
 from .exceptions import xsts_auth_error
+from .auth_error import AuthError, AuthStep
 
 log = logging.getLogger(__name__)
 
@@ -64,6 +65,46 @@ class MinecraftToken:
         return self.expires_in > 10
     
     @classmethod
+    def auth_alternate(cls, xsts_token:XstsToken):
+        payload = {
+            "xtoken": f"XBL3.0 x={xsts_token.user_hash};{xsts_token.token}",
+            "platform": "PC_LAUNCHER"
+        }
+
+        response = None
+        attempts = 0
+        while attempts < 3:
+            attempts += 1
+            try:
+                response = session.post(MOJ_AUTH_URL, json=payload)
+                response.raise_for_status()
+            except (requests.exceptions.ConnectionError,
+                    requests.exceptions.ConnectTimeout) as exc:
+                log.warning(
+                    "%s occured while attempting MSA token refresh"
+                    % exc.__qualname__)
+                if attempts >= 2:
+                    constants.offline_mode = True
+                    break
+                else:
+                    log.info("Waiting 5 seconds before next attempt...")
+                    time.sleep(5)
+                    continue
+            except requests.HTTPError as err:
+                log.error(
+                    "Failed to get Minecraft Token from %s; response code %d\n"
+                    "Full response: %s"
+                    % (MOJ_AUTH_URL_ALT, err.response.status_code,
+                       err.response.text))
+                return AuthError(
+                    AuthStep.MOJ, err.response.status_code, err.response.text)
+            
+        if response is None:
+            raise ValueError("Failed to get response")
+        
+        return cls(response.json())
+
+    @classmethod
     def auth(cls, xsts_token:XstsToken):
         payload = {
             "identityToken": "XBL3.0 x=%(uhs)s;%(xsts)s" % {
@@ -77,7 +118,7 @@ class MinecraftToken:
         while connection_attempts < 3:
             connection_attempts += 1
             try:
-                response = requests.post(MOJ_AUTH_URL, json=payload)
+                response = session.post(MOJ_AUTH_URL, json=payload)
                 response.raise_for_status()
                 break
             except (requests.exceptions.ConnectionError,
@@ -92,9 +133,16 @@ class MinecraftToken:
                 log.info("Waiting 5 seconds before next attempt...")
                 time.sleep(5)
             except requests.HTTPError as exc:
-                log.error("Failed to refresh MSA token; response code %s"
-                          % exc.errno)
-                return False
+                if exc.response.status_code in (400, 401, 402, 403):
+                    log.warning(
+                        "Malformed request err; defaulting to alt auth url")
+                    log.debug("returning `cls.auth_alternate(xsts_token)`")
+                    return cls.auth_alternate(xsts_token)
+                log.error("Failed to refresh MSA token; response code %d\n"
+                          "Response text: %s"
+                          % (exc.response.status_code, exc.response.text))
+                return AuthError(
+                    AuthStep.MOJ, exc.response.status_code, exc.response.text)
             # TODO: remove this when verified that the loop won't
             # infinitely continue
             if connection_attempts < 4:
@@ -142,7 +190,7 @@ class MinecraftToken:
             "Authorization": "Bearer %s" % self.access_token
         }
 
-        response = requests.get(LAUNCH_ENTITLEMENTS_URL, headers=headers)
+        response = session.get(LAUNCH_ENTITLEMENTS_URL, headers=headers)
         response.raise_for_status()
 
         game_list = response.json()

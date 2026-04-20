@@ -8,10 +8,9 @@ import urllib3
 from PySide6.QtCore import (qInstallMessageHandler, Qt, QMessageLogger,
                             QtMsgType, QMessageLogContext)
 from PySide6.QtWidgets import QApplication
+import requests
 
-# pyinstaller uses sys.frozen to indicate if we're running compiled or not,
-# doesn't exist in python normally
-DEV = bool(getattr(sys, '__compiled__', False) == False)
+from .constants import DEV, USER_AGENT, DEBUG_LOGGING
 
 # pyinstaller workaround for windows, since logging uses stdout at times:
 if sys.stdout is None:
@@ -21,22 +20,32 @@ if sys.stderr is None:
 
 # logging setup AFTER stdout/stderr workaround, just in case.
 # TODO: log files
+if DEBUG_LOGGING:
+    logging.basicConfig(level=logging.DEBUG)
+else:
+    logging.basicConfig(level=logging.INFO)
 class _LoggingFormatter(logging.Formatter):
+    default_msec_format = '%s.%03d'
+    default_time_format = "%H:%M:%S"
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
     def format(self, record:logging.LogRecord):
         record.name = record.name.replace("minecraftlauncher.", "")
         return super().format(record)
 root_logger = logging.getLogger()
-FORMATTER = _LoggingFormatter(
-    "[%(levelname)s] %(name)s: %(message)s")
 MEMORY_HANDLER = MemoryHandler(capacity=1000, flushLevel=logging.DEBUG)
+MEMORY_HANDLER.setLevel(logging.DEBUG)
 if DEV:
-    logging.basicConfig(level=logging.DEBUG)
-    root_logger.handlers[0].setFormatter(FORMATTER)
-    logging.info("Not running frozen, dev mode active")
-    _urllib_logger = logging.getLogger("urllib3")
-    _urllib_logger.setLevel(logging.CRITICAL)
+    FORMATTER = _LoggingFormatter(
+        "%(thread)5d %(asctime)12s %(levelname)7s  %(name)s: %(message)s")
 else:
-    root_logger.addHandler(MEMORY_HANDLER)
+    FORMATTER = _LoggingFormatter(
+        "%(asctime)s [%(levelname)s] %(name)s: %(message)s")
+root_logger.addHandler(MEMORY_HANDLER)
+_urllib_logger = logging.getLogger("urllib3")
+_urllib_logger.setLevel(logging.CRITICAL)
+
+root_logger.handlers[0].setFormatter(FORMATTER)
 
 _Q_LOGGER = logging.getLogger("Qt")
 _Q_LOGGER.setLevel(logging.DEBUG)
@@ -81,3 +90,7 @@ def style():
     style = _qapp.style()
     assert style
     return style
+
+session = requests.sessions.Session()
+session.headers["User-Agent"] = USER_AGENT
+logging.debug("User agent: %s" % USER_AGENT)

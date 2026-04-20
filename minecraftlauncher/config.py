@@ -1,7 +1,8 @@
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, Literal
 from types import NoneType
 from enum import StrEnum, Enum, IntEnum
+from datetime import timedelta
 import json
 import logging
 import os
@@ -20,13 +21,38 @@ class PostLaunchBehavior(IntEnum):
     CLOSE_WHEN_DONE = 2
     CLOSE = 3
 
+class JarRedownloadBehavior(IntEnum):
+    NEVER = 0
+    REDOWNLOAD = 1
+    REDOWNLOAD_ONCE = 2
+
+class IgnoreMe:
+    def __bool__(self) -> Literal[False]:
+        return False
+    
+    def __eq__(self, a):
+        if type(self) == type(a) or type(self) == a:
+            return True
+        return False
+    
+    def __ne__(self, a):
+        return True
+
 """Config Values"""
 window_size = [1100, 700]
-open_browser_for_login:bool = False
-post_launch_option:PostLaunchBehavior = PostLaunchBehavior.HIDE
-maximized:bool = False
-tooltip_icons_enabled:bool = True
-ignored_messages:list[str] = []
+open_browser_for_login: bool = False
+copy_code_for_login: bool = True
+post_launch_option: PostLaunchBehavior = PostLaunchBehavior.HIDE
+redownload_option: JarRedownloadBehavior = JarRedownloadBehavior.REDOWNLOAD
+maximized: bool = False
+tooltip_icons_enabled: bool = True
+ignored_messages: list[int] = []
+dialog_answers: dict[int, bool] = {}
+show_animation_on_skin_dialog: bool = False
+if DEV:
+    dev_game_logs_in_console: bool | IgnoreMe = True
+else:
+    dev_game_logs_in_console: bool | IgnoreMe = IgnoreMe()
 # show_logs_on_home:bool = False
 
 def set(val_name:str, new_val:Any):
@@ -62,15 +88,19 @@ def load(config:dict|None=None):
             config = {}
     assert not isinstance(config, NoneType)
     for key, val in config.items():
-        if not isinstance(val, (str, int, list, dict, bool, NoneType)):
+        if key[0] == key[0].upper():
             continue
-        if key.startswith("_") or key.endswith("_"):
+        elif not isinstance(val, (str, int, list, dict, bool, NoneType)):
             continue
-        if key.upper() == key:
+        elif key.startswith("_") or key.endswith("_"):
             continue
-        if isinstance(globals().get(key), NoneType):
+        elif key.upper() == key:
+            continue
+        elif isinstance(globals().get(key), NoneType):
             _log.warning("Ignoring unknown key in config.json: '%s'" % key)
             continue
+        elif isinstance(globals()[key], IgnoreMe):
+            continue # silently ignore lol
         default = globals()[key]
         if not isinstance(default, type(val)):
             _log.warning(f"Value in '{key}' has conflicting type, ignoring")
@@ -84,6 +114,8 @@ def save():
     for key, val in globals().items():
         if not isinstance(val, (str, int, list, dict, bool, NoneType)):
             continue
+        elif isinstance(val, (list, dict)) and not val:
+            continue # skip bloat
         elif key.startswith("_") or key.endswith("_"):
             continue
         elif key.upper() == key:
@@ -91,9 +123,10 @@ def save():
         elif key[0] == key[0].upper():
             continue
         obj_out[key] = val
-    json_out = json.dumps(obj_out)
+    json_out = json.dumps(obj_out, indent=2)
     if not LAUNCHER_DATA_DIR.exists():
         LAUNCHER_DATA_DIR.mkdir(parents=True, exist_ok=True)
     LAUNCHER_CONFIG_FILE.write_text(json_out)
+    _log.debug("Saved config.json.")
 
 load()

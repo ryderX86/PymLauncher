@@ -1,6 +1,6 @@
 from enum import StrEnum, IntEnum
 
-from ._PortableProfile import PortableProfile
+from .portable_profile import PortableProfile
 
 class ChunkUpdatePrioritization(IntEnum):
     THREADED = 0

@@ -1,30 +1,31 @@
 """
 Device code flow window
 """
+from http.server import HTTPServer, BaseHTTPRequestHandler
+from urllib.parse import urlparse, parse_qs
 import logging
 import time
 import json
 
 from PySide6.QtCore import Qt, QThread, QUrl, Signal
-from PySide6.QtGui import QDesktopServices, QClipboard
+from PySide6.QtGui import QDesktopServices, QClipboard, QPixmap
 from PySide6.QtWidgets import (
-    QDialog,
-    QLabel,
-    QPushButton,
-    QVBoxLayout, QCheckBox, QWidget, QHBoxLayout
-)
-
+    QDialog, QLabel, QPushButton, QVBoxLayout, QCheckBox, QWidget, QHBoxLayout,
+    QSizePolicy)
+from PySide6.QtSvgWidgets import QSvgWidget
+from PySide6.QtSvg import QtSvg
 import requests
 
 from minecraftlauncher import qapp, config
-from minecraftlauncher.constants import (AZURE_CLIENT_ID, MS_DEVICE_CODE_URL,
-                                         MS_TOKEN_URL)
-from minecraftlauncher.auth import MicrosoftAccount, LauncherAccount
+from minecraftlauncher.constants import (
+    AZURE_CLIENT_ID, MS_DEVICE_CODE_URL, MS_TOKEN_URL, AZURE_SCOPE)
+from minecraftlauncher.auth import MicrosoftAccount, LauncherAccount, auth_flow
 from minecraftlauncher.front.styles import ACCENT, TEXT_PRIMARY, TEXT_SECONDARY
+from minecraftlauncher.front.resources import link_to_qrcode
 
 log = logging.getLogger(__name__)
 
-DEVICE_CODE_SCOPE = "openid offline_access XboxLive.signin"
+# DEVICE_CODE_SCOPE = "openid email XboxLive.signin XboxLive.offline_access"
 GRANT_TYPE = "urn:ietf:params:oauth:grant-type:device_code"
 
 class DeviceCodePoller(QThread):
@@ -60,7 +61,7 @@ class DeviceCodePoller(QThread):
                     "grant_type": GRANT_TYPE,
                     "client_id": AZURE_CLIENT_ID,
                     "device_code": self.device_code,
-                    "scope": DEVICE_CODE_SCOPE
+                    "scope": AZURE_SCOPE
                 })
             except requests.RequestException as exc:
                 self.status.emit("Connection error: %s" % str(exc))
@@ -114,7 +115,7 @@ class LoginWindow(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Sign in with Microsoft")
-        self.setFixedSize(420, 340)
+        self.setFixedWidth(420)
         self.setSizeGripEnabled(False)
         self.setWindowFlags(Qt.WindowType.Dialog)
         self.setModal(True)
@@ -122,9 +123,10 @@ class LoginWindow(QDialog):
         self._open_browser = config.open_browser_for_login
         self._build_ui()
 
-    def _build_ui(self):
+    def _build_ui(self): # TODO: turn this into a QStackedWidget
         layout = QVBoxLayout(self)
         layout.setContentsMargins(32, 32, 32, 32)
+        layout.setAlignment(Qt.AlignmentFlag.AlignHCenter)
         layout.setSpacing(16)
 
         title = QLabel("Sign in with Microsoft")
@@ -137,11 +139,20 @@ class LoginWindow(QDialog):
             "Click the button below to start the sign-in process.\n"
             "A code will be generated for you to enter on Microsoft's website."
         )
-        self.instruction_label.setWordWrap(True)
-        self.instruction_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.instruction_label.setStyleSheet("color: %s;" % TEXT_SECONDARY)
+        self.instruction_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.instruction_label.setWordWrap(True)
+        self.instruction_label.setMinimumWidth(self.width() - 64)
+        self.instruction_label.setMaximumWidth(self.width() - 32)
         layout.addWidget(self.instruction_label)
         
+        qr_cont_w = QWidget()
+        qr_cont = QHBoxLayout(qr_cont_w)
+        qr_cont.setContentsMargins(0, 0, 0, 0)
+        self.code_qr_w = QLabel()
+        self.code_qr_w.setHidden(True)
+        qr_cont.addWidget(self.code_qr_w)
+        layout.addWidget(qr_cont_w)
 
         self.code_label = QLabel("")
         self.code_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -159,8 +170,6 @@ class LoginWindow(QDialog):
         self.status_label.setStyleSheet("color: %s; font-size: 12px;"
                                         % TEXT_SECONDARY)
         layout.addWidget(self.status_label)
-
-        layout.addStretch()
 
         # so complicated for what
         open_browser_w = QWidget()
@@ -189,7 +198,7 @@ class LoginWindow(QDialog):
         try:
             resp = requests.post(MS_DEVICE_CODE_URL, data={
                 "client_id": AZURE_CLIENT_ID,
-                "scope": DEVICE_CODE_SCOPE,
+                "scope": AZURE_SCOPE,
                 "response_type": "device_code"
             }, timeout=15)
         except requests.RequestException as err:
@@ -217,22 +226,49 @@ class LoginWindow(QDialog):
         device_code = data.get("device_code", "")
         interval = data.get("interval", 5)
         expires_in = data.get("expires_in", 900)
+        error = data.get("error")
+        error_desc = data.get("error_description")
+        error_uri = data.get("error_uri")
+
+        display_uri = verification_uri
+
+        if verification_uri == "https://www.microsoft.com/link":
+            verification_uri = ''.join([
+                verification_uri, "?otc=%s" % user_code])
+            
+        qr = link_to_qrcode(verification_uri)
+        # self.code_qr_w.load(qr)
+        self.code_qr_w.setPixmap(qr)
+        self.code_qr_w.setFixedSize(qr.size())
+        self.setMinimumHeight(self.minimumHeight() + qr.height()) # qt complains a lot
+        self.code_qr_w.setHidden(False)
+
+        if error:
+            self.status_label.setText(
+                f"Failed to start authentication: {error}\n"
+                f"Description: {error_desc}\n"
+                f"<a href=\"{error_uri}\">More info</a>")
+            self.open_browser.setHidden(False)
+            self.start_button.setEnabled(True)
+            self.code_qr_w.setHidden(True)
+            return
 
         self.code_label.setText(user_code)
         self.instruction_label.setText(
-            "Go to <a href=\"%s\">%s</a>\n "
+            "Go to <a href=\"%s\">%s</a> or scan the QR code\n "
             "and enter the code above to sign in."
-            % (verification_uri, verification_uri)
+            % (verification_uri, display_uri)
         )
         self.instruction_label.setOpenExternalLinks(True)
         self.status_label.setText("Waiting for sign-in to complete...")
 
-        clip = qapp().clipboard()
-        if clip:
-            clip.setText(user_code, clip.Mode.Clipboard)
-            log.debug("Verification code should be in clipboard.")
-        else:
-            log.warning("Couldn't get clipboard!")
+        if display_uri == verification_uri:
+            clip = qapp().clipboard()
+            if clip:
+                clip.setText(user_code, clip.Mode.Clipboard)
+                log.debug("Verification code should be in clipboard.")
+            else:
+                log.warning("Couldn't get clipboard!")
 
         if self._open_browser:
             QDesktopServices.openUrl(QUrl(verification_uri))
@@ -251,7 +287,13 @@ class LoginWindow(QDialog):
         self.status_label.setText("Authenticating with Xbox Live...")
 
         msa = MicrosoftAccount(token_data)
-        lp = LauncherAccount(msa)
+        lp = auth_flow(msa)
+        if not lp:
+            log.error("Auth chain failed! Details:\n%s" % str(lp))
+            self.status_label.setText("Authentication failed")
+            self.start_button.setEnabled(True)
+            self.open_browser.setHidden(False)
+            return
         try:
             lp.minecraft_auth()
             lp.get_profile_info()
@@ -262,17 +304,19 @@ class LoginWindow(QDialog):
             self.open_browser.setHidden(False)
         else:
             self.status_label.setText("Logged in successfully.")
-            log.info("Logged in as %s" % lp.msa.email)
+            log.info("Logged in as %s" % lp.gamertag)
             self.login_complete.emit(lp)
             self.accept()
             self.start_button.setEnabled(True)
             self.open_browser.setHidden(False)
+            self.code_qr_w.setHidden(True)
 
     def _on_error(self, message:str):
         log.error("Login error: %s" % message)
         self.status_label.setText(message)
         self.start_button.setEnabled(True)
         self.open_browser.setHidden(False)
+        self.code_qr_w.setHidden(True)
 
     def _cancel(self):
         if self._poller:

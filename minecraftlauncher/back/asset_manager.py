@@ -21,6 +21,7 @@ from minecraftlauncher.constants import RESOURCES_URL, MINECRAFT_DIR
 from minecraftlauncher.back.download_helpers import (
     download, RunnableDownloader
 )
+from minecraftlauncher import session
 
 log = logging.getLogger(__name__)
 
@@ -69,7 +70,7 @@ def fetch_asset_index(version_json:dict) -> dict:
     # download the index and return it
     log.info("Downloading asset index '%s' from '%s'"
              % (str(index_id), index_url))
-    resp = requests.get(index_url, timeout=30)
+    resp = session.get(index_url, timeout=30)
     resp.raise_for_status()
 
     index_path.touch()
@@ -296,14 +297,14 @@ def download_assets_threaded(asset_index:dict, *,
             f"{RESOURCES_URL}/{prefix}/{file_hash}",
             dest_path,
             file_hash,
-            callback_f=add_number
+            callback=add_number
         )
         if map_virtual_assets:
             v_downloader = RunnableDownloader(
                 f"{RESOURCES_URL}/{prefix}/{file_hash}",
                 VIRTUAL_BASE / virtual_path,
                 file_hash,
-                callback_f=add_number
+                callback=add_number
             )
             download_list.append(v_downloader)
         download_list.append(downloader)

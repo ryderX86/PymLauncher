@@ -3,6 +3,7 @@ minecraftlauncher.front.window.main.home_page
 
 Home page, play button, profile info, progress bar, all that stuff.
 """
+from typing import Callable
 from pathlib import Path
 from time import sleep
 import logging
@@ -22,10 +23,12 @@ from minecraftlauncher.back import (version_manager, asset_manager,
                                     game_launcher, profile_manager,
                                     account_manager)
 from minecraftlauncher.exceptions.datatypes import InvalidVersionIdError
-from minecraftlauncher.constants import MINECRAFT_DIR, offline_mode
+from minecraftlauncher.constants import MINECRAFT_DIR, offline_mode, DEV
 from minecraftlauncher.auth import LauncherAccount
 from minecraftlauncher.front import styles, resources
 from minecraftlauncher.front.qt.models import ProfileSelectionModel
+from minecraftlauncher.front.window import Warning, WarningType, ButtonConfig
+from minecraftlauncher import config
 
 log = logging.getLogger(__name__)
 
@@ -45,14 +48,25 @@ class LaunchWorker(QThread):
 
     log = log.getChild("LaunchWorker")
 
-    def __init__(self, version_id:str, profile_data:GameProfile,
-                 auth_info:LauncherAccount, parent=None):
+    def __init__(self, version_id: str, profile_data: GameProfile,
+                 auth_info: LauncherAccount,
+                 log_hook: Callable[[str], None] | None = None,
+                 parent = None):
         super().__init__(parent)
         self.version_id = version_id
         self.profile_data = profile_data
         self.auth_info = auth_info
+        self._hook = log_hook
 
     def run(self):
+        if offline_mode:
+            allow_run = Warning.warn(
+                self, "Offline mode is experimental. Do you want to continue?",
+                WarningType.OFFLINE_MODE_LAUNCH, "Launch in offline mode?",
+                ButtonConfig.YES_NO)
+            if not allow_run:
+                self.finished.emit(False, "User aborted launch")
+                return
         match self.version_id:
             case "latest-release":
                 self.version_id = version_manager.get_latest_release()
@@ -140,7 +154,9 @@ class LaunchWorker(QThread):
 
         classpath = library_manager.build_classpath(libs, jar_path)
 
-        if not self.auth_info.token_valid:
+        if self.auth_info.token_valid:
+            reauth = False
+        else:
             self.log.warning("User account doesn't have a valid token, "
                              "trying to refresh...")
             self.status.emit("Reauthenticating...")
@@ -156,8 +172,13 @@ class LaunchWorker(QThread):
                                "offline?):", exc_info=err)
                 self.finished.emit(False, str(err))
                 return
+            reauth = True
         assert self.auth_info.token
-        if not self.auth_info.profile:
+        if self.auth_info.profile:
+            reauth = max(reauth, False)
+        else:
+            log.warning("Account doesn't have associated profile info, trying "
+                        "to fetch it...")
             try:
                 self.auth_info.get_profile_info()
             except Exception as err:
@@ -166,19 +187,21 @@ class LaunchWorker(QThread):
                 self.finished.emit(False, str(err))
                 return
             else:
+                log.info("Got profile info for '%s'" % self.auth_info.gamertag)
                 assert self.auth_info.profile
-        
-        account_manager.save_or_replace_account(self.auth_info)
+                reauth = True
+
+        if reauth:
+            account_manager.save_or_replace_account(self.auth_info)
                 
         self.status.emit("Launching Minecraft...")
         cmd = game_launcher.build_launch_command(
             version_json, self.auth_info.profile.name,
             self.auth_info.profile.uuid, self.auth_info.token.access_token,
             self.auth_info.player_type, self.auth_info.demo_mode,
-            None, str(java_exc), log4j_config, classpath,
+            self.auth_info.xuid, str(java_exc), log4j_config, classpath,
             self.profile_data.game_dir, self.profile_data.jvm_args,
-            self.profile_data.memory_min,
-            self.profile_data.memory_max,
+            self.profile_data.memory_min, self.profile_data.memory_max,
             self.profile_data.resolution_width,
             self.profile_data.resolution_height,
             self.profile_data.mods_folder,
@@ -197,24 +220,49 @@ class LaunchWorker(QThread):
             self.log.warning("Game hasn't given a return code, did it launch?")
             self.finished.emit(True, "Unknown status")
 
+        if DEV and config.dev_game_logs_in_console:
+            game_log_func = sub_logger.debug
+        else:
+            def game_log_func(msg:object, *args):
+                ...
+
         # reverse this when reading:
         stdout_cache:list[str] = []
 
-        if self._p.stdout:
-            for line in iter(self._p.stdout.readline, ""):
-                sub_logger.debug(
-                    line[:-1]) # skip newline
-                stdout_cache.insert(0, line[:-1])
+        if self._hook:
+            def loop(self):
+                nonlocal stdout_cache
+                if self._p.stdout:
+                    for line in iter(self._p.stdout.readline, ""):
+                        game_log_func(line[:-1])
+                        stdout_cache.insert(0, line[:-1])
+                        self._hook(line)
 
-                # memory usage
-                self._p.stdout.flush()
-                stdout_cache = stdout_cache[:255] # 256 lines
-        self._p.wait()
+                        self._p.stdout.flush()
+                        stdout_cache = stdout_cache[:255]
+                self._p.wait()
+        else:
+            def loop(self):
+                nonlocal stdout_cache
+                if self._p.stdout:
+                    for line in iter(self._p.stdout.readline, ""):
+                        game_log_func(line[:-1]) # skip newline
+                        stdout_cache.insert(0, line[:-1])
+
+                        # memory usage
+                        self._p.stdout.flush()
+                        stdout_cache = stdout_cache[:255] # 256 lines
+                self._p.wait()
+        
+        loop(self)
 
         stdout_cache.reverse()
         stdout = "\n".join(stdout_cache)
 
         self.log.debug("Returned with code %d" % self._p.returncode)
+        if self._p.returncode == 0:
+            if config.redownload_option > 1:
+                config.redownload_option = 0
         self.game_closed.emit(
             str(self._p.returncode),
             stdout
@@ -332,6 +380,12 @@ class HomePage(QWidget):
         )
         open_screenshots_button.setProperty("mini", True)
         profile_action_row.addWidget(open_screenshots_button, 0)
+
+        open_versions_button = QPushButton("Versions")
+        open_versions_button.clicked.connect(
+            lambda: self._open_prof_folder("versions"))
+        open_versions_button.setProperty("mini", True)
+        profile_action_row.addWidget(open_versions_button, 0)
 
         profile_action_row.addStretch()
 
@@ -534,6 +588,8 @@ class HomePage(QWidget):
                 p = p / "saves"
             case "screenshots":
                 p = p / "screenshots"
+            case "versions":
+                p = MINECRAFT_DIR / "versions"
 
         # check again for subfolders
         if not p.exists():

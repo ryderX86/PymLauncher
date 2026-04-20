@@ -17,7 +17,7 @@ log = logging.getLogger(__name__)
 ADD_ACCOUNT_TEXT = "Add account"
 
 class AccountSelect(QComboBox):
-    account_changed = Signal(str) # email
+    account_changed = Signal(str) # gamertag
     add_account_requested = Signal()
 
     def __init__(self, parent=None):
@@ -27,7 +27,6 @@ class AccountSelect(QComboBox):
 
         self._previous_index = -1
         self.currentIndexChanged.connect(self._on_index_changed)
-        self.refresh()
 
     def _correct_size(self, t:str):
         current_size = self.size()
@@ -38,16 +37,16 @@ class AccountSelect(QComboBox):
         self.blockSignals(True)
 
         self.clear()
-        accounts, active_email = account_manager.load_accounts()
+        accounts, active_gtg = account_manager.load_accounts()
 
         active_idx = 0
         for i, acc in enumerate(accounts):
-            email = acc.msa.email
+            gamertag = acc.gamertag
             username = acc.username
-            display = f"{username} ({email})" if username else email
-            face = icon_from_qimg(acc.get_current_skin_face(), True)
-            self.addItem(face, display, userData=email)
-            if email == active_email:
+            display = username if username else gamertag
+            face = acc.skin_icon()
+            self.addItem(face, display, userData=gamertag)
+            if gamertag == active_gtg:
                 active_idx = i
 
         self.addItem(symbol("profile-add"), ADD_ACCOUNT_TEXT)
@@ -79,10 +78,10 @@ class AccountSelect(QComboBox):
             self.add_account_requested.emit()
             return
         
-        email = self.itemData(index)
-        if email:
-            account_manager.set_active_account(email)
-            self.account_changed.emit(email)
+        gamertag = self.itemData(index)
+        if gamertag:
+            account_manager.set_active_account(gamertag)
+            self.account_changed.emit(gamertag)
 
     def next_account(self):
         add_idx = self.count() - 1

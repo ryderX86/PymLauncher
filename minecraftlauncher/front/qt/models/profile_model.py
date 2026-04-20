@@ -8,7 +8,7 @@ from PySide6.QtCore import (
     QDataStream, QIODevice
 )
 
-from minecraftlauncher.datatypes.GameProfile import GameProfile
+from minecraftlauncher.datatypes.launch_profile import GameProfile
 from minecraftlauncher.back import profile_manager, version_manager
 from minecraftlauncher.front import resources
 from minecraftlauncher import config

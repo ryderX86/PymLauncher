@@ -3,9 +3,9 @@ import logging
 
 from PySide6.QtCore import Qt, QItemSelectionModel, QModelIndex, Signal
 
-from ._ProfileModel import ProfileModel
+from .profile_model import ProfileModel
 from minecraftlauncher.back import profile_manager
-from minecraftlauncher.datatypes.GameProfile import GameProfile
+from minecraftlauncher.datatypes.launch_profile import GameProfile
 
 _instance = None
 

@@ -65,6 +65,8 @@ screen = QGuiApplication.primaryScreen()
 
 MapIndex = ProfileModel.MapIndex
 
+_running_threads = []
+
 class VersionTextValidator(QValidator):
     log = log.getChild("VersionTextValidator")
 
@@ -114,6 +116,7 @@ class ProfileResolutionTextValidator(QValidator):
             return self.State.Intermediate, self.resolutions[0], 0
         if a0 == "Auto":
             return self.State.Acceptable, a0, a1
+        a0 = a0.replace("*", "x").replace(".", "x").replace(":", "x")
         a0 = a0.replace(" ", "")
         sel_res = a0.split("x")
         if ((len(sel_res) < 2 and sel_res[0].isdigit())
@@ -162,6 +165,7 @@ class VersionJsonBackgroundDownloader(QThread):
         version_json = version_manager.resolve_inheritence(version.get_json())
         args = game_launcher.default_user_jvm_args_factory(version_json)
         self.done.emit(args)
+        self.destroyed.connect(lambda: _running_threads.remove(self))
 
 class ProfilesPage(QWidget):
     """Profile page"""
@@ -676,12 +680,14 @@ class ProfilesPage(QWidget):
     def _reset(self):
         self._set_mods_folder_row_visibility()
         # TODO: see if i can remove this check during build
+        self.icon_picker.revert()
+        self.mapper.revert()
+        prof = profile_manager.get_current_profile()
+        self.jvm_args_input.setText(prof.jvm_args)
         if DEV:
             self._dirty_check()
         else:
             self._set_undirty()
-        self.icon_picker.revert()
-        self.mapper.revert()
     
     def _parse_resolution(self, text:str):
         """Parse `nxn` into `(n, n)`"""
@@ -973,9 +979,10 @@ class ProfilesPage(QWidget):
             version_id = self.version_combo.itemText(version_id)
         else:
             version_id = version_id
-        self._bg_worker = VersionJsonBackgroundDownloader(
+        _bg_worker = VersionJsonBackgroundDownloader(
             version_id, prof
         )
+        _running_threads.append(_bg_worker)
 
         def set_args_final(args:str):
             nonlocal prof
@@ -983,9 +990,9 @@ class ProfilesPage(QWidget):
                 prof.jvm_args = args
                 self.jvm_args_input.setText(args)
         
-        self._bg_worker.done.connect(set_args_final)
-        self._bg_worker.finished.connect(self._bg_worker.deleteLater)
-        self._bg_worker.start()
+        _bg_worker.done.connect(set_args_final)
+        _bg_worker.finished.connect(_bg_worker.deleteLater)
+        _bg_worker.start()
 
         self._set_mods_folder_row_visibility(version_id, set_checkbox=False)
 

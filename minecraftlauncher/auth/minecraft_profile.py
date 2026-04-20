@@ -1,20 +1,27 @@
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from pathlib import Path
 from enum import StrEnum
+from functools import lru_cache
 import logging
+import hashlib
+import uuid
 import time
+import json
 
 from PySide6.QtCore import QRect
-from PySide6.QtGui import QImage
+from PySide6.QtGui import QImage, QIcon, QPixmap
 import requests
 import requests.exceptions
 
 from minecraftlauncher.auth.minecraft_token import MinecraftToken
 from minecraftlauncher.constants import (
-    MOJ_PROF_URL, STEVE_SKIN_URL, LAUNCHER_DATA_DIR
+    MOJ_PROF_URL, STEVE_SKIN_URL, LAUNCHER_DATA_DIR, offline_mode
 )
-from minecraftlauncher import constants
-from ..datatypes import try_request
+from minecraftlauncher import constants, session
+from minecraftlauncher.back.download_helpers import download as try_request
+from minecraftlauncher.front import resources
+from .auth_error import AuthStep, AuthError
 
 log = logging.getLogger(__name__)
 
@@ -22,50 +29,12 @@ KNOWN_DICT_KEYS = [
     "id", "name", "skins", "capes", "last_updated"
 ]
 
-SKIN_CACHE_DIR = LAUNCHER_DATA_DIR / "skins"
-STEVE_SKIN_CACHE_PATH = SKIN_CACHE_DIR / "_default.png"
+_STEVE_UUID = str(uuid.UUID(int=0))
+SKIN_CACHE_PATH = LAUNCHER_DATA_DIR / "skins"
+CAPE_CACHE_PATH = LAUNCHER_DATA_DIR / "capes"
 
-_skins_cache:dict[str, QImage] = {}
-
-def get_steve_skin(cls=None) -> QImage:
-    if "_" in _skins_cache:
-        return _skins_cache["_"]
-    elif STEVE_SKIN_CACHE_PATH.exists():
-        _skins_cache["_"] = QImage.fromData(STEVE_SKIN_CACHE_PATH.read_bytes())
-        _skins_cache["_"].setText("id", "STEVE")
-        return _skins_cache["_"]
-    log.debug("Getting default Steve skin...")
-    max_retries = 3
-    resp = None
-    while max_retries > 0:
-        try:
-            resp = requests.get(STEVE_SKIN_URL)
-            resp.raise_for_status()
-        except (requests.exceptions.ConnectTimeout,
-                requests.exceptions.ConnectionError) as err:
-                log.error("Failed to connect to %s:" % STEVE_SKIN_URL,
-                          exc_info=err)
-                log.info("Waiting 5 seconds before next attempt...")
-                time.sleep(5)
-                continue
-        except requests.HTTPError as err:
-            log.error("Failed to fetch skin:")
-            raise
-        except Exception as err:
-            log.error("Unknown error occured while fetching skin:")
-            raise
-        else:
-            break
-    if resp is None:
-        raise RuntimeError("Failed to get skin from API")
-    if not SKIN_CACHE_DIR.exists():
-        log.debug("Creating skin cache dir: %s"
-                  % str(SKIN_CACHE_DIR))
-        SKIN_CACHE_DIR.mkdir(parents=True, exist_ok=True)
-    STEVE_SKIN_CACHE_PATH.write_bytes(resp.content)
-    _skins_cache["_"] = QImage.fromData(resp.content)
-    _skins_cache["_"].setText("id", "STEVE")
-    return _skins_cache["_"]
+_cached_skins: dict[str, QIcon] = {}
+_cached_capes: dict[str, QPixmap] = {}
 
 class TextureState(StrEnum):
     """Enums for skin/cape "state\"."""
@@ -86,9 +55,18 @@ class SkinModel(StrEnum):
     ALEX = SLIM
     """Alias for `SLIM`"""
 
-class MinecraftProfile:
-    TextureState = TextureState
+def check_redownload_skin(p: Path, url: str, sha: str | None = None):
+    if not sha:
+        sha = url.split("/")[-1]
+    if p.exists():
+        file_sha = p.read_bytes()
+        if file_sha == sha:
+            return
+    resp = try_request(url)
+    p.write_bytes(resp.content)
+    return
 
+class MinecraftProfile:
     _token:MinecraftToken|None
     owned_items:list
     uuid:str
@@ -107,15 +85,70 @@ class MinecraftProfile:
         self._other_info = {k:v
                             for k, v in profile_info.items()
                             if k not in KNOWN_DICT_KEYS}
+        self._cape_list_cache: list[tuple[str, str, str, QImage]] | None = None
+        self._cape_thumbnails: list[tuple[str, str, str, QImage]] | None = None
+
+        self.current_skin = self._default_skin_inf = {
+            "id": _STEVE_UUID,
+            "state": "ACTIVE",
+            "url": STEVE_SKIN_URL,
+            "textureKey": STEVE_SKIN_URL.split("/")[-1],
+            "variant": "CLASSIC"
+        }
+
+        self.current_cape = None
+        self._check_current_skin()
+
+    def _check_current_skin(self):
+        self.current_skin = self._default_skin_inf
+        if self.skins:
+            current: dict | None = None
+            for skin in self.skins:
+                state = skin["state"]
+                if state != TextureState.ACTIVE:
+                    continue
+                current = skin
+                break
+            if current:
+                self.current_skin = current
+            del current
+        
+        self.current_cape = None
+        if self.capes:
+            current: dict | None = None
+            for cape in self.capes:
+                if cape["state"] != TextureState.ACTIVE:
+                    continue
+                current = cape
+                break
+            if current:
+                self.current_cape = current
+            del current
         
     @staticmethod
-    def default_skin_factory():
-        return get_steve_skin()
+    def steve_skin_bytes():
+        skin_path = SKIN_CACHE_PATH / (_STEVE_UUID + ".png")
+        check_redownload_skin(skin_path, STEVE_SKIN_URL)
+        return skin_path.read_bytes()
     
     @staticmethod
-    def default_face_factory():
-        skin = get_steve_skin()
-        return skin.copy(8, 8, 8, 8)
+    def steve_skin_path():
+        skin_path = SKIN_CACHE_PATH / (_STEVE_UUID + ".png")
+        check_redownload_skin(skin_path, STEVE_SKIN_URL)
+        return skin_path
+    
+    @staticmethod
+    def steve_skin_icon():
+        uid = _STEVE_UUID + "_thumb"
+        if uid in _cached_skins:
+            return _cached_skins[uid]
+        img_bytes = MinecraftProfile.steve_skin_bytes()
+        img = QImage()
+        img.loadFromData(img_bytes)
+        img.setText("id", uid)
+        ico = resources.icon_from_qimg(img.copy(8, 8, 8, 8), True)
+        _cached_skins[uid] = ico
+        return _cached_skins[uid]
 
     @classmethod
     def from_token(cls, mc_token:MinecraftToken):
@@ -128,7 +161,7 @@ class MinecraftProfile:
         while max_retries > 0:
             max_retries -= 1
             try:
-                response = requests.get(MOJ_PROF_URL, headers=headers)
+                response = session.get(MOJ_PROF_URL, headers=headers)
                 response.raise_for_status()
                 break
             except (requests.exceptions.ConnectTimeout,
@@ -153,58 +186,6 @@ class MinecraftProfile:
         prof_info_json["last_updated"] = datetime.now().timestamp()
 
         return cls(prof_info_json, mc_token)
-    
-    def get_current_skin(self) -> QImage:
-        current:dict|None = None
-        if self.skins:
-            for skin in self.skins:
-                state = skin.get("state", "")
-                if state not in TextureState:
-                    log.warning(
-                        "Cannot determine skin texture status from '%s'"
-                        % state
-                    )
-                    continue
-                if state != TextureState.ACTIVE:
-                    continue
-                id_ = skin.get("id", "")
-                if not id_:
-                    log.warning("Skin ID not found, continuing")
-                    continue
-                url = skin.get("url", "")
-                if not url:
-                    log.warning("Player Skin has no URL, continuing")
-                    continue
-                variant = skin.get("variant", "")
-                if variant not in SkinModel:
-                    log.warning("Unknown skin model, defaulting to %s"
-                                % SkinModel.CLASSIC)
-                    variant = SkinModel.CLASSIC
-                current = skin
-                break
-        if not current:
-            return get_steve_skin()
-        if current["id"] in _skins_cache:
-            return _skins_cache[current["id"]]
-        if not SKIN_CACHE_DIR.exists():
-            SKIN_CACHE_DIR.mkdir(parents=True, exist_ok=True)
-        texture_path = SKIN_CACHE_DIR / f"{current["id"]}.png"
-        if texture_path.exists():
-            _skins_cache[current["id"]] = QImage.fromData(
-                texture_path.read_bytes()
-            )
-            _skins_cache[current["id"]].setText("id", current["id"])
-            return _skins_cache[current["id"]]
-        log.debug("Downloading skin '%s'" % current["id"])
-        resp = try_request(log, current["url"])
-        texture_path.write_bytes(resp.content)
-        _skins_cache[current["id"]] = QImage.fromData(resp.content)
-        _skins_cache[current["id"]].setText("id", current["id"])
-        return _skins_cache[current["id"]]
-    
-    def get_skin_face(self) -> QImage:
-        skin = self.get_current_skin()
-        return skin.copy(8, 8, 8, 8)
     
     @property
     def should_refresh(self):
@@ -237,7 +218,7 @@ class MinecraftProfile:
         while max_retries > 0:
             max_retries -= 1
             try:
-                response = requests.get(MOJ_PROF_URL, headers=headers)
+                response = session.get(MOJ_PROF_URL, headers=headers)
                 response.raise_for_status()
                 break
             except (requests.exceptions.ConnectTimeout,
@@ -269,7 +250,7 @@ class MinecraftProfile:
         self.capes = prof_info_json.get("capes", [])
 
         self.last_updated = datetime.now().timestamp()
-
+        self._check_current_skin()
         return self
     
     def serialize(self):
@@ -284,3 +265,68 @@ class MinecraftProfile:
             "last_updated": self.last_updated,
             **self._other_info
         }.items() if v}
+    
+    def current_skin_bytes(self):
+        p = SKIN_CACHE_PATH / (str(self.current_skin["textureKey"]) + ".png")
+        check_redownload_skin(p, self.current_skin["url"])
+        return p.read_bytes()
+    
+    def current_skin_path(self):
+        p = SKIN_CACHE_PATH / (str(self.current_skin["textureKey"]) + ".png")
+        check_redownload_skin(p, self.current_skin["url"])
+        return p
+    
+    def current_skin_model(self):
+        return self.current_skin["variant"]
+    
+    def current_skin_icon(self):
+        uid = self.current_skin["textureKey"] + "_thumb"
+        if uid in _cached_skins:
+            return _cached_skins[uid]
+        img_bytes = self.current_skin_bytes()
+        img = QImage()
+        img.loadFromData(img_bytes)
+        img.setText("id", uid)
+        ico = resources.icon_from_qimg(img.copy(8, 8, 8, 8), True)
+        _cached_skins[uid] = ico
+        return _cached_skins[uid]
+    
+    def get_all_cape_paths(self) -> list[dict[str, str]]:
+        capes_out = []
+        for cape in self.capes:
+            url: str = cape["url"]
+            sha = url.split("/")[-1]
+            p = CAPE_CACHE_PATH / (sha + ".png")
+            check_redownload_skin(p, url, sha)
+            new_cape_obj = {**cape, "path": p}
+            capes_out.append(new_cape_obj)
+        return capes_out
+    
+    def get_all_cape_thumbs(self) -> list[dict[str, str | Path | QPixmap]]:
+        capes_out = []
+        c = self.get_all_cape_paths()
+        for cape in c:
+            name = cape["alias"]
+            if name + "_thumb" in _cached_capes:
+                cape["thumb"] = _cached_capes[name + "_thumb"] # type: ignore
+                capes_out.append(cape)
+                continue
+            img_full = QImage()
+            img_full.load(str(cape["path"]))
+            img = img_full.copy(1, 1, 10, 16).scaledToHeight(256)
+            pix = QPixmap.fromImage(img)
+            del img_full, img
+            _cached_capes[name + "_thumb"] = pix
+            cape["thumb"] = _cached_capes[name + "_thumb"] # type: ignore
+            capes_out.append(cape)
+        return capes_out
+    
+    def current_cape_path(self):
+        if self.current_cape:
+            url: str = self.current_cape["url"]
+            assert isinstance(url, str)
+            sha = url.split("/")[-1]
+            p = CAPE_CACHE_PATH / (sha + ".png")
+            check_redownload_skin(p, url, sha)
+            return p
+        return None

@@ -12,13 +12,16 @@ import lzma
 import requests
 from PySide6.QtCore import QThread, QThreadPool, QRunnable
 
+from minecraftlauncher.config import redownload_option
+from minecraftlauncher import session
+
 log = logging.getLogger(__name__)
 T = TypeVar("T")
 
 def _download(url: str, max_retries: int, timeout: int, _retries: int = 0, *,
               hash: str | None = None) -> requests.Response:
     try:
-        resp = requests.get(url, timeout=timeout)
+        resp = session.get(url, timeout=timeout)
         resp.raise_for_status()
     except Exception:
         if _retries >= max_retries:
@@ -151,11 +154,11 @@ class RunnableDownloader(QRunnable):
     """Should we override the file? (default: `False`)"""
     _lzma: bool
 
-    log = log.getChild("BulkDownloadSingleFile")
+    log = log.getChild("RunnableDownloader")
     def __init__(
             self, url: str, path: Path | str, hash: str | None = None,
             override: bool = False, mkdir: bool = True, lzma: bool = False,
-            callback_f: Callable[[int], None] | None = None,
+            callback: Callable[[int], None] | None = None,
             check_hash: bool = True):
         """
         Class for a single file to download in a bulk.
@@ -187,12 +190,11 @@ class RunnableDownloader(QRunnable):
         self._hash = hash
         self._override = override
         self._lzma = lzma
-        self._cb_f = callback_f
+        self._callback = callback
         self._check_hash = check_hash
             
     def _check_sha1(self):
         if not self._hash:
-            self.log.warning("Called SHA check function without a present SHA")
             return True
         return _check_file_sha1(self._path, self._hash)
     
@@ -219,7 +221,7 @@ class RunnableDownloader(QRunnable):
         resp = None
         while attempts < 3:
             try:
-                resp = requests.get(self._url, timeout=30)
+                resp = session.get(self._url, timeout=30)
                 resp.raise_for_status()
             except Exception as err:
                 self.log.error("Failed to get file from '%s': %s"
@@ -249,8 +251,8 @@ class RunnableDownloader(QRunnable):
             raise RuntimeError("Failed to download file from '%s' to '%s'"
                                % (self._url, str(self._path)))
         else:
-            if self._cb_f:
-                self._cb_f(1)
+            if self._callback:
+                self._callback(1)
         return 1
     
     @classmethod

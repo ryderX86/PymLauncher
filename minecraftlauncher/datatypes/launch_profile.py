@@ -6,7 +6,7 @@ import uuid
 import re
 import os
 
-from minecraftlauncher.back import version_manager
+from minecraftlauncher.back import version_manager, game_launcher
 from .game_version import GameVersionStub
 from minecraftlauncher.exceptions.datatypes import InvalidVersionIdError
 
@@ -62,12 +62,11 @@ class GameProfile:
         if modloader_arg or self.mods_folder:
             if not self.mods_folder_mode:
                 self.mods_folder_mode = "modsFolder"
-        if "  " in self.jvm_args:
-            log.debug("Removing extra whitespaces in JVM args...")
+        if "  " in self.jvm_args: # probably not necessary?
             while "  " in self.jvm_args:
                 self.jvm_args = self.jvm_args.replace("  ", " ")
+        # this is definitely necessary or the file will keep getting bigger
         if self.jvm_args.startswith(" ") or self.jvm_args.endswith(" "):
-            log.debug("Trimming JVM args whitespace")
             self.jvm_args = self.jvm_args.strip()
 
     def to_dict(self):
@@ -90,16 +89,18 @@ class GameProfile:
     @property
     def has_custom_args(self):
         DEFAULT_ARGS_LIST = [
-            " ".join([
-                "-XX:+UseCompactObjectHeaders", "-XX:+AlwaysPreTouch",
-                "-XX:+UseStringDeduplication", "-XX:+UseZGC"
-            ]),
-            " ".join([
-                "-XX:+UnlockExperimentalVMOptions", "-XX:+UseG1GC",
-                "-XX:G1NewSizePercent=20", "-XX:G1ReservePercent=20",
-                "-XX:MaxGCPauseMillis=50", "-XX:G1HeapRegionSize=32M"
-            ])
+                "-XX:+UseCompactObjectHeaders " "-XX:+AlwaysPreTouch "
+                "-XX:+UseStringDeduplication " "-XX:+UseZGC",
+
+                "-XX:+UnlockExperimentalVMOptions " "-XX:+UseG1GC "
+                "-XX:G1NewSizePercent=20 " "-XX:G1ReservePercent=20 "
+                "-XX:MaxGCPauseMillis=50 " "-XX:G1HeapRegionSize=32M"
         ]
+        if self.version_id not in ("latest-release", "latest-snapshot"):
+            v = version_manager.fetch_version_json(self.version_id)
+            DEFAULT_ARGS_LIST = [
+                game_launcher.default_user_jvm_args_factory(v)
+            ]
         if self.jvm_args and self.jvm_args in DEFAULT_ARGS_LIST:
             return False
         elif not self.jvm_args:

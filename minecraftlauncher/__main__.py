@@ -1,12 +1,18 @@
+# nuitka-project: --standalone
+# nuitka-project-if: sys.platform == "win32":
+#   nuitka-project: --windows-console-mode=disable
 from datetime import datetime
 from logging.handlers import RotatingFileHandler
+from typing import Callable
 import time
 import logging
 import sys
 
 from PySide6.QtCore import QThread
-from PySide6.QtGui import QFont
+from PySide6.QtGui import QFont, QSurfaceFormat
 from PySide6.QtWidgets import QApplication, QMessageBox
+from PySide6.QtQuick3D import QQuick3D, QQuick3DTextureData
+import requests
 
 from . import config, constants, FORMATTER, DEV, MEMORY_HANDLER
 from . import set_qapp
@@ -25,6 +31,20 @@ from .auth import MicrosoftAccount, LauncherAccount
 log = logging.getLogger(__name__ if __name__ != "__main__"
                         else "minecraftlauncher")
 
+offline_mode_hooks: list[Callable[[bool], None]] = []
+
+def add_offline_mode_hook(hook: Callable[[bool], None]):
+    """
+    Adds a function that handles offline mode changing for that module.
+
+    `hook` should be a function that takes a `bool`.
+    
+    If `True` is passed, we're in offline mode.
+
+    Otherwise, we're back online.
+    """
+    offline_mode_hooks.append(hook)
+
 log_dir = constants.LAUNCHER_DATA_DIR / "logs"
 log_file = log_dir / "latest.log"
 if not log_dir.exists():
@@ -35,9 +55,8 @@ if not DEV:
     fh = RotatingFileHandler(log_file, backupCount=4)
     fh.setLevel(logging.DEBUG)
     fh.setFormatter(FORMATTER)
-    if log_file.exists():
+    if log_file.exists() and log_file.is_file():
         fh.doRollover()
-    MEMORY_HANDLER.setLevel(logging.DEBUG)
     MEMORY_HANDLER.setTarget(fh)
     MEMORY_HANDLER.flush()
     root_logger = logging.getLogger()
@@ -51,10 +70,10 @@ class App:
     close_if_login_aborted:bool
     """Should we close if the login process is aborted?"""
 
-    log = log.getChild("App()")
+    log = log.getChild("App")
 
     def __init__(self):
-        self.log.info("Setting up...")
+        self.log.debug("Setting up...")
         self.qapp = QApplication(sys.argv)
         self.qapp.setApplicationName("Minecraft Launcher")
         self.qapp.setStyleSheet(STYLESHEET)
@@ -88,7 +107,7 @@ class App:
             page.build()
 
     def run(self) -> int:
-        self.log.debug("Attempt to get version manifest set up...")
+        self.log.debug("Attempting to get version manifest set up...")
         self.lb_window.set_text("Fetching version list")
         try:
             version_manager.fetch_version_manifest()
@@ -99,7 +118,7 @@ class App:
             error_box(f"Failed to get version info: {err}", fatal=True)
             return 1
         
-        self.log.debug("Attempt to get JRE manifest...")
+        self.log.debug("Attempting to get JRE manifest...")
         self.lb_window.set_text("Fetching Java version list")
         try:
             java_manager.get_jvm_manifest()
@@ -111,7 +130,7 @@ class App:
             return 1
 
         self.buildall()
-        self.log.debug("Attempt to load accounts from cache...")
+        self.log.debug("Attempting to load accounts from cache...")
         self.lb_window.set_text("Authenticating")
         accounts, _ = account_manager.load_accounts()
         if accounts:
@@ -148,15 +167,15 @@ class App:
         dialog.show()
         dialog.exec()
     
-    def _on_login_complete(self, launcher_profile:LauncherAccount):
-        if launcher_profile:
+    def _on_login_complete(self, account:LauncherAccount):
+        if account:
             self.close_if_login_aborted = False
         self.lb_window.open()
         self.lb_window.set_text("Loading account details")
         self.lb_window.update()
         account_manager.load_accounts()
-        account_manager.save_or_replace_account(launcher_profile)
-        account_manager.set_active_account(launcher_profile.msa.email)
+        account_manager.save_or_replace_account(account)
+        account_manager.set_active_account(account.gamertag)
         self._refresh_account_ui()
         self.lb_window.hide()
     
@@ -201,22 +220,23 @@ class App:
             active
         )
 
-    def _on_account_changed(self, email:str):
+    def _on_account_changed(self, gamertag:str):
         if self.lb_window.isVisible():
             self.lb_window.accept()
-        if email in [a.msa.email for a in account_manager.accounts]:
-            account_manager.active_account = email
-            acc = account_manager.fetch_account(email)
+        if gamertag in [a.gamertag for a in account_manager.accounts]:
+            account_manager.active_account = gamertag
+            acc = account_manager.fetch_account(gamertag)
             assert acc
-            if (not acc.msa_valid) or (not acc.token or (not acc.token.is_active)):
+            if (not acc.msa_valid) or (not acc.token
+                                       or (not acc.token.is_active)):
                 self.lb_window.open()
                 if acc.refresh():
-                    log.debug("Refreshed %s" % email)
+                    log.debug("Refreshed %s" % gamertag)
                     self.lb_window.accept()
                     account_manager.save_or_replace_account(acc)
                 else:
                     log.debug(
-                        "Couldn't refresh %s, prompting user to relog" % email)
+                        "Couldn't refresh %s, prompting user to relog" % gamertag)
                     dialog = LoginWindow(self.lb_window)
                     dialog.rejected.connect(
                         self.main_window.account_dropdown.next_account)
@@ -235,7 +255,7 @@ class App:
         assert active_account
         if not active_account.token_valid:
             self.lb_window.set_text("Authenticating")
-            log.info("Refreshing token for %s" % active_account.msa.email)
+            log.info("Refreshing token for %s" % active_account.gamertag)
             active_account.minecraft_auth()
             account_manager.save_or_replace_account(active_account)
         self.main_window.account_page.set_account_info(active_account)

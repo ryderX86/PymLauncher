@@ -14,20 +14,14 @@ import platform
 import re
 import zipfile
 
-import requests
 from PySide6.QtCore import QThreadPool
 
 from minecraftlauncher.constants import (
-    MINECRAFT_DIR,
-    OS,
-    ARCH,
-    CLASSPATH_SEPARATOR,
-    OS_VER,
-    LIBRARIES_URL
-)
+    MINECRAFT_DIR, OS, ARCH, CLASSPATH_SEPARATOR, OS_VER, LIBRARIES_URL,
+    offline_mode)
+from minecraftlauncher.config import redownload_option
 from .download_helpers import (
-    download, should_download_file, _check_file_sha1, RunnableDownloader
-)
+    download, should_download_file, _check_file_sha1, RunnableDownloader)
 
 log = logging.getLogger(__name__)
 
@@ -313,9 +307,14 @@ def download_libraries_threaded(libraries:list[dict], *,
 
         if url and path:
             destination = Path(LIBRARIES_BASE, *path.split("/"))
+            if destination.exists() and destination.is_file():
+                if not redownload_option:
+                    log.info("Skipping download of library at '%s' "
+                             "regardless of hash according to options."
+                             % str(destination))
+                    continue
             download_list.append(RunnableDownloader(
-                url, destination, sha1 or None, callback_f=passed_callback
-            ))
+                url, destination, sha1 or None, callback=passed_callback))
 
     pool.setMaxThreadCount(75)
     for dl in download_list:

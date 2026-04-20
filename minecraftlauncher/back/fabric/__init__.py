@@ -1,12 +1,9 @@
-from typing import Any
-from functools import lru_cache
 import logging
 import json
 
 from minecraftlauncher.constants import LAUNCHER_DATA_DIR, MINECRAFT_DIR
 from minecraftlauncher.back.download_helpers import (
-    download, should_download_file, file_exists_or_age
-)
+    download, file_exists_or_age)
 
 log = logging.getLogger(__name__)
 
@@ -21,7 +18,6 @@ _master_manifest = {}
 game_versions_list:list[tuple[str, bool]] = []
 loader_versions_list:list[str] = []
 
-@lru_cache(maxsize=1)
 def _get_master(force_refresh:bool=False):
     global _master_manifest
     if force_refresh or not _master_manifest:
@@ -36,10 +32,14 @@ def _get_master(force_refresh:bool=False):
                 _master_manifest = {}
                 del cached
             else:
+                log.info("Using cached fabric-versions.json")
                 return
         log.info("Downloading Fabric manifest...")
         response = download(FABRIC_MANIFEST_URL)
         _master_manifest = response.json()
+        del _master_manifest["mappings"]
+        del _master_manifest["intermediary"]
+        del _master_manifest["installer"]
         if not _master_manifest:
             raise RuntimeError(
                 "Couldn't get game versions manifest for Fabric"
@@ -53,6 +53,8 @@ def get_game_versions_list(force_refresh:bool=False):
 
     if game_versions_list and not force_refresh:
         return game_versions_list
+    
+    log.debug("Building game version list for Fabric")
     
     new_list:list[tuple[str, bool]] = []
     
@@ -81,6 +83,8 @@ def get_loader_versions_list(force_refresh:bool=False):
     if loader_versions_list and not force_refresh:
         return loader_versions_list
     
+    log.debug("Building loader versions list for Fabric")
+    
     new_list:list[str] = []
 
     for v_dict in _master_manifest.get("loader", []):
@@ -89,6 +93,7 @@ def get_loader_versions_list(force_refresh:bool=False):
     loader_versions_list = new_list
     return loader_versions_list
 
+# maybe TODO(?): insert 'jar' into the version JSON?
 def install(game_ver:str, fabric_ver:str, override:bool=False):
     _get_master()
     log.debug("fabric-loader-%s-%s install requested" % (fabric_ver, game_ver))
@@ -96,6 +101,8 @@ def install(game_ver:str, fabric_ver:str, override:bool=False):
            "%(game)s/%(loader)s/profile/json") % {
                "game": game_ver, "loader": fabric_ver
            }
+    
+    log.debug("Download: %s" % URL)
     
     dir = MINECRAFT_DIR / "versions" / f"fabric-loader-{fabric_ver}-{game_ver}"
     path = dir / f"fabric-loader-{fabric_ver}-{game_ver}.json"

@@ -4,8 +4,8 @@ from PySide6.QtCore import QEvent, QRect, Qt, Signal, QSize
 from PySide6.QtGui import QFocusEvent, QIcon, QMouseEvent, QWheelEvent
 from PySide6.QtWidgets import QPushButton, QLabel, QWidget, QBoxLayout, QHBoxLayout
 
-from ._IconPicker import IconPicker
-from minecraftlauncher.datatypes.GameProfile import GameProfile
+from .icon_picker import IconPicker
+from minecraftlauncher.datatypes.launch_profile import GameProfile
 from minecraftlauncher.front import resources
 
 log = logging.getLogger(__name__)
