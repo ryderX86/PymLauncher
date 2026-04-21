@@ -8,6 +8,7 @@ cd %__CWD%
 cd ..
 
 call .\.venv\scripts\activate.bat
+call "C:\Program Files\Microsoft Visual Studio\18\Community\VC\Auxiliary\Build\vcvars64.bat"
 
 if exist .\dist (
     del .\dist /Q
@@ -16,7 +17,7 @@ if exist .\dist (
 python .\resources\compile.py
 
 rem Full send:
-pyside6-deploy -c .\scripts\w32.pysidedeploy.spec -f
+pyside6-deploy -c w32.pysidedeploy.spec
 
 echo PySide6 deploy done, NSIS:
 cd .\scripts

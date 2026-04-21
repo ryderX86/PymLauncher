@@ -9,11 +9,11 @@ import os
 
 from PySide6.QtCore import Qt, QUrl
 from PySide6.QtGui import QDesktopServices, QClipboard, QFont
-from PySide6.QtWidgets import (QDialog, QMessageBox, QPushButton, QLabel,
-                             QPlainTextEdit, QVBoxLayout, QHBoxLayout,
-                             QScrollBar, QSizePolicy, QFrame, QMainWindow)
+from PySide6.QtWidgets import (
+    QDialog, QMessageBox, QPushButton, QLabel, QPlainTextEdit, QVBoxLayout,
+    QHBoxLayout, QScrollBar, QSizePolicy, QFrame, QMainWindow, QApplication)
 
-from minecraftlauncher import qapp, constants
+from minecraftlauncher import constants
 
 log = logging.getLogger(__name__)
 
@@ -94,14 +94,20 @@ class ErrorDisplay(QDialog):
         clipboard_button = QPushButton()
         clipboard_button.setText("Copy to Clipboard")
         clipboard_button.clicked.connect(self._copy_logs_to_clipboard)
-        self.clip = qapp().clipboard()
+        qapp = QApplication.instance()
+        if not qapp or not isinstance(qapp, QApplication):
+            log.warning("Couldn't get %sQApplication instance!"
+                        % "correct " if qapp else "")
+            self.clip = None
+        else:
+            self.clip = qapp.clipboard()
         if not self._log:
             clipboard_button.setDisabled(True)
             clipboard_button.setText("No logs to copy...")
             clipboard_button.setStyleSheet(clipboard_button.styleSheet()
                                            + " font: italic;")
         elif not self.clip:
-            log.warning("No clipboard found.")
+            log.warning("No clipboard found")
             clipboard_button.setDisabled(True)
         buttons_layout.addWidget(clipboard_button)
         

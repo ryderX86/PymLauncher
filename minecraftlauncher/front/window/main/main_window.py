@@ -52,7 +52,7 @@ class MainWindow(QMainWindow):
         self._nav_buttons:dict[str, QPushButton] = {}
         self._build_ui()
 
-    def _save_config(self):
+    def _on_window_closed(self):
         geo = self.geometry()
         if self.isMaximized():
             config.maximized = True
@@ -60,14 +60,13 @@ class MainWindow(QMainWindow):
             config.window_size = [geo.width(), geo.height()]
             config.maximized = False
         config.save()
-        account_manager.save_accounts()
 
     def closeEvent(self, a0):
-        self._save_config()
+        self._on_window_closed()
         super().closeEvent(a0)
 
     def hide(self):
-        self._save_config()
+        self._on_window_closed()
         config.save()
         return super().hide()
     

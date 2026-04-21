@@ -10,22 +10,23 @@ import platform
 import logging
 import json
 
-from minecraftlauncher.constants import WANT_ENCRYPTION
-
 log = logging.getLogger(__name__)
 
-match platform.system(), WANT_ENCRYPTION:
-    case "Windows", True:
+ENABLED: bool
+"""Whether or not the launcher has encryption enabled or not"""
+
+match platform.system():
+    case "Windows":
         from .win32_encryption import (
             encrypt, decrypt, data_load_hook, data_save_hook)
+        ENABLED = True
     case _:
         log.warning(
             "Platform is not supported for encryption, user login info won't "
             "be safe")
         
         def encrypt(data:str|bytes) -> ByteString:
-            log.warning("User data is NOT secure; encryption is not "
-                        "implemented on this platform.")
+            log.warning("Storing accounts.bin [json] in plaintext")
             if isinstance(data, str):
                 data = data.encode("utf-8")
             return data
@@ -40,3 +41,4 @@ match platform.system(), WANT_ENCRYPTION:
             return j.encode("utf-8")
         
         data_load_hook = decrypt
+        ENABLED = False

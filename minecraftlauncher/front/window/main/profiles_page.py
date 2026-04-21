@@ -27,7 +27,7 @@ from PySide6.QtWidgets import (
     QCheckBox, QMenu, QWidgetAction
 )
 
-from minecraftlauncher import style, DEV, config
+from minecraftlauncher import DEV, config
 from minecraftlauncher.functions.text import indent
 from minecraftlauncher.functions.error_box import error_box
 from minecraftlauncher.datatypes.game_version import GameVersionStub

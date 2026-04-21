@@ -184,7 +184,6 @@ class LauncherAccount:
         return {k:v for k, v in {
             "msa_token": self.msa.serialize(),
             "mc_token": self.token.serialize() if self.token else None,
-            "demo_user": self.demo_mode,
             "game_profile": self.profile.serialize() if self.profile else None,
             "gamertag": self.gamertag,
             "xuid": self.xuid,

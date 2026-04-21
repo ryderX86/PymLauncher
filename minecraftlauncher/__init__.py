@@ -67,30 +67,6 @@ def _qt_logger(type:QtMsgType, context:QMessageLogContext, msg:str):
     func(msg)
 qInstallMessageHandler(_qt_logger)
 
-# stuff so i can access QApplication without the linter throwing a damn tantrum
-_qapp:QApplication|None = None
-
-def qapp():
-    global _qapp
-    if _qapp:
-        return _qapp
-    else:
-        _qapp = QApplication([])
-        return _qapp
-    
-def set_qapp(qapp:QApplication):
-    global _qapp
-    _qapp = qapp
-    
-def style():
-    global _qapp
-    if not _qapp:
-        qapp()
-        assert _qapp
-    style = _qapp.style()
-    assert style
-    return style
-
 session = requests.sessions.Session()
 session.headers["User-Agent"] = USER_AGENT
 logging.debug("User agent: %s" % USER_AGENT)

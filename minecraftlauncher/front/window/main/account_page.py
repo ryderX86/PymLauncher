@@ -14,9 +14,8 @@ from PySide6.QtQml import QQmlImageProviderBase
 from PySide6.QtWidgets import (
     QApplication, QFileDialog, QFrame, QGridLayout, QGroupBox, QHBoxLayout,
     QLabel, QListWidget, QListWidgetItem, QMessageBox, QPushButton,
-    QVBoxLayout, QWidget, QStyle)
+    QVBoxLayout, QWidget, QStyle, QApplication)
 
-from minecraftlauncher import style, qapp
 from minecraftlauncher.front.resources import symbol
 from minecraftlauncher.back import account_manager
 from minecraftlauncher.auth import LauncherAccount, MinecraftProfile
@@ -58,11 +57,6 @@ class AccountPage(QWidget):
         self.title = QLabel("<username or gamertag>")
         self.title.setProperty("heading", True)
         preview_layout.addWidget(self.title)
-
-        self.change_skin_button = QPushButton("Change skin")
-        self.change_skin_button.setMaximumWidth(250)
-        self.change_skin_button.clicked.connect(self._change_skin)
-        preview_layout.addWidget(self.change_skin_button, 0)
 
         layout.addWidget(preview_w)
 
@@ -126,6 +120,13 @@ class AccountPage(QWidget):
         # Management area
         manage_w = QWidget()
         manage = QHBoxLayout(manage_w)
+        manage.setContentsMargins(0, 0, 0, 0)
+
+        self.change_skin_button = QPushButton("Change Skin")
+        self.change_skin_button.setMaximumWidth(250)
+        self.change_skin_button.clicked.connect(self._change_skin)
+        manage.addWidget(self.change_skin_button, 0)
+
         manage.addStretch()
 
         mg_accounts_button = QPushButton("Manage accounts")
@@ -162,7 +163,13 @@ class AccountPage(QWidget):
     def _copy_uuid(self):
         uuid_text = self.uuid_label.text()
         if uuid_text and uuid_text != "<uuid>":
-            clipboard = qapp().clipboard()
+            qapp = QApplication.instance()
+            if not qapp:
+                error_box("Failed to get QApplication instance")
+                log.warning("Couldn't get QApplication instance!")
+                return
+            assert isinstance(qapp, QApplication)
+            clipboard = qapp.clipboard()
             if not clipboard:
                 error_box("Failed to get clipboard instance to copy to.")
                 log.warning("Couldn't get clipboard instance!")

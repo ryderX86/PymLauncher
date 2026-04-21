@@ -1,4 +1,5 @@
 PySide6
 requests
 nuitka
-pywin32
+qrcode
+pywin32; platform_system == "Windows"

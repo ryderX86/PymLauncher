@@ -15,7 +15,6 @@ from PySide6.QtQuick3D import QQuick3D, QQuick3DTextureData
 import requests
 
 from . import config, constants, FORMATTER, DEV, MEMORY_HANDLER
-from . import set_qapp
 from .functions.error_box import error_box
 from .front import resources
 from .front.styles import STYLESHEET, FONT
@@ -79,7 +78,6 @@ class App:
         self.qapp.setStyleSheet(STYLESHEET)
         self.qapp.setFont(FONT)
 
-        set_qapp(self.qapp)
         self.lb_window = LoadingBlockerWindow()
         self.lb_window.open()
 

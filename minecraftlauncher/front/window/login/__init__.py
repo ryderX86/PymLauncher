@@ -11,12 +11,12 @@ from PySide6.QtCore import Qt, QThread, QUrl, Signal
 from PySide6.QtGui import QDesktopServices, QClipboard, QPixmap
 from PySide6.QtWidgets import (
     QDialog, QLabel, QPushButton, QVBoxLayout, QCheckBox, QWidget, QHBoxLayout,
-    QSizePolicy)
+    QSizePolicy, QApplication)
 from PySide6.QtSvgWidgets import QSvgWidget
 from PySide6.QtSvg import QtSvg
 import requests
 
-from minecraftlauncher import qapp, config
+from minecraftlauncher import config
 from minecraftlauncher.constants import (
     AZURE_CLIENT_ID, MS_DEVICE_CODE_URL, MS_TOKEN_URL, AZURE_SCOPE)
 from minecraftlauncher.auth import MicrosoftAccount, LauncherAccount, auth_flow
@@ -263,7 +263,12 @@ class LoginWindow(QDialog):
         self.status_label.setText("Waiting for sign-in to complete...")
 
         if display_uri == verification_uri:
-            clip = qapp().clipboard()
+            qapp = QApplication.instance()
+            if not qapp or not isinstance(qapp, QApplication):
+                log.warning("Couldn't get %sQApplication instance!"
+                            % ("correct " if qapp else ""))
+                return
+            clip = qapp.clipboard()
             if clip:
                 clip.setText(user_code, clip.Mode.Clipboard)
                 log.debug("Verification code should be in clipboard.")
