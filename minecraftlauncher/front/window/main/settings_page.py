@@ -125,33 +125,27 @@ class SettingsPage(QWidget):
         show_logs_lo.setContentsMargins(0, 0, 0, 0)
         show_logs_lo.setAlignment(Qt.AlignmentFlag.AlignLeft)
         show_logs_tt = TooltipHint(
-            "Show the game's logs on the home page.\n\n"
+            "Show the game's console logs on the home page.\n"
             "(Might slow your PC!)"
         )
         show_logs_check = QCheckBox("Show game logs on home page")
         # show_logs_check.setChecked(config.show_logs_on_home)
-        show_logs_check.checkStateChanged.connect(
-            lambda c: config.set(
-                "show_logs_on_home", c == Qt.CheckState.Checked))
+        def show_logs_changed(check_state: Qt.CheckState):
+            nonlocal self
+            checked = check_state == Qt.CheckState.Checked
+            config.set("show_logs_on_home", checked)
+            self.settings_changed.emit()
+        show_logs_check.checkStateChanged.connect(show_logs_changed)
         show_logs_lo.addWidget(show_logs_check)
         show_logs_lo.addWidget(show_logs_tt)
 
-        # layout.addWidget(show_logs_w)
+        visual.addWidget(show_logs_w)
 
         # dev options
-        if constants.DEV:
-            dev = Section("DEV")
+        # if constants.DEV:
+        #     dev = Section("DEV")
 
-            console_game_logs = QCheckBox("Show game logs in native console")
-            console_game_logs.setChecked(bool(config.dev_game_logs_in_console))
-            console_game_logs.checkStateChanged.connect(
-                lambda c: config.set(
-                    "dev_game_logs_in_console", c == Qt.CheckState.Checked
-                )
-            )
-            dev.addWidget(console_game_logs)
-
-            layout.addWidget(dev)
+        #     layout.addWidget(dev)
 
         layout.addStretch()
 

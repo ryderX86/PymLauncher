@@ -49,11 +49,7 @@ tooltip_icons_enabled: bool = True
 ignored_messages: list[int] = []
 dialog_answers: dict[int, bool] = {}
 show_animation_on_skin_dialog: bool = False
-if DEV:
-    dev_game_logs_in_console: bool | IgnoreMe = True
-else:
-    dev_game_logs_in_console: bool | IgnoreMe = IgnoreMe()
-# show_logs_on_home:bool = False
+show_logs_on_home:bool = False
 
 def set(val_name:str, new_val:Any):
     current = globals().get(val_name)
@@ -99,8 +95,6 @@ def load(config:dict|None=None):
         elif isinstance(globals().get(key), NoneType):
             _log.warning("Ignoring unknown key in config.json: '%s'" % key)
             continue
-        elif isinstance(globals()[key], IgnoreMe):
-            continue # silently ignore lol
         default = globals()[key]
         if not isinstance(default, type(val)):
             _log.warning(f"Value in '{key}' has conflicting type, ignoring")

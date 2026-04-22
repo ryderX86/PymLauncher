@@ -176,6 +176,9 @@ class MainWindow(QMainWindow):
         self.home_page.game_open.connect(self._process_game_open)
         self.home_page.game_closed.connect(self._process_game_closed)
         self.account_page.skin_upload.connect(self.account_dropdown.refresh)
+        self.settings_page.settings_changed.connect(
+            self.home_page.config_changed
+        )
 
         for page in self.page_list:
             self.pages.addWidget(page)

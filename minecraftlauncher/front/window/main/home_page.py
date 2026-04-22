@@ -11,10 +11,12 @@ import subprocess
 
 import requests
 
-from PySide6.QtCore import Qt, QThread, Signal, QUrl, QItemSelection, QSize
-from PySide6.QtGui import QDesktopServices, QIcon
-from PySide6.QtWidgets import (QFrame, QHBoxLayout, QLabel, QProgressBar,
-                             QPushButton, QVBoxLayout, QWidget, QComboBox)
+from PySide6.QtCore import (
+    Qt, QThread, Signal, QUrl, QItemSelection, QSize, QTimer)
+from PySide6.QtGui import QDesktopServices, QIcon, QFont
+from PySide6.QtWidgets import (
+    QFrame, QHBoxLayout, QLabel, QProgressBar, QPushButton, QVBoxLayout,
+    QWidget, QComboBox, QCheckBox, QPlainTextEdit)
 
 from minecraftlauncher.functions.error_box import error_box
 from minecraftlauncher.back.profile_manager import GameProfile
@@ -40,6 +42,7 @@ class LaunchWorker(QThread):
     finished = Signal(bool, str) # successful, message
     status = Signal(str) # status text
     game_closed = Signal(str, str)
+    game_log = Signal(str)
     """
     `[0]` (`int`) - Exit code<br>
     `[1]` (`str`) - stdout<br>
@@ -50,6 +53,7 @@ class LaunchWorker(QThread):
 
     def __init__(self, version_id: str, profile_data: GameProfile,
                  auth_info: LauncherAccount,
+                 emit_logs: bool = True,
                  log_hook: Callable[[str], None] | None = None,
                  parent = None):
         super().__init__(parent)
@@ -220,7 +224,7 @@ class LaunchWorker(QThread):
             self.log.warning("Game hasn't given a return code, did it launch?")
             self.finished.emit(True, "Unknown status")
 
-        if DEV and config.dev_game_logs_in_console:
+        if DEV and config.post_launch_option:
             game_log_func = sub_logger.debug
         else:
             def game_log_func(msg:object, *args):
@@ -229,14 +233,16 @@ class LaunchWorker(QThread):
         # reverse this when reading:
         stdout_cache:list[str] = []
 
+        if not self._hook:
+            self._hook = self.game_log.emit
+
         if self._hook:
             def loop(self):
                 nonlocal stdout_cache
                 if self._p.stdout:
                     for line in iter(self._p.stdout.readline, ""):
-                        game_log_func(line[:-1])
                         stdout_cache.insert(0, line[:-1])
-                        self._hook(line)
+                        self._hook(line[:-1])
 
                         self._p.stdout.flush()
                         stdout_cache = stdout_cache[:255]
@@ -290,7 +296,9 @@ class HomePage(QWidget):
         self.profile_needs_install:bool = True
 
     def build(self):
-        pass
+        self.game_log_limiter = QTimer(self)
+        self.game_log_limiter.setInterval(60000)
+        self.game_log_limiter.timeout.connect(self._truncate_logs)
 
     def kill_worker(self):
         if self._worker:
@@ -390,15 +398,35 @@ class HomePage(QWidget):
         profile_action_row.addStretch()
 
         self.version_label = QLabel("Version: [unknown]")
-        # self.version_label.setStyleSheet(
-        #     f"font-size: 13px; color: {styles.TEXT_SECONDARY};"
-        # )
         self.version_label.setProperty("secondary", True)
         self.version_label.setContentsMargins(10,0,10,0)
         self.version_label.setOpenExternalLinks(True)
         info_layout.addWidget(self.version_label)
 
-        layout.addStretch()
+        self.game_logs = QPlainTextEdit(
+            tabChangesFocus=False,
+            undoRedoEnabled=False,
+            lineWrapMode=QPlainTextEdit.LineWrapMode.WidgetWidth,
+            readOnly=True,
+            plainText="*taps mic* This thing on?",
+            centerOnScroll=False
+        )
+        self.game_logs.setStyleSheet(
+            self.game_logs.styleSheet()
+            + f"; background-color: {styles.BG_DARK};")
+        self.game_logs.setFont(QFont("consolas"))
+
+        info_layout.addWidget(self.game_logs)
+
+        self.stretcher = QWidget()
+        stretcher_lo = QVBoxLayout(self.stretcher)
+        stretcher_lo.addStretch()
+        layout.addWidget(self.stretcher)
+
+        if config.show_logs_on_home:
+            self.stretcher.setHidden(True)
+        else:
+            self.game_logs.setHidden(True)
 
         # Progress bar
         self.progress_frame = QFrame()
@@ -527,12 +555,19 @@ class HomePage(QWidget):
         log.debug("Preparing to install/launch game...")
         self.progress_bar.setValue(0)
         self.progress_frame.setVisible(True)
+        show_logs = config.show_logs_on_home
 
-        self._worker = LaunchWorker(version_id, profile_data, auth_info)
+        self._worker = LaunchWorker(
+            version_id, profile_data, auth_info, emit_logs=show_logs
+        )
         self._worker.progress.connect(self._on_progress)
         self._worker.status.connect(self._on_status)
         self._worker.finished.connect(self._on_finished)
         self._worker.game_closed.connect(self._on_game_closed)
+        if show_logs:
+            log.debug("Starting game with logs shown")
+            self._worker.game_log.connect(self._handle_game_log)
+        self.game_logs.clear()
         log.debug("Starting background worker for install...")
         self._worker.start()
 
@@ -563,6 +598,9 @@ class HomePage(QWidget):
         if int(exit_code) != 0:
             self.game_crash.emit(exit_code, stdout)
         self.kill_worker()
+        if self.game_log_limiter.isActive():
+            log.debug("Stopping log truncation timer")
+            self.game_log_limiter.stop()
 
     def _open_prof_folder(self, folder:str|None=None):
         prof = profile_manager.get_current_profile()
@@ -614,8 +652,30 @@ class HomePage(QWidget):
             self.progress_label.setText("")
             self.progress_bar.setValue(0)
             self.game_open.emit()
+            if not self.game_log_limiter.isActive():
+                log.debug("Starting game log truncation timer")
+                self.game_log_limiter.start()
         else:
             error_box("Launch failed: %s" % message)
             prof = profile_manager.get_current_profile()
             assert prof
             self._profile_change(prof)
+
+    def config_changed(self):
+        self.game_logs.setHidden(not config.show_logs_on_home)
+        self.stretcher.setHidden(config.show_logs_on_home)
+        if not config.show_logs_on_home:
+            if self.game_logs.blockCount() > 1:
+                log.debug(
+                    "Clearing home page game logs due to option being "
+                    "unchecked")
+                self.game_logs.clear()
+
+    def _handle_game_log(self, log: str):
+        self.game_logs.appendPlainText(log)
+
+    def _truncate_logs(self):
+        log.debug("Truncating console logs to (text)[-200:]")
+        self.game_logs.setPlainText(
+            "\n".join(self.game_logs.toPlainText().splitlines()[-200:])
+        )
