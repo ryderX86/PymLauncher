@@ -30,8 +30,12 @@ KNOWN_DICT_KEYS = [
 ]
 
 _STEVE_UUID = str(uuid.UUID(int=0))
-SKIN_CACHE_PATH = LAUNCHER_DATA_DIR / "skins"
-CAPE_CACHE_PATH = LAUNCHER_DATA_DIR / "capes"
+SKIN_CACHE_PATH = LAUNCHER_DATA_DIR / "textures_cache" / "skins"
+CAPE_CACHE_PATH = LAUNCHER_DATA_DIR / "textures_cache" / "capes"
+if not SKIN_CACHE_PATH.exists():
+    SKIN_CACHE_PATH.mkdir(parents=True, exist_ok=True)
+if not CAPE_CACHE_PATH.exists():
+    CAPE_CACHE_PATH.mkdir(parents=True, exist_ok=True)
 
 _cached_skins: dict[str, QIcon] = {}
 _cached_capes: dict[str, QPixmap] = {}
@@ -55,13 +59,16 @@ class SkinModel(StrEnum):
     ALEX = SLIM
     """Alias for `SLIM`"""
 
-def check_redownload_skin(p: Path, url: str, sha: str | None = None):
+def check_redownload_skin(p: Path, url: str, sha: str | None = None,
+                          name: str | None = None):
     if not sha:
         sha = url.split("/")[-1]
     if p.exists():
-        file_sha = p.read_bytes()
+        file_sha = hashlib.sha256(p.read_bytes()).hexdigest()
         if file_sha == sha:
             return
+    if name:
+        log.debug("Downloading player texture for '%s'" % name)
     resp = try_request(url)
     p.write_bytes(resp.content)
     return
@@ -268,12 +275,18 @@ class MinecraftProfile:
     
     def current_skin_bytes(self):
         p = SKIN_CACHE_PATH / (str(self.current_skin["textureKey"]) + ".png")
-        check_redownload_skin(p, self.current_skin["url"])
+        check_redownload_skin(
+            p, self.current_skin["url"],
+            name=str(self.current_skin["textureKey"])
+        )
         return p.read_bytes()
     
     def current_skin_path(self):
         p = SKIN_CACHE_PATH / (str(self.current_skin["textureKey"]) + ".png")
-        check_redownload_skin(p, self.current_skin["url"])
+        check_redownload_skin(
+            p, self.current_skin["url"],
+            name=str(self.current_skin["textureKey"])
+        )
         return p
     
     def current_skin_model(self):
@@ -297,7 +310,7 @@ class MinecraftProfile:
             url: str = cape["url"]
             sha = url.split("/")[-1]
             p = CAPE_CACHE_PATH / (sha + ".png")
-            check_redownload_skin(p, url, sha)
+            check_redownload_skin(p, url, sha, name=cape["alias"])
             new_cape_obj = {**cape, "path": p}
             capes_out.append(new_cape_obj)
         return capes_out

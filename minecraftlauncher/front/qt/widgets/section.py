@@ -9,7 +9,7 @@ class Section(QWidget):
         super().__init__(parent)
         self.setContentsMargins(0, 0, 0, 0)
         self._meta_layout = QVBoxLayout(self)
-        self._meta_layout.setContentsMargins(0, 0, 0, 0)
+        self._meta_layout.setContentsMargins(5, 0, 0, 0)
         self._meta_layout.setSpacing(8)
         self._label = QLabel(text)
         self._label.setProperty("section", True)

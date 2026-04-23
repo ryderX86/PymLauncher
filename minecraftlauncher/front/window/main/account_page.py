@@ -46,24 +46,17 @@ class AccountPage(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(40, 40, 40, 40)
         layout.setSpacing(20)
-        layout.addStretch()
 
-        preview_w = QWidget()
-        preview_w.setContentsMargins(0, 0, 0, 0)
-        preview_layout = QHBoxLayout(preview_w)
-        preview_layout.setContentsMargins(0, 0, 0, 0)
-        preview_layout.setSpacing(40)
+        title = QLabel("Account")
+        title.setProperty("heading", True)
+        layout.addWidget(title)
 
         self.title = QLabel("<username or gamertag>")
-        self.title.setProperty("heading", True)
-        preview_layout.addWidget(self.title)
-
-        layout.addWidget(preview_w)
-
-        layout.addStretch()
+        self.title.setProperty("h2", True)
+        # layout.addWidget(self.title)
 
         # Account info stuff
-        info_group = QGroupBox("Account Info")
+        info_group = QGroupBox("Details")
         info_layout = QGridLayout(info_group)
         info_layout.setSpacing(0)
 
@@ -114,6 +107,7 @@ class AccountPage(QWidget):
             info_layout.setRowMinimumHeight(i, 48)
 
         layout.addWidget(info_group)
+        layout.addStretch()
 
         # TODO: Skin selection/preview
 
@@ -129,11 +123,11 @@ class AccountPage(QWidget):
 
         manage.addStretch()
 
-        mg_accounts_button = QPushButton("Manage accounts")
-        mg_accounts_button.setFixedWidth(160)
-        # mg_accounts_button.clicked.connect(self._manage_accounts)
-        mg_accounts_button.setDisabled(True)
-        manage.addWidget(mg_accounts_button)
+        # mg_accounts_button = QPushButton("Manage accounts")
+        # mg_accounts_button.setFixedWidth(160)
+        # # mg_accounts_button.clicked.connect(self._manage_accounts)
+        # mg_accounts_button.setDisabled(True)
+        # manage.addWidget(mg_accounts_button)
 
         logout_button = QPushButton("Log out")
         logout_button.setProperty("danger", True)

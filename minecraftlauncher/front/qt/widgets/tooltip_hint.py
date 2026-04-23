@@ -22,9 +22,14 @@ class TooltipHint(QLabel):
         self.setContentsMargins(0, 0, 0, 0)
         self.setAlignment(Qt.AlignmentFlag.AlignVCenter)
         self.hide_all.connect(self._hide_all_sig)
-        _instances.append(weakref.ref(self))
+        self.ref = weakref.ref(self)
+        _instances.append(self.ref)
         if not config.tooltip_icons_enabled:
             self.setHidden(not config.tooltip_icons_enabled)
+
+    def deleteLater(self) -> None:
+        _instances.remove(self.ref)
+        return super().deleteLater()
 
     def _hide_all_sig(self, hide:bool):
         if hide:

@@ -281,13 +281,6 @@ class ProfilesPage(QWidget):
         self.profile_list.setAutoScroll(False)
         self.profile_list.setDragEnabled(True)
         self.profile_list.setDragDropMode(QListView.DragDropMode.DragDrop)
-        # self._change_filter = ProfileSelectionModel(
-        #     self.profile_list.model(),
-        #     can_change_func=self._row_change_check,
-        #     dialog_func=self._abandon_changes_dialog
-        # )
-        # self.profile_list.setSelectionModel(self._change_filter)
-        # self.selection_model.currentRowChanged.connect(self._on_select)
         left_layout.addWidget(self.profile_list, 1)
 
         layout.addWidget(left)
@@ -316,23 +309,6 @@ class ProfilesPage(QWidget):
         self.name_input = QLineEdit()
         self.mapper.addMapping(self.name_input, MapIndex.NAME)
         self.name_input.textChanged.connect(self._dirty_check)
-
-        # self.icon_menu = QComboBox()
-        # self.icon_menu.setMaximumWidth(72)
-        # self.icon_menu.setMaxVisibleItems(5)
-        # self.icon_menu.currentIndexChanged.connect(self._dirty_check)
-        # self.icon_menu.currentIndexChanged.connect(self._icon_change)
-        # self.icon_menu.setInsertPolicy(QComboBox.InsertPolicy.InsertAtTop)
-        # self.icon_menu.setProperty("icons_only", True)
-        # icon_view = self.icon_menu.view()
-        # assert icon_view
-        # icon_view.setIconSize(QSize(48, 48))
-        # icon_view.setAutoScroll(False)
-        # self.icon_menu.addItem("", userData="")
-        # self.icon_menu.addItem(
-        #     resources.symbol("file-image"), "Import", "IMPORT"
-        # )
-        # icon_view.setVerticalScrollMode(icon_view.ScrollMode.ScrollPerPixel)
 
         icon_label = QLabel("Icon:")
 
@@ -549,17 +525,6 @@ class ProfilesPage(QWidget):
         self.icon_picker.profile_selected(prof)
         if self._dirty:
             self._abandon_changes_dialog()
-        # item = self.icon_menu.itemText(2)
-        # if item in ("<CUSTOM>"):
-        #     self.icon_menu.removeItem(2)
-        # if prof.has_custom_icon():
-        #     assert prof.icon
-        #     ico = resources.profile_icon(prof.icon)
-        #     self.icon_menu.insertItem(2, ico, "<CUSTOM>", "<CUSTOM>")
-        # elif prof.icon:
-        #     if prof.icon not in resources.get_all_default_icons().keys():
-        #         ico = resources.get_unknown_icon()
-        #         self.icon_menu.insertItem(2, ico, prof.icon, prof.icon)
         self._set_mods_folder_row_visibility(prof.real_version_id, prof)
 
     def _process_mods_folder_checkbox(self, checked:bool|None=None):
@@ -834,43 +799,6 @@ class ProfilesPage(QWidget):
                 case _:
                     self.version_combo.addItem(id, ver.local)
 
-    # def _on_select(self, row:int):
-    #     item = self.profile_list.item(row)
-    #     if row > len(profile_manager.profiles.keys()) or not item:
-    #         self.log.warning("Couldn't find selected profile in index!")
-    #         return
-        
-    #     profile:GameProfile|None = profile_manager.profiles.get(
-    #         item.data(Qt.ItemDataRole.UserRole)
-    #     )
-    #     if profile is None:
-    #         self.log.warning("Couldn't find selected profile!")
-    #         return
-    #     if profile_manager.get_current_profile() != profile:
-    #         profile_manager.set_current_profile(profile)
-        
-    #     # Checks for latest-release/latest-snapshot profiles
-    #     self.name_input.setEnabled(profile.can_edit)
-    #     self.version_combo.setEnabled(profile.can_edit)
-    #     self.delete_button.setEnabled(profile.can_edit)
-        
-    #     self.name_input.setText(profile.name)
-    #     self.name_input.setModified(False)
-    #     self.version_combo.setCurrentText(profile.version_id)
-    #     self.version_combo.isWindowModified
-    #     self.game_dir_input.setText(profile.game_dir)
-    #     self.java_input.setText(profile.java_path)
-    #     if profile.jvm_args and profile.has_custom_args:
-    #         self.jvm_args_input.setText(profile.jvm_args)
-    #     else:
-    #         self._args_changer(profile.version_id)
-    #     self.mem_min_input.setText(profile.memory_min)
-    #     self.mem_max_input.setText(profile.memory_max)
-    #     self.res_combo_box.setCurrentText(
-    #         self._resolution_to_text(profile.resolution_width,
-    #                                  profile.resolution_height)
-    #     )
-
     def _check_changed_vals(self) -> list[tuple[str, str, str]]:
         if not self._selected_uuid:
             return []
@@ -995,51 +923,6 @@ class ProfilesPage(QWidget):
         _bg_worker.start()
 
         self._set_mods_folder_row_visibility(version_id, set_checkbox=False)
-
-    # def _icon_change(self, idx:int):
-    #     sel_data = self.icon_menu.itemData(idx)
-    #     prof_ico_data = profile_manager.get_current_profile().icon
-    #     if prof_ico_data and not prof_ico_data.startswith("data:image/"):
-    #         previous_icon = prof_ico_data
-    #     elif prof_ico_data:
-    #         previous_icon = "<CUSTOM>"
-    #     else:
-    #         previous_icon = ""
-    #     if sel_data == "IMPORT":
-    #         path, _ = QFileDialog.getOpenFileName(
-    #             self, "Select Image File", "",
-    #             "Portable Network Graphics Image (*.png);"
-    #         )
-    #         if path:
-    #             p = Path(path)
-    #             try:
-    #                 pixmap = QPixmap(128, 128)
-    #                 loaded = pixmap.load(path)
-    #                 img_bytes = QByteArray()
-    #                 buffer = QBuffer(img_bytes)
-    #                 pixmap.save(buffer, "png")
-    #             except Exception as err:
-    #                 log.error("Failed to read image at '%s':" % path,
-    #                           exc_info=err)
-    #                 self.icon_menu.setCurrentText(previous_icon)
-    #                 error_box("Couldn't read file at: %s" % path)
-    #                 return
-    #             if not loaded:
-    #                 error_box("Couldn't read \"%s\"" % p.name)
-    #                 self.icon_menu.setCurrentText(previous_icon)
-    #                 return
-    #             ico = QIcon(pixmap)
-    #             data = self.icon_menu.itemData(2)
-    #             if data in ("<CUSTOM>", "<UNKNOWN>"):
-    #                 self.icon_menu.removeItem(2)
-    #             img_b64 = base64.b64encode(img_bytes.data()).decode("utf-8")
-
-    #             self.icon_menu.insertItem(
-    #                 2, ico, "<CUSTOM>", "data:image/png;base64,%s" % img_b64
-    #             )
-    #             self.icon_menu.setCurrentIndex(2)
-    #         else:
-    #             self.icon_menu.setCurrentText(previous_icon)
 
     def _export_prof_icon(self, prof:GameProfile|None=None):
         if not prof:

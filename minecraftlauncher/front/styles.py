@@ -161,7 +161,13 @@ QLabel[heading="true"] {{
     font-size: 20px;
     font-weight: 700;
     color: {ACCENT};
-    padding-bottom: 4px;
+    margin-bottom: 4px;
+}}
+QLabel[h2="true"] {{
+    font-size: 16px;
+    font-weight: 700;
+    color: {ACCENT};
+    margin-left: 4px;
 }}
 QLabel[subheading="true"] {{
     font-size: 14px;

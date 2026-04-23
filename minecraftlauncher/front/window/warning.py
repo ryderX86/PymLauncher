@@ -20,18 +20,21 @@ class UserReturn(IntEnum):
 
 class WarningType(IntEnum):
     OFFLINE_MODE_LAUNCH = 0
+    ACCOUNTS_BIN_ENCRYPTION = 1
 
 class Warning(QDialog):
     def __init__(self, text: str, type_: WarningType | None = None,
-                 title: str | None = None, ico: QIcon | None = None,
+                 title: str | None = None, *, icon: QIcon | None = None,
+                 show_once: bool = False,
                  button_config: ButtonConfig = ButtonConfig.OK, parent=None):
         super().__init__(parent)
         self._text = text
         self._title = title
-        self._ico = ico
+        self._ico = icon
         self._warning_type = type_
         self._button_config = button_config
         self.status = None
+        self._show_once = show_once
 
     def _build_ui(self):
         root = QVBoxLayout(self)
@@ -73,7 +76,7 @@ class Warning(QDialog):
         root.addWidget(button_row_w)
 
     def _handle_dismissal(self):
-        if self.checkbox.isChecked():
+        if self.checkbox.isChecked() or self._show_once:
             if not isinstance(self._warning_type, WarningType):
                 log.warning(
                     "Checkbox was checked without a warning type! Ignoring.")
@@ -139,10 +142,12 @@ class Warning(QDialog):
     @classmethod
     def warn(cls, parent=None, text: str = "<oops>",
              type_: WarningType | None = None,
-             title: str | None = None,
+             title: str | None = None, *,
+             show_once: bool = False,
              button_config: ButtonConfig = ButtonConfig.OK,
              ico: QIcon | None = None):
-        dialog = cls(text, type_, title, ico, button_config, parent)
+        dialog = cls(text, type_, title, icon=ico, button_config=button_config,
+                     parent=parent, show_once=show_once)
         dialog.exec()
         match dialog.status:
             case UserReturn.OK_YES:

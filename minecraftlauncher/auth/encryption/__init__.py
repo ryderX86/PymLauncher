@@ -21,12 +21,7 @@ match platform.system():
             encrypt, decrypt, data_load_hook, data_save_hook)
         ENABLED = True
     case _:
-        log.warning(
-            "Platform is not supported for encryption, user login info won't "
-            "be safe")
-        
         def encrypt(data:str|bytes) -> ByteString:
-            log.warning("Storing accounts.bin [json] in plaintext")
             if isinstance(data, str):
                 data = data.encode("utf-8")
             return data

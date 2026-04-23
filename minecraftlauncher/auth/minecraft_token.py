@@ -34,7 +34,7 @@ class MinecraftToken:
     # NOT part of the original response:
     acquired_at:float
     expires_at:float
-    owned_items:list
+    owned_items: list[str] | None
     _owns_game:bool
     def __init__(self, mc_token:dict):
         self.username = mc_token["username"]
@@ -44,21 +44,17 @@ class MinecraftToken:
         self._expires_in = mc_token["expires_in"]
 
         # cached value only
-        self.owned_items = mc_token.get("owned_items", [])
+        self.owned_items = mc_token.get("owned_items")
         self.acquired_at = mc_token.get(
-            "acquired_at",
-            datetime.now().timestamp()
+            "acquired_at", datetime.now().timestamp()
         )
-        self.expires_at = mc_token.get(
-            "expires_at",
-            self.acquired_at + self._expires_in
-        )
+        self.expires_at = self.acquired_at + self._expires_in
         self._owns_game = False
         self._update_entitlements()
 
     @property
     def expires_in(self):
-        return (self.expires_at - datetime.now().timestamp())
+        return max(self.expires_at - datetime.now().timestamp(), 0)
     
     @property
     def is_active(self):
@@ -152,14 +148,16 @@ class MinecraftToken:
         if response is None:
             raise ValueError("response should not be false!")
         
-        return cls(response.json())
+        new_token = cls(response.json())
+        new_token.get_launcher_entitlements()
+        return new_token
     
     from_token = auth
     """Alias for `cls.auth()`"""
     
     @property
     def owns_game(self):
-        if self._owns_game is None:
+        if self.owned_items is None:
             self._update_entitlements(constants.offline_mode == False)
         return self._owns_game
     
@@ -178,6 +176,7 @@ class MinecraftToken:
     def _update_entitlements(self, use_web_request:bool=False):
         if not self.owned_items and use_web_request:
             self.get_launcher_entitlements()
+            assert self.owned_items is not None
         elif not self.owned_items:
             return
         self._owns_game = ("product_minecraft" in self.owned_items
@@ -198,5 +197,6 @@ class MinecraftToken:
         self.owned_items = game_list.get("items", [])
 
         self._update_entitlements()
+        assert self.owned_items is not None
 
         return self.owned_items

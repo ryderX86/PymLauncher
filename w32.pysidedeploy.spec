@@ -28,9 +28,9 @@ android_packages = buildozer==1.5.0,cython==0.29.33
 
 [qt]
 qml_files = resources\3d-raw\Alex.qml,resources\3d\alex\Alex.qml,resources\3d\alex\scene.qml,resources\3d\steve\Steve.qml,resources\3d\steve\scene.qml
-modules = Core,Gui,Network,OpenGL,Qml,QmlMeta,QmlModels,QmlWorkerScript,Quick,Quick3D,Quick3DRuntimeRender,Quick3DUtils,QuickWidgets,ShaderTools,Svg,SvgWidgets,Widgets
-excluded_qml_plugins = QtCharts,QtSensors,QtWebEngine
-plugins = qml,qmllint,qmltooling,accessiblebridge,egldeviceintegrations,generic,iconengines,imageformats,platforminputcontexts,platforms,platforms/darwin,platformthemes,styles,wayland-decoration-client,wayland-graphics-integration-client,wayland-shell-integration,xcbglintegrations
+modules = Core,Gui,Qml,Quick,Quick3D,QuickWidgets,Svg,SvgWidgets,Widgets
+excluded_qml_plugins = QtCharts,QtSensors,QtWebEngine,Qt5Compat,QtCharts,QtDataVisualization,QtGraphs,QtLocation,QtMultimedia,Qt3D,QtRemoteObjects,QtScxml,QtSensors,QtTest,QtTextToSpeech,QtWebChannel,QtWebSockets,QtWebView
+plugins = qml,accessiblebridge,egldeviceintegrations,generic,iconengines,imageformats,platforminputcontexts,platforms,platforms/darwin,platformthemes,styles,wayland-decoration-client,wayland-graphics-integration-client,wayland-shell-integration,xcbglintegrations
 
 [android]
 

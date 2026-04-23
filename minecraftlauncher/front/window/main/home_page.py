@@ -61,13 +61,14 @@ class LaunchWorker(QThread):
         self.profile_data = profile_data
         self.auth_info = auth_info
         self._hook = log_hook
+        self.emit_logs = emit_logs
 
     def run(self):
         if offline_mode:
             allow_run = Warning.warn(
                 self, "Offline mode is experimental. Do you want to continue?",
                 WarningType.OFFLINE_MODE_LAUNCH, "Launch in offline mode?",
-                ButtonConfig.YES_NO)
+                button_config=ButtonConfig.YES_NO)
             if not allow_run:
                 self.finished.emit(False, "User aborted launch")
                 return
@@ -224,7 +225,7 @@ class LaunchWorker(QThread):
             self.log.warning("Game hasn't given a return code, did it launch?")
             self.finished.emit(True, "Unknown status")
 
-        if DEV and config.post_launch_option:
+        if DEV and config.post_launch_option < 1:
             game_log_func = sub_logger.debug
         else:
             def game_log_func(msg:object, *args):
@@ -233,7 +234,7 @@ class LaunchWorker(QThread):
         # reverse this when reading:
         stdout_cache:list[str] = []
 
-        if not self._hook:
+        if self.emit_logs and not self._hook:
             self._hook = self.game_log.emit
 
         if self._hook:
@@ -296,9 +297,7 @@ class HomePage(QWidget):
         self.profile_needs_install:bool = True
 
     def build(self):
-        self.game_log_limiter = QTimer(self)
-        self.game_log_limiter.setInterval(60000)
-        self.game_log_limiter.timeout.connect(self._truncate_logs)
+        pass
 
     def kill_worker(self):
         if self._worker:
@@ -415,6 +414,7 @@ class HomePage(QWidget):
             self.game_logs.styleSheet()
             + f"; background-color: {styles.BG_DARK};")
         self.game_logs.setFont(QFont("consolas"))
+        self.game_logs.setMaximumBlockCount(2000) # change if needed
 
         info_layout.addWidget(self.game_logs)
 
@@ -598,9 +598,6 @@ class HomePage(QWidget):
         if int(exit_code) != 0:
             self.game_crash.emit(exit_code, stdout)
         self.kill_worker()
-        if self.game_log_limiter.isActive():
-            log.debug("Stopping log truncation timer")
-            self.game_log_limiter.stop()
 
     def _open_prof_folder(self, folder:str|None=None):
         prof = profile_manager.get_current_profile()
@@ -652,9 +649,6 @@ class HomePage(QWidget):
             self.progress_label.setText("")
             self.progress_bar.setValue(0)
             self.game_open.emit()
-            if not self.game_log_limiter.isActive():
-                log.debug("Starting game log truncation timer")
-                self.game_log_limiter.start()
         else:
             error_box("Launch failed: %s" % message)
             prof = profile_manager.get_current_profile()
@@ -667,15 +661,9 @@ class HomePage(QWidget):
         if not config.show_logs_on_home:
             if self.game_logs.blockCount() > 1:
                 log.debug(
-                    "Clearing home page game logs due to option being "
+                    "Resetting home page game logs due to option being "
                     "unchecked")
-                self.game_logs.clear()
+                self.game_logs.setPlainText("*taps mic* This thing on?")
 
     def _handle_game_log(self, log: str):
         self.game_logs.appendPlainText(log)
-
-    def _truncate_logs(self):
-        log.debug("Truncating console logs to (text)[-200:]")
-        self.game_logs.setPlainText(
-            "\n".join(self.game_logs.toPlainText().splitlines()[-200:])
-        )

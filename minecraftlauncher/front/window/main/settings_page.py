@@ -31,8 +31,6 @@ class SettingsPage(QWidget):
 
         title = QLabel("Settings")
         title.setProperty("heading", True)
-        title.setStyleSheet(
-            ";".join([title.styleSheet(), "margin-left: -0.2em;"]))
         layout.addWidget(title)
 
         # Behavior
@@ -152,6 +150,7 @@ class SettingsPage(QWidget):
         buttons_w = QWidget()
         buttons_lo = QHBoxLayout(buttons_w)
         buttons_lo.addStretch()
+        buttons_lo.setContentsMargins(0, 0, 0, 0)
 
         open_dir_btn = QPushButton("Open Data Folder")
         open_dir_btn.clicked.connect(self._open_data_folder)
