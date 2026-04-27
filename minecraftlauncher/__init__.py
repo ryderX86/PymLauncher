@@ -28,13 +28,6 @@ if not DEV:
                 f"{AUTHOR_USR}.{LAUNCHER_NAME}"
             )
 
-# pyinstaller workaround for windows, since logging uses stdout at times:
-if sys.stdout is None:
-    sys.stdout = open(os.devnull, "w")
-if sys.stderr is None:
-    sys.stderr = open(os.devnull, "w")
-
-# logging setup AFTER stdout/stderr workaround, just in case.
 # TODO: log files
 if DEBUG_LOGGING:
     logging.basicConfig(level=logging.DEBUG)
