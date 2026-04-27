@@ -1,19 +1,14 @@
-from pathlib import Path
-from typing import Any, Callable, Literal
+from typing import Any, Literal
 from types import NoneType
-from enum import StrEnum, Enum, IntEnum
-from datetime import timedelta
+from enum import IntEnum
 import json
 import logging
-import os
-import string
 
-from PySide6.QtCore import QRect, QSize
-
-from .constants import LAUNCHER_DATA_DIR, LAUNCHER_CONFIG_FILE
+from .constants import LAUNCHER_DATA_DIR, LAUNCHER_CONFIG_FILE, OS, OS_VER
 from . import DEV
 
 _log = logging.getLogger(__name__)
+
 
 class PostLaunchBehavior(IntEnum):
     KEEP_OPEN = 0
@@ -21,24 +16,29 @@ class PostLaunchBehavior(IntEnum):
     CLOSE_WHEN_DONE = 2
     CLOSE = 3
 
+
 class JarRedownloadBehavior(IntEnum):
     NEVER = 0
     REDOWNLOAD = 1
     REDOWNLOAD_ONCE = 2
 
+
 class IgnoreMe:
     def __bool__(self) -> Literal[False]:
         return False
-    
+
     def __eq__(self, a):
-        if type(self) == type(a) or type(self) == a:
+        if isinstance(a, type(self)) or isinstance(self, type(a)):
             return True
+        elif isinstance(a, bool):
+            return not a
         return False
-    
+
     def __ne__(self, a):
         return True
 
-"""Config Values"""
+
+# default values
 window_size = [1100, 700]
 open_browser_for_login: bool = False
 copy_code_for_login: bool = True
@@ -49,12 +49,15 @@ tooltip_icons_enabled: bool = True
 ignored_messages: list[int] = []
 dialog_answers: dict[int, bool] = {}
 show_animation_on_skin_dialog: bool = False
-show_logs_on_home:bool = False
+show_logs_on_home: bool = False
+jump_list_items: list[str] = []  # profiles
+want_jump_lists: bool = OS == "windows" and float(OS_VER[:5].rstrip(".")) >= 6.1
 
-def set(val_name:str, new_val:Any):
+
+def set_(val_name: str, new_val: Any):
     current = globals().get(val_name)
     if val_name not in globals():
-        raise IndexError("'%s' not found in conifg" % val_name)
+        raise IndexError(f"'{val_name}' not found in conifg")
     if val_name.startswith("_") or val_name.endswith("_"):
         raise IndexError("Can't override private var")
     if isinstance(current, type(new_val)):
@@ -63,14 +66,17 @@ def set(val_name:str, new_val:Any):
         raise TypeError("Can't override callable")
     else:
         _log.warning(
-            "Type of '%s' changed: '%s' -> '%s'"
-            % (val_name, type(current).__name__, type(new_val).__name__)
+            "Type of '%s' changed: '%s' -> '%s'",
+            val_name,
+            type(current).__name__,
+            type(new_val).__name__,
         )
-    
+
     globals()[val_name] = new_val
     return
 
-def load(config:dict|None=None):
+
+def load(config: dict | None = None):
     if not config:
         config = {}
         if LAUNCHER_CONFIG_FILE.exists():
@@ -93,15 +99,16 @@ def load(config:dict|None=None):
         elif key.upper() == key:
             continue
         elif isinstance(globals().get(key), NoneType):
-            _log.warning("Ignoring unknown key in config.json: '%s'" % key)
+            _log.warning("Ignoring unknown key in config.json: '%s'", key)
             continue
         default = globals()[key]
         if not isinstance(default, type(val)):
-            _log.warning(f"Value in '{key}' has conflicting type, ignoring")
+            _log.warning("Value in '%s' has conflicting type, ignoring", key)
             continue
         if DEV and val != default:
-            _log.debug(f"{key} def: {default}, new: {val}")
+            _log.debug("%s def: %s, new: %s", key, default, val)
         globals()[key] = val
+
 
 def save():
     obj_out = {}
@@ -109,7 +116,7 @@ def save():
         if not isinstance(val, (str, int, list, dict, bool, NoneType)):
             continue
         elif isinstance(val, (list, dict)) and not val:
-            continue # skip bloat
+            continue  # skip bloat
         elif key.startswith("_") or key.endswith("_"):
             continue
         elif key.upper() == key:
@@ -122,5 +129,6 @@ def save():
         LAUNCHER_DATA_DIR.mkdir(parents=True, exist_ok=True)
     LAUNCHER_CONFIG_FILE.write_text(json_out)
     _log.debug("Saved config.json.")
+
 
 load()

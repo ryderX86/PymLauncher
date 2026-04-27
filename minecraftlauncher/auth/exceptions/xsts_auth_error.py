@@ -1,8 +1,9 @@
 class XstsAuthError(Exception):
-    comment:str
-    xerr:int
-    redirect:str
-    def __init__(self, xsts_err:dict):
+    comment: str
+    xerr: int
+    redirect: str
+
+    def __init__(self, xsts_err: dict):
         xerr_num = xsts_err.get("XErr", -1)
         if len(xsts_err.get("Message", "")) < 1:
             match xerr_num:
@@ -12,9 +13,12 @@ class XstsAuthError(Exception):
                     reason = (
                         "This account doesn't have an Xbox Live account."
                         "\nPlease go to minecraft.net and sign in to create "
-                        "one.")
+                        "one."
+                    )
                 case 2148916235:
-                    reason = "Xbox Live is not available in the account's region"
+                    reason = (
+                        "Xbox Live is not available in the account's region"
+                    )
                 case 2148916236:
                     reason = "Xbox Live needs adult verification in SK."
                 case 2148916237:
@@ -25,7 +29,9 @@ class XstsAuthError(Exception):
                 case 2148916262:
                     reason = "Error 2148916262"
                 case _:
-                    reason = "Unknown error occured while authenticating with XSTS."
+                    reason = (
+                        "Unknown error occured while authenticating with XSTS."
+                    )
         else:
             reason = xsts_err["Message"]
 
@@ -33,4 +39,4 @@ class XstsAuthError(Exception):
         self.xerr = xerr_num
         self.redirect = xsts_err.get("Redirect", "https://minecraft.net")
 
-        super().__init__("XSTS authentication failed: %s" % self.comment)
+        super().__init__(f"XSTS authentication failed: {self.comment}")

@@ -6,25 +6,34 @@ from xml.etree import ElementTree
 
 from minecraftlauncher.constants import LAUNCHER_DATA_DIR, MINECRAFT_DIR
 from minecraftlauncher.back.download_helpers import (
-    download, should_download_file, file_exists_or_age
+    download,
+    should_download_file,
+    file_exists_or_age,
 )
 
 log = logging.getLogger(__name__)
 
-VERSION_LIST_URL = ("https://maven.minecraftforge.net/net/minecraftforge/forge"
-                    "/maven-metadata.xml")
-VERSION_LIST_RECOMMENDED = ("https://files.minecraftforge.net/net/minecraftfor"
-                            "ge/forge/promotions_slim.json")
+VERSION_LIST_URL = (
+    "https://maven.minecraftforge.net/net/minecraftforge/forge"
+    "/maven-metadata.xml"
+)
+VERSION_LIST_RECOMMENDED = (
+    "https://files.minecraftforge.net/net/minecraftfor"
+    "ge/forge/promotions_slim.json"
+)
 
-_DOWNLOAD_BASE = ("https://maven.minecraftforge.net/net/minecraftforge")
+_DOWNLOAD_BASE = "https://maven.minecraftforge.net/net/minecraftforge"
 
 LOADER_MANIFEST_PATH = LAUNCHER_DATA_DIR / "forge-versions.json"
 
 _master_manifest: dict[str, list[str]] = {}
 
-def download_url(forge_ver:str):
-    return '/'.join([
-        _DOWNLOAD_BASE, forge_ver, f"forge-{forge_ver}-installer.jar"])
+
+def download_url(forge_ver: str):
+    return "/".join(
+        [_DOWNLOAD_BASE, forge_ver, f"forge-{forge_ver}-installer.jar"]
+    )
+
 
 def version_xml_to_json(version_list: ElementTree.Element | str):
     if isinstance(version_list, str):
@@ -32,12 +41,14 @@ def version_xml_to_json(version_list: ElementTree.Element | str):
     versioning = version_list.find("versioning")
     if versioning is None:
         raise RuntimeError(
-            "Couldn't get version info from %s" % VERSION_LIST_URL)
-    
+            "Couldn't get version info from %s" % VERSION_LIST_URL
+        )
+
     versions = versioning.find("versions")
     if versions is None:
         raise RuntimeError(
-            "Couldn't get version list from %s" % VERSION_LIST_URL)
+            "Couldn't get version list from %s" % VERSION_LIST_URL
+        )
 
     forge_versions: list[str] = []
     for el in versions.iter():
@@ -51,12 +62,13 @@ def version_xml_to_json(version_list: ElementTree.Element | str):
         mc_ver = v_info[0]
         if mc_ver not in json_out:
             json_out[mc_ver] = []
-        f_ver = '-'.join(v_info[1:])
+        f_ver = "-".join(v_info[1:])
         json_out[mc_ver].append(f_ver)
     return json_out
 
+
 @lru_cache(maxsize=1)
-def get_master(override:bool=False):
+def get_master(override: bool = False):
     global _master_manifest
     if _master_manifest and not override:
         return _master_manifest
@@ -66,12 +78,14 @@ def get_master(override:bool=False):
             manifest = json.loads(manifest_text)
         except json.JSONDecodeError as err:
             log.warning(
-                "Couldn't read JSON at '%s', re-downloading"
-                % LOADER_MANIFEST_PATH)
+                "Couldn't read JSON at '%s', re-downloading",
+                LOADER_MANIFEST_PATH,
+                exc_info=err,
+            )
         else:
             _master_manifest = manifest
             return _master_manifest
-    log.info("Downloading Forge metadata from %s" % VERSION_LIST_URL)
+    log.info("Downloading Forge metadata from %s", VERSION_LIST_URL)
     try:
         resp = download(VERSION_LIST_URL)
     except:
@@ -85,9 +99,11 @@ def get_master(override:bool=False):
         _master_manifest = mf
     return _master_manifest
 
-def forge_versions_list(version:str):
+
+def forge_versions_list(version: str):
     get_master()
     return _master_manifest.get(version, [])
+
 
 def game_versions_list():
     get_master()

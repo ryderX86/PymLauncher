@@ -3,50 +3,69 @@ minecraftlauncher.front.window.main.profiles_page
 
 Profile management page.
 """
-from datetime import datetime
+
 from pathlib import Path
-from fractions import Fraction
-from io import BytesIO
-import base64
 import logging
-import json
 import os
 
 from PySide6.QtCore import (
-    Qt, Signal, QThread, QSize, QBuffer, QByteArray, QModelIndex, QPoint,
-    QEvent, QObject
+    Qt,
+    Signal,
+    QThread,
+    QSize,
+    QEvent,
 )
 from PySide6.QtGui import (
-    QGuiApplication, QValidator, QIcon, QPixmap, QAction, QContextMenuEvent,
-    QMouseEvent, QSinglePointEvent, QPixelFormat, QShortcut, QKeySequence
+    QValidator,
+    QAction,
+    QContextMenuEvent,
+    QMouseEvent,
+    QShortcut,
+    QKeySequence,
 )
 from PySide6.QtWidgets import (
-    QComboBox, QFileDialog, QFormLayout, QFrame, QHBoxLayout, QLabel,
-    QLineEdit, QListWidget, QListWidgetItem, QMessageBox, QPushButton,
-    QVBoxLayout, QWidget, QStyle, QDataWidgetMapper, QListView, QFileDialog,
-    QCheckBox, QMenu, QWidgetAction
+    QComboBox,
+    QFileDialog,
+    QFormLayout,
+    QFrame,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QMessageBox,
+    QPushButton,
+    QVBoxLayout,
+    QWidget,
+    QDataWidgetMapper,
+    QListView,
+    QCheckBox,
+    QMenu,
+    QWidgetAction,
 )
 
-from minecraftlauncher import DEV, config
-from minecraftlauncher.functions.text import indent
-from minecraftlauncher.functions.error_box import error_box
+from minecraftlauncher import DEV
 from minecraftlauncher.datatypes.game_version import GameVersionStub
 from minecraftlauncher.back.profile_manager import (
-    GameProfile, load_launcher_profiles, save_launcher_profiles,
-    get_last_used_profile, save_single_profile
+    GameProfile,
+    load_launcher_profiles,
+    save_single_profile,
 )
 from minecraftlauncher.back import (
-    version_manager, profile_manager, game_launcher
+    version_manager,
+    profile_manager,
+    game_launcher,
 )
 from minecraftlauncher.front import styles, resources
 from minecraftlauncher.front.qt.models import (
-    ProfileSelectionModel, ProfileModel
+    ProfileSelectionModel,
+    ProfileModel,
 )
 from minecraftlauncher.front.qt.widgets import IconPickerButton
 from minecraftlauncher.front.window.profile_exporting.export_profile import (
-    ExportProfileDialog
+    ExportProfileDialog,
 )
-from minecraftlauncher import constants
+from minecraftlauncher.functions import copy_to_clipboard
+from minecraftlauncher.ostools import set_jump_list
+from minecraftlauncher import constants, config
 
 log = logging.getLogger(__name__)
 
@@ -58,14 +77,13 @@ COMMON_RESOLUTIONS = [
     (1600, 900),
     (1920, 1080),
     (2560, 1440),
-    (3840, 2160)
+    (3840, 2160),
 ]
-
-screen = QGuiApplication.primaryScreen()
 
 MapIndex = ProfileModel.MapIndex
 
 _running_threads = []
+
 
 class VersionTextValidator(QValidator):
     log = log.getChild("VersionTextValidator")
@@ -76,9 +94,8 @@ class VersionTextValidator(QValidator):
 
     def load(self):
         self.ver_list = version_manager.get_version_list()
-    
-    def validate(self, a0:str,
-                 a1:int) -> tuple[QValidator.State, str, int]:
+
+    def validate(self, a0: str, a1: int) -> tuple[QValidator.State, str, int]:
         ver_ids = [v.id for v in self.ver_list]
         if not ver_ids:
             return self.State.Intermediate, a0, a1
@@ -86,32 +103,36 @@ class VersionTextValidator(QValidator):
             return self.State.Intermediate, ver_ids[0], 0
         if a0 in ["latest-release", "latest-snapshot"]:
             return self.State.Acceptable, a0, a1
-        for id in ver_ids:
-            if id == a0:
+        for id_ in ver_ids:
+            if id_ == a0:
                 return self.State.Acceptable, a0, a1
-            if id.startswith(a0):
+            if id_.startswith(a0):
                 return self.State.Intermediate, a0, a1
         return self.State.Invalid, ver_ids[0], 0
 
+
 def _right_click_decorator(func):
     _func = func
-    def decorated_func(e:QEvent|QMouseEvent|None):
+
+    def decorated_func(e: QEvent | QMouseEvent | None):
         if not e or not isinstance(e, QMouseEvent):
             return _func(e)
         if e.buttons() & Qt.MouseButton.RightButton:
-            return
+            return None
         return _func(e)
+
     return decorated_func
-    
+
+
 class ProfileResolutionTextValidator(QValidator):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.resolutions = []
 
-    def set_resolutions(self, resolution_list:list[str]):
+    def set_resolutions(self, resolution_list: list[str]):
         self.resolutions = resolution_list
 
-    def validate(self, a0:str|None, a1:int):
+    def validate(self, a0: str | None, a1: int):
         if not a0:
             return self.State.Intermediate, self.resolutions[0], 0
         if a0 == "Auto":
@@ -119,8 +140,11 @@ class ProfileResolutionTextValidator(QValidator):
         a0 = a0.replace("*", "x").replace(".", "x").replace(":", "x")
         a0 = a0.replace(" ", "")
         sel_res = a0.split("x")
-        if ((len(sel_res) < 2 and sel_res[0].isdigit())
-            or sel_res[0].isdigit() and not sel_res[1]):
+        if (
+            (len(sel_res) < 2 and sel_res[0].isdigit())
+            or sel_res[0].isdigit()
+            and not sel_res[1]
+        ):
             return self.State.Intermediate, a0, a1
         elif sel_res[0].isdigit() and sel_res[1].isdigit():
             w = int(sel_res[0])
@@ -131,17 +155,18 @@ class ProfileResolutionTextValidator(QValidator):
                 return self.State.Intermediate, a0, a1
             return self.State.Acceptable, a0, a1
         return self.State.Invalid, self.resolutions[0], 0
-    
+
+
 class VersionJsonBackgroundDownloader(QThread):
     done = Signal(str)
 
     log = log.getChild("VersionJsonBackgroundDownloader()")
-    
-    def __init__(self, version_id:str, profile:GameProfile, parent=None):
+
+    def __init__(self, version_id: str, profile: GameProfile, parent=None):
         super().__init__(parent)
         self._version_id = version_id
         self._profile = profile
-    
+
     def run(self):
         if self._profile.has_custom_args:
             self.done.emit("")
@@ -152,14 +177,15 @@ class VersionJsonBackgroundDownloader(QThread):
             case "latest-snapshot" | "latest snapshot":
                 self._version_id = version_manager.get_latest_release()
         version_list = version_manager.get_version_list()
-        version:GameVersionStub|None=None
+        version: GameVersionStub | None = None
         for v in version_list:
             if v.id == self._version_id:
                 version = v
                 break
         if not version:
-            self.log.warning("Failed to get version info for '%s'"
-                             % self._version_id)
+            self.log.warning(
+                "Failed to get version info for '%s'", self._version_id
+            )
             self.done.emit("INVALID")
             return
         version_json = version_manager.resolve_inheritence(version.get_json())
@@ -167,9 +193,12 @@ class VersionJsonBackgroundDownloader(QThread):
         self.done.emit(args)
         self.destroyed.connect(lambda: _running_threads.remove(self))
 
+
 class ProfilesPage(QWidget):
     """Profile page"""
+
     status_update = Signal(str)
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.log = log.getChild("ProfilesPage")
@@ -186,14 +215,16 @@ class ProfilesPage(QWidget):
         self._build_ui()
         if constants.OS != "osx":
             key_seq = QKeySequence(
-                Qt.Modifier.CTRL | Qt.Key.Key_S) # type: ignore
+                Qt.Modifier.CTRL | Qt.Key.Key_S  # type: ignore
+            )
         else:
             key_seq = QKeySequence(
-                Qt.Modifier.META | Qt.Key.Key_S) # type: ignore
+                Qt.Modifier.META | Qt.Key.Key_S  # type: ignore
+            )
         shortcut = QShortcut(key_seq, self)
         shortcut.activated.connect(self._ctrl_s)
         shortcut.setContext(Qt.ShortcutContext.WindowShortcut)
-        self._bg_worker:VersionJsonBackgroundDownloader|None=None
+        self._bg_worker: VersionJsonBackgroundDownloader | None = None
 
     def _ctrl_s(self):
         if self.save_button.isEnabled():
@@ -205,14 +236,14 @@ class ProfilesPage(QWidget):
         if prof:
             return prof.uuid
         return None
-    
+
     @_selected_uuid.setter
-    def _selected_uuid(self, new_id:str):
+    def _selected_uuid(self, new_id: str):
         prof = profile_manager.profiles.get(new_id)
         if not prof:
             raise ValueError("UUID not found in profiles cache")
         profile_manager.set_current_profile(prof)
-        
+
     def build(self):
         self._load()
         self._loaded = True
@@ -228,7 +259,7 @@ class ProfilesPage(QWidget):
         left.setStyleSheet(f"background-color: {styles.BG_DARK};")
         left_layout = QVBoxLayout(left)
         left_layout.setContentsMargins(12, 16, 12, 16)
-        
+
         label = QLabel("Profiles")
         label.setProperty("heading", True)
         left_layout.addWidget(label)
@@ -258,15 +289,16 @@ class ProfilesPage(QWidget):
         self.profile_list.mousePressEvent = _right_click_decorator(
             self.profile_list.mousePressEvent
         )
-        _l_ctx_menu = lambda a0: self._profile_list_context_menu(a0)
+
+        def _l_ctx_menu(a0):
+            return self._profile_list_context_menu(a0)
+
         self.profile_list.contextMenuEvent = _l_ctx_menu
-        """
-        for the context menu, I could have used the customContextMenuRequested
-        event, however that only gives a single `pos` argument that is local to
-        the widget's coordinates, and the `contextMenuEvent` function gives an
-        event with `globalPos()` as an argument allowing me to be much, much
-        lazier with implementation
-        """
+        # for the context menu, I could have used the customContextMenuRequested
+        # event, however that only gives a single `pos` argument that is local
+        # to the widget's coordinates, and the `contextMenuEvent` function gives
+        # to event with `globalPos()` as an argument allowing me to be much,
+        # much lazier with implementation
         self.profile_list.setModel(self.model)
         self.profile_list.setSelectionModel(self.select)
         self.profile_list.setUniformItemSizes(True)
@@ -321,7 +353,7 @@ class ProfilesPage(QWidget):
         name_icon_area.addWidget(self.icon_picker)
 
         self.form.addRow("Name:", name_icon_area)
-        
+
         self.version_combo = QComboBox()
         self.version_combo.addItems(["latest-release", "latest-snapshot"])
         self.version_combo.setEditable(True)
@@ -343,7 +375,7 @@ class ProfilesPage(QWidget):
         version_row.addWidget(self.version_combo, 1)
         version_row.addWidget(refresh_versions_button)
         self.form.addRow("Version:", version_row)
-        
+
         game_dir_row = QHBoxLayout()
         self.game_dir_input = QLineEdit()
         self.game_dir_input.setPlaceholderText(".../.minecraft")
@@ -400,8 +432,9 @@ class ProfilesPage(QWidget):
         self.res_combo_box.setEditable(True)
         self.res_combo_box.setValidator(ProfileResolutionTextValidator())
         self.res_combo_box.currentTextChanged.connect(self._dirty_check)
-        self.mapper.addMapping(self.res_combo_box, MapIndex.RESOLUTION,
-                               b"currentText")
+        self.mapper.addMapping(
+            self.res_combo_box, MapIndex.RESOLUTION, b"currentText"
+        )
         self._populate_resolution_combo()
         self.form.addRow("Resolution:", self.res_combo_box)
 
@@ -425,9 +458,7 @@ class ProfilesPage(QWidget):
         self.mods_folder_browse = QPushButton(
             resources.symbol("folder-symlink"), "Browse"
         )
-        self.mods_folder_browse.clicked.connect(
-            self._browse_mods_folder
-        )
+        self.mods_folder_browse.clicked.connect(self._browse_mods_folder)
         self.mods_folder_browse.setDisabled(True)
         self.mods_folder_row.addWidget(self.mods_folder_browse)
         self.form.addRow("Mods folder:", self.mods_folder_row)
@@ -462,28 +493,24 @@ class ProfilesPage(QWidget):
 
         right_layout.addWidget(buttons_row)
 
-        self.mapper.setSubmitPolicy(
-            QDataWidgetMapper.SubmitPolicy.ManualSubmit
-        )
+        self.mapper.setSubmitPolicy(QDataWidgetMapper.SubmitPolicy.ManualSubmit)
 
         layout.addWidget(right, 1)
         self.select.begin_change.connect(self._hook)
 
-
     def _populate_resolution_combo(self):
         self.res_combo_box.clear()
-        resolution_list = [str(w) + "x" + str(h)
-                           for w, h in COMMON_RESOLUTIONS]
+        resolution_list = [str(w) + "x" + str(h) for w, h in COMMON_RESOLUTIONS]
         screen = self.screen()
         geo = screen.geometry()
         if screen:
             sw, sh = geo.width(), geo.height()
-            for frac in [1.0, .8, .75, .6, .5, .25]:
+            for frac in [1.0, 0.8, 0.75, 0.6, 0.5, 0.25]:
                 w = int(sw * frac)
                 h = int(sh * frac)
                 res = f"{w}x{h}"
                 if res not in resolution_list:
-                    self.log.debug("Adding resolution %s to list" % res)
+                    self.log.debug("Adding resolution %s to list", res)
                     resolution_list.append(res)
             new_res_list = []
             for res in resolution_list:
@@ -495,39 +522,40 @@ class ProfilesPage(QWidget):
                 new_res_list.append(res)
             resolution_list = new_res_list
 
-        def sort(resolution:str):
+        def sort(resolution: str):
             xy = resolution.split("x")
             if len(xy) < 2:
                 return 0
             return int(xy[0])
-        
+
         resolution_list.sort(key=sort)
         resolution_list.insert(0, "Auto")
         self.res_combo_box.addItems(resolution_list)
-        self.res_combo_box.validator().set_resolutions( # type: ignore
+        self.res_combo_box.validator().set_resolutions(  # type: ignore
             resolution_list
         )
         return
-    
+
     def _abandon_changes_dialog(self):
         confirm = QMessageBox.question(
-            self, "Abandon Changes?",
+            self,
+            "Abandon Changes?",
             "Are you sure you want to abandon your profile changes?",
             QMessageBox.StandardButton.Save
-            | QMessageBox.StandardButton.Discard
+            | QMessageBox.StandardButton.Discard,
         )
         if confirm == QMessageBox.StandardButton.Save:
             self._set_undirty()
             self._save()
-        
-    def _hook(self, prof:GameProfile):
+
+    def _hook(self, prof: GameProfile):
         self.version_combo.setDisabled(prof.is_default_profile)
         self.icon_picker.profile_selected(prof)
         if self._dirty:
             self._abandon_changes_dialog()
         self._set_mods_folder_row_visibility(prof.real_version_id, prof)
 
-    def _process_mods_folder_checkbox(self, checked:bool|None=None):
+    def _process_mods_folder_checkbox(self, checked: bool | None = None):
         if not isinstance(checked, bool):
             checked = self.use_mods_folder_input.isChecked()
         assert isinstance(checked, bool)
@@ -543,10 +571,13 @@ class ProfilesPage(QWidget):
             self.mods_folder_input.clear()
             self.mods_folder_input.setDisabled(True)
             self.mods_folder_browse.setDisabled(True)
-        
-    def _set_mods_folder_row_visibility(self, ver_id:str|None=None,
-                                        prof:GameProfile|None=None,
-                                        set_checkbox:bool=True):
+
+    def _set_mods_folder_row_visibility(
+        self,
+        ver_id: str | None = None,
+        prof: GameProfile | None = None,
+        set_checkbox: bool = True,
+    ):
         if not prof:
             prof = profile_manager.get_current_profile()
         if not ver_id:
@@ -572,12 +603,12 @@ class ProfilesPage(QWidget):
         self._dirty = True
         self.save_button.setEnabled(True)
         self.reset_button.setEnabled(True)
-    
+
     def _set_undirty(self):
         self._dirty = False
         self.save_button.setDisabled(True)
         self.reset_button.setDisabled(True)
-    
+
     def _dirty_check(self, *args):
         if not self._loaded:
             return False
@@ -590,14 +621,14 @@ class ProfilesPage(QWidget):
             if widget is None:
                 continue
             if getattr(widget, "currentText", None):
-                val = widget.currentText() # type: ignore
+                val = widget.currentText()  # type: ignore
                 if not val:
                     if profile[i] is None:
                         val = None
                     else:
                         val = ""
             elif getattr(widget, "text", None):
-                val = widget.text() # type: ignore
+                val = widget.text()  # type: ignore
                 if not val:
                     if profile[i] is None:
                         val = None
@@ -608,20 +639,19 @@ class ProfilesPage(QWidget):
             if val != profile[i]:
                 is_dirty = True
                 continue
-        """
-        This entire section here for the icon check is stupid and I'm not proud
-        of it, but it damn works at least.
-        """
-        if (self.icon_picker.text() == "<CUSTOM>"
-            and profile.has_custom_icon()):
+        # This entire section here for the icon check is stupid and I'm not proud
+        # of it, but it damn works at least.
+        if self.icon_picker.text() == "<CUSTOM>" and profile.has_custom_icon():
             # <CUSTOM> is always a loaded icon, means there's no change
             pass
         elif not profile.icon and not self.icon_picker.text():
             pass
         elif self.icon_picker.text() == "" and not profile.icon:
             pass
-        elif (self.icon_picker.text().startswith("data:image/")
-            or self.icon_picker.text() != profile.icon):
+        elif (
+            self.icon_picker.text().startswith("data:image/")
+            or self.icon_picker.text() != profile.icon
+        ):
             # which also means that base64 in the data indicates a change
             is_dirty = True
         if is_dirty:
@@ -638,9 +668,12 @@ class ProfilesPage(QWidget):
         row = self.select.currentIndex().row()
         idx = self.model.index(row, 8)
         # hacky workaround for mapper not supporting itemData :(
-        self.model.setData(idx, self.icon_picker.text(),
-                           Qt.ItemDataRole.UserRole)
+        self.model.setData(
+            idx, self.icon_picker.text(), Qt.ItemDataRole.UserRole
+        )
         self.mapper.submit()
+        if config.want_jump_lists and config.jump_list_items:
+            set_jump_list()  # refresh in case icons of jump-list profs changed
 
     def _reset(self):
         self._set_mods_folder_row_visibility()
@@ -653,8 +686,8 @@ class ProfilesPage(QWidget):
             self._dirty_check()
         else:
             self._set_undirty()
-    
-    def _parse_resolution(self, text:str):
+
+    def _parse_resolution(self, text: str):
         """Parse `nxn` into `(n, n)`"""
         if text.lower() == "auto":
             return None, None
@@ -663,31 +696,27 @@ class ProfilesPage(QWidget):
             w, h = int(w), int(h)
         except Exception as err:
             self.log.error("Failed to split resolution text!", exc_info=err)
-            if screen:
-                ssz = screen.size()
-                return ssz.width(), ssz.height()
-            else:
-                return 720, 480
+            return 720, 480
         else:
             return w, h
-        
-    def _resolution_to_text(self, width:int|None, height:int|None):
+
+    def _resolution_to_text(self, width: int | None, height: int | None):
         if (not width) and (not height):
             return "Auto"
         return f"{width}x{height}"
-        
+
     def _browse_game_dir(self):
-        path = QFileDialog.getExistingDirectory(
-            self, "Select Game Directory"
-        )
+        path = QFileDialog.getExistingDirectory(self, "Select Game Directory")
         if path:
             self.game_dir_input.setText(path)
 
     def _browse_java(self):
         # TODO: other OSes
         path, _ = QFileDialog.getOpenFileName(
-            self, "Select Java Executable", "",
-            "Executables (*.exe);;All Files (*)"
+            self,
+            "Select Java Executable",
+            "",
+            "Executables (*.exe);;All Files (*)",
         )
         if path:
             self.java_input.setText(path)
@@ -721,7 +750,7 @@ class ProfilesPage(QWidget):
                 log.error(
                     "Folder creation failed. "
                     "Returning without doing anything.",
-                    exc_info=err
+                    exc_info=err,
                 )
                 return
             else:
@@ -743,74 +772,76 @@ class ProfilesPage(QWidget):
         game_versions = version_manager.get_version_list(override=True)
         self._version_id_validator.load()
         for ver in game_versions:
-            id = ver.id
+            id_ = ver.id
             ver_type = ver.type
             if constants.show_snapshots and constants.show_old_releases:
-                self.version_combo.addItem(id, ver.local)
+                self.version_combo.addItem(id_, ver.local)
                 continue
             match ver_type:
                 case "release":
-                    self.version_combo.addItem(id, ver.local)
+                    self.version_combo.addItem(id_, ver.local)
                     continue
                 case "snapshot":
                     if constants.show_snapshots:
-                        self.version_combo.addItem(id, ver.local)
+                        self.version_combo.addItem(id_, ver.local)
                 case "old_beta" | "old_alpha":
                     if constants.show_old_releases:
-                        self.version_combo.addItem(id, ver.local)
+                        self.version_combo.addItem(id_, ver.local)
                 case _:
-                    self.version_combo.addItem(id, ver.local)
+                    self.version_combo.addItem(id_, ver.local)
         prof = profile_manager.get_current_profile()
         if current_selected_ver in ["latest-release", "latest-snapshot"]:
             self.version_combo.setCurrentText(current_selected_ver)
         elif version_manager.version_exists(current_selected_ver):
             self.version_combo.setCurrentText(current_selected_ver)
         else:
-            log.warning("Version '%s' either never existed or doesn't anymore!"
-                        % current_selected_ver)
-            if (prof.version_id != current_selected_ver
-                and version_manager.version_exists(prof.version_id)):
+            log.warning(
+                "Version '%s' either never existed or doesn't anymore!",
+                current_selected_ver,
+            )
+            if (
+                prof.version_id != current_selected_ver
+                and version_manager.version_exists(prof.version_id)
+            ):
                 self.version_combo.setCurrentText(prof.version_id)
             self.version_combo.setCurrentText("latest-release")
         self.version_combo.blockSignals(False)
         self._dirty_check()
-    
+
     def populate_version_combo(self):
         # refresh game versions (just in case)
         # TODO: is this necessary?
         game_versions = version_manager.get_version_list()
         self._version_id_validator.load()
         for ver in game_versions:
-            id = ver.id
+            id_ = ver.id
             ver_type = ver.type
             if constants.show_snapshots and constants.show_old_releases:
-                self.version_combo.addItem(id, ver.local)
+                self.version_combo.addItem(id_, ver.local)
                 continue
             match ver_type:
                 case "release":
-                    self.version_combo.addItem(id, ver.local)
+                    self.version_combo.addItem(id_, ver.local)
                     continue
                 case "snapshot":
                     if constants.show_snapshots:
-                        self.version_combo.addItem(id, ver.local)
+                        self.version_combo.addItem(id_, ver.local)
                 case "old_beta" | "old_alpha":
                     if constants.show_old_releases:
-                        self.version_combo.addItem(id, ver.local)
+                        self.version_combo.addItem(id_, ver.local)
                 case _:
-                    self.version_combo.addItem(id, ver.local)
+                    self.version_combo.addItem(id_, ver.local)
 
     def _check_changed_vals(self) -> list[tuple[str, str, str]]:
         if not self._selected_uuid:
             return []
         profile = profile_manager.get_current_profile()
         # (key, old, new)
-        changed_values:list[tuple[str, str, str]] = []
+        changed_values: list[tuple[str, str, str]] = []
 
         prof_name = self.name_input.text()
         if profile.name != prof_name:
-            changed_values.append(
-                ("name", profile.name, prof_name)
-            )
+            changed_values.append(("name", profile.name, prof_name))
         prof_ver_id = self.version_combo.currentText()
         if profile.version_id != prof_ver_id:
             changed_values.append(
@@ -819,43 +850,48 @@ class ProfilesPage(QWidget):
         prof_game_dir = self.game_dir_input.text() or None
         if profile.game_dir != prof_game_dir:
             changed_values.append(
-                ("game_dir", profile.game_dir or "None",
-                 prof_game_dir or "None")
+                (
+                    "game_dir",
+                    profile.game_dir or "None",
+                    prof_game_dir or "None",
+                )
             )
         prof_java_path = self.java_input.text() or None
         if profile.java_path != prof_java_path:
             changed_values.append(
-                ("java_path", profile.java_path or "None",
-                 prof_java_path or "None")
+                (
+                    "java_path",
+                    profile.java_path or "None",
+                    prof_java_path or "None",
+                )
             )
         jvm_args = self.jvm_args_input.text() or None
         if profile.jvm_args != jvm_args:
             changed_values.append(
-                ("jvm_args", profile.jvm_args or "None",
-                 jvm_args or "None")
+                ("jvm_args", profile.jvm_args or "None", jvm_args or "None")
             )
         mem_min = self.mem_min_input.text() or "512M"
         if profile.memory_min != mem_min:
-            changed_values.append(
-                ("memory_min", profile.memory_min, mem_min)
-            )
+            changed_values.append(("memory_min", profile.memory_min, mem_min))
         mem_max = self.mem_max_input.text() or "4G"
         if profile.memory_max != mem_max:
-            changed_values.append(
-                ("memory_max", profile.memory_max, mem_max)
-            )
-        width, height = self._parse_resolution(
-            self.res_combo_box.currentText()
-        )
+            changed_values.append(("memory_max", profile.memory_max, mem_max))
+        width, height = self._parse_resolution(self.res_combo_box.currentText())
         if profile.resolution_width != width:
             changed_values.append(
-                ("resolution_width", str(profile.resolution_width) or "None",
-                 str(width) or "None")
+                (
+                    "resolution_width",
+                    str(profile.resolution_width) or "None",
+                    str(width) or "None",
+                )
             )
         if profile.resolution_height != height:
             changed_values.append(
-                ("resolution_height", str(profile.resolution_height) or "None",
-                 str(height) or "None")
+                (
+                    "resolution_height",
+                    str(profile.resolution_height) or "None",
+                    str(height) or "None",
+                )
             )
 
         return changed_values
@@ -865,7 +901,7 @@ class ProfilesPage(QWidget):
             return
         profile = profile_manager.profiles[self._selected_uuid]
         changed_values = self._check_changed_vals()
-        log.info("Saving profile '%s' (ID: %s)" % (profile.name, profile.uuid))
+        log.info("Saving profile '%s' (ID: %s)", profile.name, profile.uuid)
         string = []
         for name, old, new in changed_values:
             string.append(f"{name}: '{old}'->'{new}'")
@@ -873,86 +909,84 @@ class ProfilesPage(QWidget):
             log.debug("\n".join(string))
 
         self.mapper.submit()
-        self.model
         save_single_profile(profile)
 
     def _new_profile(self):
         prof = profile_manager.create_profile()
         profile_manager.set_current_profile(prof)
 
-    def _delete_profile(self, profile:GameProfile|None=None):
+    def _delete_profile(self, profile: GameProfile | None = None):
         if not profile:
             profile = profile_manager.get_current_profile()
         if not self._selected_uuid:
             return
         confirmation = QMessageBox.question(
-            self, "Delete Profile?",
-            "Are you sure you want to delete the profile \"%s\"?"
-            % profile.name,
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+            self,
+            "Delete Profile?",
+            f'Are you sure you want to delete the profile "{profile.name}"?',
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
         )
         if confirmation == QMessageBox.StandardButton.Yes:
-            log.info("Deleting profile '%s' (ID: %s)"
-                     % (profile.name, profile.uuid))
+            log.info(
+                "Deleting profile '%s' (ID: %s)", profile.name, profile.uuid
+            )
             profile_manager.delete_single_profile(profile)
             del profile
 
     @property
     def current_jvm_args(self):
         return self.jvm_args_input.text()
-    
-    def _args_changer(self, version_id:str|int):
+
+    def _args_changer(self, version_id: str | int):
         prof = profile_manager.get_current_profile()
         if isinstance(version_id, int):
             version_id = self.version_combo.itemText(version_id)
-        else:
-            version_id = version_id
-        _bg_worker = VersionJsonBackgroundDownloader(
-            version_id, prof
-        )
+        _bg_worker = VersionJsonBackgroundDownloader(version_id, prof)
         _running_threads.append(_bg_worker)
 
-        def set_args_final(args:str):
+        def set_args_final(args: str):
             nonlocal prof
             if args:
                 prof.jvm_args = args
                 self.jvm_args_input.setText(args)
-        
+
         _bg_worker.done.connect(set_args_final)
         _bg_worker.finished.connect(_bg_worker.deleteLater)
         _bg_worker.start()
 
         self._set_mods_folder_row_visibility(version_id, set_checkbox=False)
 
-    def _export_prof_icon(self, prof:GameProfile|None=None):
+    def _export_prof_icon(self, prof: GameProfile | None = None):
         if not prof:
             prof = profile_manager.get_current_profile()
         if not prof.icon:
             return
         str_path, _ = QFileDialog.getSaveFileName(
-            self, "Save file", "",
-            "PNG Image (*.png);;All Files (*)"
+            self, "Save file", "", "PNG Image (*.png);;All Files (*)"
         )
         if not str_path:
             return
         path = Path(str_path)
         if not path.parent.exists():
             return
-        log.debug("Saving profile icon to '%s'" % str_path)
+        log.debug("Saving profile icon to '%s'", str_path)
         ico = resources.profile_icon(prof.icon)
         img = ico.pixmap(ico.actualSize(QSize(99999, 99999))).toImage()
         img.save(str_path)
 
-    def _clone_profile(self, prof:GameProfile|None=None):
+    def _clone_profile(self, prof: GameProfile | None = None):
         if not prof:
             prof = profile_manager.get_current_profile()
         new = prof.copy()
         profile_manager.save_single_profile(new)
 
-    def _profile_list_context_menu(self, e:QContextMenuEvent):
+    def _profile_list_context_menu(self, e: QContextMenuEvent):
         e.ignore()
         if not e:
             return
+        mods = e.modifiers()
+        show_debug_options = mods & Qt.KeyboardModifier.ShiftModifier
+
         menu = QMenu(self.profile_list)
         idx = self.profile_list.indexAt(e.pos())
         prof = self.model.data(idx, 256)
@@ -960,9 +994,7 @@ class ProfilesPage(QWidget):
             new_prof = QAction(menu)
             new_prof.setIcon(resources.symbol("journal-plus"))
             new_prof.setText("New profile")
-            new_prof.triggered.connect(
-                self._new_profile
-            )
+            new_prof.triggered.connect(self._new_profile)
             menu.addAction(new_prof)
             menu.exec(e.globalPos())
             return
@@ -972,31 +1004,53 @@ class ProfilesPage(QWidget):
         save_icon = QAction(menu)
         save_icon.setIcon(resources.symbol("save"))
         save_icon.setText("Save Icon as...")
-        save_icon.triggered.connect(
-            lambda c: self._export_prof_icon(prof)
-        )
+        save_icon.triggered.connect(lambda c: self._export_prof_icon(prof))
         if not prof.icon:
             save_icon.setDisabled(True)
         menu.addAction(save_icon)
 
+        if config.want_jump_lists:
+            if prof.uuid not in config.jump_list_items:
+                add_jump_list = QAction(menu)
+                add_jump_list.setText("Add to jump-list")
+                add_jump_list.setIcon(resources.symbol("add"))
+                add_jump_list.triggered.connect(
+                    lambda c: self._add_jump_list_item(prof)
+                )
+                menu.addAction(add_jump_list)
+            else:
+                rm_jump_list = QAction(menu)
+                rm_jump_list.setText("Remove from jump-list")
+                rm_jump_list.setIcon(resources.symbol("remove"))
+                rm_jump_list.triggered.connect(
+                    lambda c: self._rm_jump_list_item(prof)
+                )
+                menu.addAction(rm_jump_list)
+
         clone_prof = QAction(menu)
         clone_prof.setIcon(resources.symbol("copy"))
-        clone_prof.setText("Create copy of \"%s\"" % prof.name)
-        clone_prof.triggered.connect(
-            lambda c: self._clone_profile(prof)
-        )
+        clone_prof.setText(f'Create copy of "{prof.name}"')
+        clone_prof.triggered.connect(lambda c: self._clone_profile(prof))
         menu.addAction(clone_prof)
 
-        export_prof = QAction(menu)
-        export_prof.setIcon(resources.symbol("share"))
-        export_prof.setText("Export \"%s\"" % prof.name)
-        if prof.is_default_profile:
-            export_prof.setDisabled(True)
-        else:
-            export_prof.triggered.connect(
-                lambda c: ExportProfileDialog.deploy(prof, self)
-            )
-        menu.addAction(export_prof)
+        if constants.FLAG_ENABLE_EXPORTING:
+            export_prof = QAction(menu)
+            export_prof.setIcon(resources.symbol("share"))
+            export_prof.setText(f'Export "{prof.name}"')
+            if prof.is_default_profile:
+                export_prof.setDisabled(True)
+            else:
+                export_prof.triggered.connect(
+                    lambda c: ExportProfileDialog.deploy(prof, self)
+                )
+            menu.addAction(export_prof)
+
+        if show_debug_options:
+            copy_id = QAction(menu)
+            copy_id.setIcon(resources.symbol("copy"))
+            copy_id.setText("Copy ID")
+            copy_id.triggered.connect(lambda c: copy_to_clipboard(prof.uuid))
+            menu.addAction(copy_id)
 
         delete_profile = QWidgetAction(menu)
         delete_profile.setIcon(resources.symbol("trash"))
@@ -1011,3 +1065,19 @@ class ProfilesPage(QWidget):
         menu.addAction(delete_profile)
 
         menu.exec(e.globalPos())
+
+    @staticmethod
+    def _add_jump_list_item(profile: GameProfile):
+        config.jump_list_items.append(profile.uuid)
+        set_jump_list()
+
+    @staticmethod
+    def _rm_jump_list_item(profile: GameProfile):
+        try:
+            config.jump_list_items.remove(profile.uuid)
+        except ValueError:
+            log.warning(
+                "User shouldn't have been able to trigger this function!"
+            )
+            return
+        set_jump_list()

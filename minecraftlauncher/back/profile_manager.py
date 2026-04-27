@@ -7,26 +7,19 @@ etc.)
 Supports reading the official Minecraft launcher's
 ``launcher_profiles.json`` format for compatibility.
 """
-from dataclasses import dataclass, asdict, field
+
 from datetime import datetime
-from typing import Literal, Callable, overload, Any, Iterable, Iterator
+from typing import Literal, Callable, Iterable
 from types import FunctionType
 from functools import lru_cache
 import json
-import inspect
 import logging
-import os
-import re
 import uuid
 
 from PySide6.QtCore import Signal, QObject
 
-from minecraftlauncher.constants import LAUNCHER_DATA_DIR, MINECRAFT_DIR
-from minecraftlauncher.back import (
-    version_manager, asset_manager, library_manager, java_manager,
-    game_launcher
-)
-from minecraftlauncher.datatypes import GameProfile, GameVersionStub
+from minecraftlauncher.constants import MINECRAFT_DIR
+from minecraftlauncher.datatypes import GameProfile
 
 log = logging.getLogger(__name__)
 
@@ -42,53 +35,61 @@ _DEFAULT_SETTINGS_JSON = {
     "keepLauncherOpen": False,
     "showGameLog": False,
     "showMenu": False,
-    "soundOn": False
+    "soundOn": False,
 }
 
 type ProfileType = Literal["custom", "latest-release", "latest-snapshot"]
 
-profiles:dict[str, GameProfile] = {}
+profiles: dict[str, GameProfile] = {}
 
-_current_profile:GameProfile|None=None
-_profile_switch_handlers:list[Callable[[GameProfile], None]] = []
-_profile_refresh_handlers:list[Callable] = []
+_current_profile: GameProfile | None = None
+_profile_switch_handlers: list[Callable[[GameProfile], None]] = []
+_profile_refresh_handlers: list[Callable] = []
+
 
 @lru_cache(maxsize=32)
-def get_row_from_profile(profile:GameProfile):
-    i=0
+def get_row_from_profile(profile: GameProfile):
+    i = 0
     for _, prof in profiles.items():
         if prof == profile:
             return i
         else:
             i += 1
-    raise IndexError("Profile '%s' (ID: %s) not in cache"
-                     % (profile.name, profile.uuid))
+    raise IndexError(
+        f"Profile '{profile.name}' (ID: {profile.uuid}) not in cache"
+    )
 
-def reorder_profiles(new_order:Iterable[str]):
+
+def reorder_profiles(new_order: Iterable[str]):
     """
     Reorder profiles cache in the order of IDs provided
     """
     global profiles
-    new_profiles:dict[str, GameProfile] = {}
-    for id in new_order:
-        if id not in profiles:
+    new_profiles: dict[str, GameProfile] = {}
+    for profile_id in new_order:
+        if profile_id not in profiles:
             raise ValueError(
-                "ID given for profile reordering doesn't exist: '%s'" % id
+                "ID given for profile reordering doesn't exist: "
+                f"'{profile_id}'"
             )
-        
-        new_profiles[id] = profiles[id]
+
+        new_profiles[profile_id] = profiles[profile_id]
     leftover = [*filter(lambda k: k not in new_order, profiles.keys())]
     if leftover:
-        for id in leftover:
-            log.warning("Profile with ID '%s' was orphaned during reordering, "
-                        "adding it back in." % id)
-            new_profiles[id] = profiles[id]
+        for profile_id in leftover:
+            log.warning(
+                "Profile with ID '%s' was orphaned during reordering, "
+                "adding it back in.",
+                profile_id,
+            )
+            new_profiles[profile_id] = profiles[profile_id]
     profiles = new_profiles
     _refresh_profiles()
     _save_sorting_order(profiles.keys())
     return
 
-def reorder_single_profile(prof:GameProfile, idx:int):
+
+def reorder_single_profile(prof: GameProfile, idx: int):
     ids = [*profiles.keys()]
     if prof.uuid not in ids:
         raise ValueError("Profile ID not present in profiles!")
@@ -96,17 +97,20 @@ def reorder_single_profile(prof:GameProfile, idx:int):
     ids.insert(idx, prof.uuid)
     return reorder_profiles(ids)
 
-def add_profile_switch_handler(func:Callable[[GameProfile], None]):
+
+def add_profile_switch_handler(func: Callable[[GameProfile], None]):
     """
     Adds a function to the profile switch handler list, then outputs the index.
 
     TODO: See if `pyqtSignal()` is better for this.
     """
-    global _profile_switch_handlers
     _profile_switch_handlers.append(func)
     return _profile_switch_handlers.index(func)
 
-def remove_profile_switch_handler(func_idx:Callable[[GameProfile], None]|int):
+
+def remove_profile_switch_handler(
+    func_idx: Callable[[GameProfile], None] | int,
+):
     match type(func_idx):
         case int():
             if func_idx > len(_profile_switch_handlers):
@@ -116,10 +120,13 @@ def remove_profile_switch_handler(func_idx:Callable[[GameProfile], None]|int):
         case FunctionType():
             if func_idx not in _profile_switch_handlers:
                 return
-            _profile_switch_handlers.pop(_profile_switch_handlers.index(func_idx))
+            _profile_switch_handlers.pop(
+                _profile_switch_handlers.index(func_idx)
+            )
         case _:
-            raise TypeError("Unexpected type: %s" % type(func_idx).__name__)
+            raise TypeError(f"Unexpected type: {type(func_idx).__name__}")
     return
+
 
 def _refresh_profiles():
     # something probably changed in the main cache, so clear LRU for row getter
@@ -127,12 +134,13 @@ def _refresh_profiles():
     for func in _profile_refresh_handlers:
         func()
 
-def add_profile_refresh_handler(func:Callable):
-    global _profile_refresh_handlers
+
+def add_profile_refresh_handler(func: Callable):
     _profile_refresh_handlers.append(func)
     return _profile_refresh_handlers.index(func)
 
-def remove_profile_refresh_handler(func_idx:Callable|int):
+
+def remove_profile_refresh_handler(func_idx: Callable | int):
     if isinstance(func_idx, int):
         if func_idx > len(_profile_refresh_handlers):
             raise IndexError()
@@ -143,10 +151,11 @@ def remove_profile_refresh_handler(func_idx:Callable|int):
     _profile_refresh_handlers.pop(_profile_refresh_handlers.index(func_idx))
     return
 
+
 def get_current_profile():
     """
     Retrieves the currently selected profile.
-    
+
     For automation, use `add_profile_switch_handler()`.
 
     If called before loading profiles, will raise an `Exception`.
@@ -157,7 +166,8 @@ def get_current_profile():
         assert _current_profile
     return _current_profile
 
-def get_profile(idx:str|int) -> GameProfile:
+
+def get_profile(idx: str | int) -> GameProfile:
     match idx:
         case str():
             if idx not in profiles:
@@ -168,44 +178,51 @@ def get_profile(idx:str|int) -> GameProfile:
                 raise IndexError(f"Index '{idx}' out of range")
             return [*profiles.values()][idx]
         case _:
-            raise TypeError("Unexpected type for 'idx': '%s'"
-                            % type(idx).__name__)
+            raise TypeError(
+                f"Unexpected type for 'idx': '{type(idx).__name__}'"
+            )
 
-def set_current_profile_uuid(uid:str):
-    current_prof:GameProfile|None=None
-    for id, prof in profiles.items():
-        if uid == id:
+
+def set_current_profile_uuid(uid: str):
+    current_prof: GameProfile | None = None
+    for id_, prof in profiles.items():
+        if uid == id_:
             current_prof = prof
             break
     if not current_prof:
         raise NameError(name=uid)
     return set_current_profile(current_prof)
 
-def set_current_profile(prof:GameProfile):
+
+def set_current_profile(prof: GameProfile):
     global _current_profile
     # print(inspect.stack()[1].function)
-    log.debug("Switching profile to '%s' (ID: %s)"
-              % (prof.name, prof.uuid))
+    log.debug("Switching profile to '%s' (ID: %s)", prof.name, prof.uuid)
     _current_profile = prof
     for func in _profile_switch_handlers:
         func(prof)
     return
 
+
 def current_profile_used():
     prof = get_current_profile()
-    log.info("Setting profile '%s' (ID: %s) last used to now."
-             % (prof.name, prof.uuid))
+    log.info(
+        "Setting profile '%s' (ID: %s) last used to now.", prof.name, prof.uuid
+    )
     prof.last_used = datetime.now().isoformat()
     save_single_profile(prof)
-    
+
+
 class _Signal(QObject):
     profile_added = Signal(GameProfile)
-    profile_deleted = Signal(str, int) # uid, row
+    profile_deleted = Signal(str, int)  # uid, row
     """`uid: str, row: int`"""
+
 
 SIGNAL = _Signal()
 
 _meta_cache = {}
+
 
 def get_launcher_meta():
     if _meta_cache:
@@ -221,16 +238,19 @@ def get_launcher_meta():
         else:
             return meta
     return {}
-        
+
+
 def save_launcher_meta():
     if not _meta_cache:
         return
     try:
         meta_json = json.dumps(_meta_cache)
-    except:
+    except Exception as err:
+        log.error("Failed to dump _meta_cache JSON!", exc_info=err)
         raise
     else:
         PROFILES_META.write_text(meta_json)
+
 
 def get_profile_sorting():
     meta = get_launcher_meta()
@@ -238,7 +258,8 @@ def get_profile_sorting():
         return meta.get("order", [])
     return [*profiles.keys()]
 
-def _save_sorting_order(data:Iterable[str]):
+
+def _save_sorting_order(data: Iterable[str]):
     log.info("Saving launcher_profiles_meta.json")
     match data:
         case list():
@@ -248,7 +269,8 @@ def _save_sorting_order(data:Iterable[str]):
     _meta_cache["order"] = data
     save_launcher_meta()
     return True
-    
+
+
 def _default_profs_factory():
     """
     Returns the default `latest-release` and `latest-snapshot` profiles in
@@ -262,7 +284,7 @@ def _default_profs_factory():
             type="latest-release",
             uuid=latest_uid,
             is_default_profile=True,
-            icon="Grass"
+            icon="Grass",
         ),
         snapshot_uid: GameProfile(
             "Latest Snapshot",
@@ -270,10 +292,11 @@ def _default_profs_factory():
             uuid=snapshot_uid,
             type="latest-snapshot",
             is_default_profile=True,
-            icon="Dirt"
-        )
+            icon="Dirt",
+        ),
     }
-    
+
+
 def _default_lp_file_factory():
     """
     Creates a new `launcher_profiles.json` with default options and profiles.
@@ -284,9 +307,10 @@ def _default_lp_file_factory():
     return {
         "profiles": _default_profs_factory(),
         "settings": {**_DEFAULT_SETTINGS_JSON},
-        "version": 6
+        "version": 6,
     }
-    
+
+
 def load_launcher_profiles():
     """
     Read `launcher_profiles.json` and parse it into a dict of `GameProfile`s.
@@ -330,8 +354,8 @@ def load_launcher_profiles():
             log.error("Failed reading launcher profiles JSON:", exc_info=err)
             log.warning("Loading default profiles. User should be notified.")
         else:
-            profs_raw:dict = lp_json.get("profiles", _default_profs_factory())
-            profs:dict[str, GameProfile] = {}
+            profs_raw: dict = lp_json.get("profiles", _default_profs_factory())
+            profs: dict[str, GameProfile] = {}
             has_latest_profile = False
             has_snapshot_profile = False
             if profile_order:
@@ -346,8 +370,10 @@ def load_launcher_profiles():
                     new_order.append(key)
                     keys_leftover.pop(keys_leftover.index(key))
                 if keys_leftover:
-                    log.warning("Orphaned profiles from sorting list, sorting "
-                                "by creation date... (may be slow!)")
+                    log.warning(
+                        "Orphaned profiles from sorting list, sorting "
+                        "by creation date... (may be slow!)"
+                    )
                     creation_order = []
                     for key in keys_leftover:
                         val = profs_raw[key]
@@ -355,17 +381,23 @@ def load_launcher_profiles():
                         try:
                             dt = datetime.fromisoformat(dt_str)
                         except:
-                            log.error("Failed to get datetime from '%s', "
-                                      "continuing..." % dt_str)
+                            log.error(
+                                "Failed to get datetime from '%s', "
+                                "continuing...",
+                                dt_str,
+                            )
                             dt = datetime.min
                         idx = 0
-                        for id in creation_order:
-                            other_dt_str = profs_raw[id].get("created")
+                        for id_ in creation_order:
+                            other_dt_str = profs_raw[id_].get("created")
                             try:
                                 other_dt = datetime.fromisoformat(other_dt_str)
                             except:
-                                log.error("Failed to get datetime from '%s', "
-                                          "ignoring..." % other_dt_str)
+                                log.error(
+                                    "Failed to get datetime from '%s', "
+                                    "ignoring...",
+                                    other_dt_str,
+                                )
                                 other_dt = datetime.min
                             if other_dt < dt:
                                 idx += 1
@@ -391,15 +423,18 @@ def load_launcher_profiles():
             if not has_latest_profile:
                 log.warning("Missing latest release profile! Creating one...")
                 uid = str(uuid.uuid4())
-                profs[uid] = GameProfile("", type="latest-release",
-                                         version_id="latest-release")
+                profs[uid] = GameProfile(
+                    "", type="latest-release", version_id="latest-release"
+                )
             if not has_snapshot_profile:
                 log.warning("Missing latest snapshot profile! Creating one...")
                 uid = str(uuid.uuid4())
-                profs[uid] = GameProfile("", type="latest-snapshot",
-                                         version_id="latest-snapshot")
-            log.info("Loaded %d profiles from 'launcher_profiles.json'"
-                     % len(profs))
+                profs[uid] = GameProfile(
+                    "", type="latest-snapshot", version_id="latest-snapshot"
+                )
+            log.info(
+                "Loaded %s profiles from 'launcher_profiles.json'", len(profs)
+            )
             profiles = profs
     else:
         log.info("Couldn't find 'launcher_profiles.json', generating new one.")
@@ -408,11 +443,14 @@ def load_launcher_profiles():
     _refresh_profiles()
     return profiles
 
-def save_launcher_profiles(profiles_:dict[str, GameProfile]|None=None,
-                           settings:dict[str, bool|str]|None=None):
+
+def save_launcher_profiles(
+    profiles_: dict[str, GameProfile] | None = None,
+    settings: dict[str, bool | str] | None = None,
+):
     """
     Saves profiles to `launcher_profiles.json`.
-    
+
     Valid `settings` entries:
     - `crashAssistance: bool`
     - `enableAdvanced: bool`
@@ -436,30 +474,28 @@ def save_launcher_profiles(profiles_:dict[str, GameProfile]|None=None,
     if not settings:
         settings = {**_DEFAULT_SETTINGS_JSON}
     profiles_json = {k: v.to_dict_compat() for k, v in profiles.items()}
-    output = {
-        "profiles": profiles_json,
-        "settings": settings,
-        "version": 6
-    }
+    output = {"profiles": profiles_json, "settings": settings, "version": 6}
     _save_sorting_order(profiles_json.keys())
     json_out = json.dumps(
         output, indent=2, sort_keys=True, separators=(", ", " : ")
     )
     PROFILES_PATH.write_text(json_out)
-    log.debug("Saved %d profiles to 'launcher_profiles.json'"
-              % len(profiles_json))
+    log.debug(
+        "Saved %s profiles to 'launcher_profiles.json'", len(profiles_json)
+    )
     _refresh_profiles()
     return True
 
-def get_last_used_profile(profiles_:dict[str, GameProfile]|None=None):
+
+def get_last_used_profile(profiles_: dict[str, GameProfile] | None = None):
     """Returns the last used profile in the dict."""
     if not profiles_:
         global profiles
     else:
         profiles = profiles_
     latest = -1.0
-    last_used_profile:GameProfile|None=None
-    for uid, profile in profiles.items():
+    last_used_profile: GameProfile | None = None
+    for profile in profiles.values():
         ts = datetime.fromisoformat(profile.last_used).timestamp()
         if ts > latest:
             latest = ts
@@ -468,14 +504,14 @@ def get_last_used_profile(profiles_:dict[str, GameProfile]|None=None):
         raise ValueError("No profiles were present!")
     return last_used_profile
 
-def save_single_profile(profile:GameProfile):
-    global profiles
+
+def save_single_profile(profile: GameProfile):
     profiles[profile.uuid] = profile
     save_launcher_profiles()
     _refresh_profiles()
 
-def delete_single_profile(profile:GameProfile):
-    global profiles, _current_profile
+
+def delete_single_profile(profile: GameProfile):
     row = get_row_from_profile(profile)
     del profiles[profile.uuid]
     if profile == _current_profile:
@@ -483,9 +519,9 @@ def delete_single_profile(profile:GameProfile):
     SIGNAL.profile_deleted.emit(profile.uuid, row)
     save_launcher_profiles()
 
+
 def create_profile():
     log.info("Creating new profile...")
-    global profiles
     prof = GameProfile()
     profiles[prof.uuid] = prof
     SIGNAL.profile_added.emit(prof)

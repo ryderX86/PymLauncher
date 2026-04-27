@@ -1,8 +1,9 @@
 """
 Common functions for downloading files.
 """
+
 from pathlib import Path
-from typing import Literal, Callable, TypeVar, overload, Iterable
+from typing import Literal, Callable, TypeVar, Iterable
 from datetime import timedelta, datetime
 import logging
 import hashlib
@@ -10,47 +11,71 @@ import time
 import lzma
 
 import requests
-from PySide6.QtCore import QThread, QThreadPool, QRunnable
+from PySide6.QtCore import QRunnable
 
-from minecraftlauncher.config import redownload_option
 from minecraftlauncher import session
 
 log = logging.getLogger(__name__)
 T = TypeVar("T")
 
-def _download(url: str, max_retries: int, timeout: int, _retries: int = 0, *,
-              hash: str | None = None) -> requests.Response:
+
+def _download(
+    url: str,
+    max_retries: int,
+    timeout: int,
+    _retries: int = 0,
+    *,
+    sha: str | None = None,
+) -> requests.Response:
     try:
         resp = session.get(url, timeout=timeout)
         resp.raise_for_status()
     except Exception:
         if _retries >= max_retries:
-            log.error("Failed to download '%s' %d/%d times, giving up."
-                      % (url, _retries, max_retries))
+            log.error(
+                "Failed to download '%s' %d/%d times, giving up.",
+                url,
+                _retries,
+                max_retries,
+            )
             raise
         else:
-            log.warning("Downloading '%s' failed. Retrying for %d/%d"
-                        % (url, _retries + 1, max_retries))
+            log.warning(
+                "Downloading '%s' failed. Retrying for %d/%d",
+                url,
+                _retries + 1,
+                max_retries,
+            )
             time.sleep(0.2)
             # return the same exact thing but bump _retries by 1
-            return _download(url, max_retries, timeout, _retries + 1,
-                             hash=hash)
+            return _download(url, max_retries, timeout, _retries + 1, sha=sha)
     else:
-        if isinstance(hash, str):
-            if hashlib.sha1(resp.content).hexdigest() == hash:
+        if isinstance(sha, str):
+            if hashlib.sha1(resp.content).hexdigest() == sha:
                 return resp
             else:
-                log.warning("Download from '%s' gave an unexpected hash! "
-                            "Retrying for %d/%d"
-                            % (url, _retries + 1, max_retries))
+                log.warning(
+                    "Download from '%s' gave an unexpected hash! "
+                    "Retrying for %d/%d",
+                    url,
+                    _retries + 1,
+                    max_retries,
+                )
                 time.sleep(0.2)
-                return _download(url, max_retries, timeout, _retries + 1,
-                                hash=hash)
+                return _download(
+                    url, max_retries, timeout, _retries + 1, sha=sha
+                )
         else:
             return resp
 
-def download(url:str, max_retries:int=2, timeout:int=30, *,
-             hash:str|None=None):
+
+def download(
+    url: str,
+    max_retries: int = 2,
+    timeout: int = 30,
+    *,
+    sha: str | None = None,
+):
     """
     Attempts to download a file to memory using `requests.get()`, returning the
     object if successful, else retrying up to `max_retries:int` (default: `2`)
@@ -60,11 +85,12 @@ def download(url:str, max_retries:int=2, timeout:int=30, *,
     If it doesn't match, the download will be failed and will retry
     automatically, counting as a failed download and using a retry.
     """
-    if isinstance(hash, str) and not hash:
-        hash = None
-    return _download(url, max_retries, timeout, hash=hash)
+    if isinstance(sha, str) and not sha:
+        sha = None
+    return _download(url, max_retries, timeout, sha=sha)
 
-def _check_file_sha1(path:str|Path, sha1:str):
+
+def _check_file_sha1(path: str | Path, sha1: str):
     """return `True` if the file exists & sha1 matches"""
     if isinstance(path, str):
         path = Path(path)
@@ -75,7 +101,8 @@ def _check_file_sha1(path:str|Path, sha1:str):
     file_hash = hashlib.sha1(path.read_bytes()).hexdigest()
     return bool(file_hash == sha1)
 
-def _check_file_size(path:str|Path, size:int):
+
+def _check_file_size(path: str | Path, size: int):
     if not size:
         log.warning("check_file_size() called without a valid size!")
         return True
@@ -85,8 +112,10 @@ def _check_file_size(path:str|Path, size:int):
         return False
     return path.stat().st_size == size
 
+
 def file_exists_or_age(
-        path: str | Path, max_age: float | int | timedelta = 86400.0):
+    path: str | Path, max_age: float | int | timedelta = 86400.0
+):
     """
     Return `True` if the file exists and is under the age specified in
     `max_age` (seconds).
@@ -99,12 +128,17 @@ def file_exists_or_age(
         return False
     if isinstance(max_age, (int, float)):
         max_age = timedelta(seconds=max_age)
-    real_max_age:float = (datetime.now() - max_age).timestamp()
+    real_max_age: float = (datetime.now() - max_age).timestamp()
     return path.stat().st_mtime > real_max_age
 
+
 def should_download_file(
-        path: str | Path, *, hash: str | None = None, size: int | None = None,
-        hash_type: Literal['sha1', 'sha256'] = "sha1"):
+    path: str | Path,
+    *,
+    sha: str | None = None,
+    size: int | None = None,
+    hash_type: Literal["sha1", "sha256"] = "sha1",
+):
     """
     Checks if a file should be downloaded based on either existance, hash,
     size, or some/all of the above.
@@ -117,10 +151,10 @@ def should_download_file(
         return True
     elif not path.is_file():
         return True
-    if hash:
+    if sha:
         match hash_type:
             case "sha1":
-                hash_match = _check_file_sha1(path, hash)
+                hash_match = _check_file_sha1(path, sha)
             case "sha256":
                 raise NotImplementedError()
             case _:
@@ -131,14 +165,16 @@ def should_download_file(
         size_match = _check_file_size(path, size)
     else:
         size_match = True
-    return not bool(hash_match and size_match)
+    return not bool(hash_match and size_match)  # pylint: disable=E0606
+
 
 def filter_downloads(
     downloads: list[T], filters: Iterable[Callable[[list[T]], list[T]]]
-    ):
-    for filter in filters:
-        downloads = filter(downloads)
+):
+    for f in filters:
+        downloads = f(downloads)
     return downloads
+
 
 class RunnableDownloader(QRunnable):
     threads_quit = False
@@ -155,14 +191,21 @@ class RunnableDownloader(QRunnable):
     _lzma: bool
 
     log = log.getChild("RunnableDownloader")
+
     def __init__(
-            self, url: str, path: Path | str, hash: str | None = None,
-            override: bool = False, mkdir: bool = True, lzma: bool = False,
-            callback: Callable[[int], None] | None = None,
-            check_hash: bool = True):
+        self,
+        url: str,
+        path: Path | str,
+        sha1: str | None = None,
+        override: bool = False,
+        mkdir: bool = True,
+        use_lzma: bool = False,
+        callback: Callable[[int], None] | None = None,
+        check_hash: bool = True,
+    ):
         """
         Class for a single file to download in a bulk.
-        
+
         If checking a non-SHA1 hash, override the `hash_check()`
         variable with another hash check function.
 
@@ -185,32 +228,33 @@ class RunnableDownloader(QRunnable):
             try:
                 self._path.parent.mkdir(parents=True, exist_ok=True)
             except Exception as err:
-                raise ValueError("Invalid path given for download: %s"
-                                 % str(self._path)) from err
-        self._hash = hash
+                raise ValueError(
+                    f"Invalid path given for download: {str(self._path)}"
+                ) from err
+        self._hash = sha1
         self._override = override
-        self._lzma = lzma
+        self._lzma = use_lzma
         self._callback = callback
         self._check_hash = check_hash
-            
+
     def _check_sha1(self):
         if not self._hash:
             return True
         return _check_file_sha1(self._path, self._hash)
-    
+
     @property
     def needs_download(self) -> bool:
         if self._hash and self._path.exists() and self._path.is_file():
             if self._check_sha1():
                 return False
         return True
-    
+
     def run(self):
         if self.threads_quit:
             self.log.debug("Quitting thread early")
             return
         self.download()
-    
+
     def download(self):
         if self._check_hash and self._path.exists() and self._path.is_file():
             if self._check_sha1():
@@ -224,8 +268,9 @@ class RunnableDownloader(QRunnable):
                 resp = session.get(self._url, timeout=30)
                 resp.raise_for_status()
             except Exception as err:
-                self.log.error("Failed to get file from '%s': %s"
-                               % (self._url, str(err)))
+                self.log.error(
+                    "Failed to get file from '%s': %s", self._url, str(err)
+                )
                 time.sleep(1)
                 self.sleep_time = 2
                 continue
@@ -240,21 +285,24 @@ class RunnableDownloader(QRunnable):
                     if self._check_sha1():
                         break
                     else:
-                        self.log.error("Download failed, retrying (SHA-1 " \
-                                       "mismatch)")
+                        self.log.error(
+                            "Download failed, retrying (SHA-1 mismatch)"
+                        )
                         resp = None
                 else:
-                    log.warning("SHA-1 doesn't exist for '%s'" % self._path)
+                    log.warning("SHA-1 doesn't exist for '%s'", self._path)
             finally:
                 attempts += 1
         if not resp:
-            raise RuntimeError("Failed to download file from '%s' to '%s'"
-                               % (self._url, str(self._path)))
+            raise RuntimeError(
+                f"Failed to download file from '{self._url}' to "
+                f"'{str(self._path)}'"
+            )
         else:
             if self._callback:
                 self._callback(1)
         return 1
-    
+
     @classmethod
     def kill_all(cls):
         cls.threads_quit = True

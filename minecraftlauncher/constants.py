@@ -6,6 +6,7 @@ where constant variables that need to be
 globally referenced will remain (like the
 Azure Client ID)
 """
+
 from pathlib import Path
 from typing import Literal
 import os
@@ -16,7 +17,7 @@ from .args import work_dir, debug_logging as _debug_logging
 
 DEV = not bool(globals().get("__compiled__", False))
 
-offline_mode = False
+offline_mode = False  # pylint: disable=invalid-name
 """
 Monkey-patch-able variable for all modules to know if we
 should be operating offline or not.
@@ -31,23 +32,26 @@ LAUNCHER_NAME = "minecraftlauncher-python"
 if DEV:
     LAUNCHER_VERSION = "dev"
 else:
-    LAUNCHER_VERSION = "build-3"
+    LAUNCHER_VERSION = "build-4"
 AUTHOR_USR = "ryderX86"
 EMAIL = "ryder@r86.me"
 
 # Authentication URLs
-MOJANG_CLIENT_ID = "00000000402B5328" # Official MC launcher client ID
+MOJANG_CLIENT_ID = "00000000402B5328"  # Official MC launcher client ID
+# "000000004C12AE6F" ?
 AZURE_CLIENT_ID = MOJANG_CLIENT_ID
 # AZURE_CLIENT_ID = "1c1a9297-d019-48d4-9417-85ea36cf4c1f"
 AZURE_SCOPE = "XboxLive.signin XboxLive.offline_access"
 if AZURE_CLIENT_ID != MOJANG_CLIENT_ID:
-    MS_DEVICE_CODE_URL = "https://login.microsoftonline.com/consumers/" \
-                         "oauth2/v2.0/devicecode"
+    MS_DEVICE_CODE_URL = (
+        "https://login.microsoftonline.com/consumers/oauth2/v2.0/devicecode"
+    )
 else:
     MS_DEVICE_CODE_URL = "https://login.live.com/oauth20_connect.srf"
 if AZURE_CLIENT_ID != MOJANG_CLIENT_ID:
-    MS_TOKEN_URL = "https://login.microsoftonline.com/consumers/" \
-                   "oauth2/v2.0/token"
+    MS_TOKEN_URL = (
+        "https://login.microsoftonline.com/consumers/oauth2/v2.0/token"
+    )
 else:
     MS_TOKEN_URL = "https://login.live.com/oauth20_token.srf"
 MSA_REFRESH_URL = "https://login.live.com/oauth20_token.srf"
@@ -55,31 +59,36 @@ MSA_REFRESH_URL = "https://login.live.com/oauth20_token.srf"
 XBOX_AUTH_URL = "https://user.auth.xboxlive.com/user/authenticate"
 XSTS_AUTH_URL = "https://xsts.auth.xboxlive.com/xsts/authorize"
 
-MOJ_AUTH_URL = "https://api.minecraftservices.com/authentication" \
-               "/login_with_xbox"
+MOJ_AUTH_URL = (
+    "https://api.minecraftservices.com/authentication/login_with_xbox"
+)
 MOJ_AUTH_URL_ALT = "https://api.minecraftservices.com/launcher/login"
 
 WANT_ENCRYPTION = True
 
 # Mojang API URLs
-LAUNCH_ENTITLEMENTS_URL = "https://api.minecraftservices.com/entitlements" \
-                          "/mcstore"
+LAUNCH_ENTITLEMENTS_URL = (
+    "https://api.minecraftservices.com/entitlements/mcstore"
+)
 MOJ_PROF_URL = "https://api.minecraftservices.com/minecraft/profile"
 SKIN_CHANGE_URL = "https://api.minecraftservices.com/minecraft/profile/skins"
 CAPE_URL = "https://api.minecraftservices.com/minecraft/profile/capes/active"
 
 # Game assets URLs
-VERSION_MANIFEST_URL = "https://piston-meta.mojang.com/mc/game" \
-                       "/version_manifest_v2.json"
+VERSION_MANIFEST_URL = (
+    "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json"
+)
 RESOURCES_URL = "https://resources.download.minecraft.net"
 LIBRARIES_URL = "https://libraries.minecraft.net"
-JAVA_MANIFEST_URL = "https://launchermeta.mojang.com/v1/products/java-runtime" \
-                    "/2ec0cc96c44e5a76b9c8b7c39df7210883d12871/all.json"
+JAVA_MANIFEST_URL = (
+    "https://launchermeta.mojang.com/v1/products/java-runtime"
+    "/2ec0cc96c44e5a76b9c8b7c39df7210883d12871/all.json"
+)
 
 
 # Default paths
 _plat = platform.system()
-base:Path
+base: Path
 if work_dir:
     base = work_dir
 else:
@@ -91,28 +100,31 @@ else:
         case "Darwin":
             base = Path("~/Library/Application Support").expanduser().resolve()
         case _:
-            base_ = os.environ.get("XDG_DATA_HOME",
-                                Path("~/.local/share").expanduser().resolve())
+            base_ = os.environ.get(
+                "XDG_DATA_HOME", Path("~/.local/share").expanduser().resolve()
+            )
             base = Path(base_)
             del base_
 
-USER_AGENT = f"{AUTHOR_USR}/{LAUNCHER_NAME} {LAUNCHER_VERSION} ({_plat} " \
-             f"{platform.version()}) (contact: {EMAIL})"
+USER_AGENT = (
+    f"{AUTHOR_USR}/{LAUNCHER_NAME} {LAUNCHER_VERSION} ({_plat} "
+    f"{platform.version()}) (contact: {EMAIL})"
+)
 
 MINECRAFT_DIR = base / ".minecraft"
 LAUNCHER_DATA_DIR = base / LAUNCHER_NAME
 LAUNCHER_CONFIG_FILE = LAUNCHER_DATA_DIR / "config.json"
 
 if DEV:
-    dev_base = Path(__file__).parent.parent / '.minecraft'
+    dev_base = Path(__file__).parent.parent / ".minecraft"
     if dev_base.exists() and dev_base.is_dir():
         base = dev_base
         MINECRAFT_DIR = base
         LAUNCHER_DATA_DIR = base / LAUNCHER_NAME
         LAUNCHER_CONFIG_FILE = LAUNCHER_DATA_DIR / "config.json"
 
-OS:Literal["windows", "osx", "linux", "unknown"]
-OS_PATH_DELIM:Literal["\\", "/"] = "/"
+OS: Literal["windows", "osx", "linux", "unknown"]
+OS_PATH_DELIM: Literal["\\", "/"] = "/"
 match _plat:
     case "Windows":
         OS = "windows"
@@ -124,7 +136,7 @@ match _plat:
     case _:
         OS = "unknown"
 
-ARCH:Literal["x86_64", "x86", "arm64", "unknown"]
+ARCH: Literal["x86_64", "x86", "arm64", "unknown"]
 if OS != "osx":
     _machine = platform.machine().lower()
 else:
@@ -158,26 +170,31 @@ match OS, ARCH:
     case _:
         JAVA_OS = "gamecore"
 
-OS_VER:str = platform.version()
+OS_VER: str = platform.version()
 
 CLASSPATH_SEPARATOR = ";" if OS == "windows" else ":"
 
 # TODO: cross-os compat
 match OS:
     case "windows":
+        if ARCH == "x86":
+            pf = "Program Files (x86)"
+        else:
+            pf = "Program Files"
         MOJANG_JAVA_BASE = Path(
-            "C:\\Program Files%s\\Minecraft Launcher\\runtime"
-            % (" (x86)" if ARCH == "x86" else ""))
+            f"C:\\Program Files{pf}\\Minecraft Launcher\\runtime"
+        )
+        del pf
     case _:
         MOJANG_JAVA_BASE = Path()
 
 JAVA_PATH = MINECRAFT_DIR / "jre"
 
-show_snapshots:bool = True
+show_snapshots: bool = True
 """
 Whether or not snapshots/pre-releases should be shown in the versions list.
 """
-show_old_releases:bool = True
+show_old_releases: bool = True
 """
 Whether or not old releases (pre-alpha, alpha, beta, etc.) should be shown in
 the versions list.
@@ -185,9 +202,12 @@ the versions list.
 
 # profile stuff
 DEFAULT_JVM_ARGS = (
-    "-XX:+UnlockExperimentalVMOptions " "-XX:+UseG1GC "
-    "-XX:G1NewSizePercent=20 " "-XX:G1ReservePercent=20 "
-    "-XX:MaxGCPauseMillis=50 " "-XX:G1HeapRegionSize=32M "
+    "-XX:+UnlockExperimentalVMOptions "
+    "-XX:+UseG1GC "
+    "-XX:G1NewSizePercent=20 "
+    "-XX:G1ReservePercent=20 "
+    "-XX:MaxGCPauseMillis=50 "
+    "-XX:G1HeapRegionSize=32M "
 )
 
 LOG4J_FIX_TIME = "2023-06-07T10:50:16+00:00"
@@ -197,9 +217,15 @@ LOG4J_VULN_MIN_TIME = "2013-09-26T15:11:19+00:00"
 
 # uuids
 PROFILE_MHF_STEVE = "c06f89064c8a49119c29ea1dbd1aab82"
-STEVE_SKIN_URL = ("http://textures.minecraft.net/texture/31f477eb1a7be"
-                  "ee631c2ca64d06f8f68fa93a3386d04452ab27f43acdf1b60cb")
+STEVE_SKIN_URL = (
+    "http://textures.minecraft.net/texture/31f477eb1a7be"
+    "ee631c2ca64d06f8f68fa93a3386d04452ab27f43acdf1b60cb"
+)
 SKIN_URL_BASE = "http://textures.minecraft.net/texture/"
 
 # UI stuff
-CHECKMARK_DELAY = 1500 # milliseconds
+CHECKMARK_DELAY = 1500  # milliseconds
+
+
+# feature flags
+FLAG_ENABLE_EXPORTING = DEV  # not ready for prod

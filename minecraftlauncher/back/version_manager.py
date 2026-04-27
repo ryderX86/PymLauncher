@@ -5,7 +5,6 @@ inheritence, and downloading the client JAR file.
 
 from datetime import datetime, timedelta
 from typing import Any, Callable
-from functools import lru_cache
 import hashlib
 import json
 import logging
@@ -13,8 +12,8 @@ import os
 import re
 
 from minecraftlauncher.constants import (
-    VERSION_MANIFEST_URL, MINECRAFT_DIR, offline_mode, LOG4J_FIX_TIME,
-    LOG4J_VULN_MIN_TIME, LOG4J_116_5_FIX_MAX_TIME, LOG4J_17_112_FIX_MAX_TIME
+    VERSION_MANIFEST_URL,
+    MINECRAFT_DIR,
 )
 from minecraftlauncher.datatypes.game_version import GameVersionStub
 from minecraftlauncher.config import redownload_option
@@ -24,30 +23,29 @@ from .download_helpers import download
 log = logging.getLogger(__name__)
 
 VERSION_DIR = MINECRAFT_DIR / "versions"
-_manifest_cache:dict = {
-    "latest": {},
-    "versions": []
-}
+manifest_cache: dict = {"latest": {}, "versions": []}
 
 FABRIC_VER_RE = re.compile(
     r"(?:fabric-loader-)((?:[0-9]+\.?)+)-((?:[0-9]+\.?)+(?:-snapshot-[0-9]+)?)"
 )
 
-_version_list_cache:list[GameVersionStub] = []
+_version_list_cache: list[GameVersionStub] = []
 
-_inheritence_cache:dict[str,dict] = {}
+_inheritence_cache: dict[str, dict] = {}
+
 
 def _get_manifest_cache_ids():
     fetch_version_manifest()
-    version_list:list[str] = []
-    for version in _manifest_cache.get("versions", []):
-        id = version.get("id", "")
-        if not id:
+    version_list: list[str] = []
+    for version in manifest_cache.get("versions", []):
+        id_ = version.get("id", "")
+        if not id_:
             continue
-        version_list.append(id)
+        version_list.append(id_)
     return version_list
 
-def fetch_version_manifest(force_refresh:bool=False):
+
+def fetch_version_manifest(force_refresh: bool = False):
     """
     Fetch full verison manifest from Mojang. (Won't force refresh <1d unless
     specified)
@@ -77,10 +75,10 @@ def fetch_version_manifest(force_refresh:bool=False):
     }
     ```
     """
-    global _manifest_cache
-    if _manifest_cache.get("versions", []) and not force_refresh:
-        return _manifest_cache
-    
+    global manifest_cache
+    if manifest_cache.get("versions", []) and not force_refresh:
+        return manifest_cache
+
     log.info("Looking for existing version manifest")
     mf_path = MINECRAFT_DIR / "versions" / "version_manifest_v2.json"
     if mf_path.exists():
@@ -96,80 +94,96 @@ def fetch_version_manifest(force_refresh:bool=False):
                 mf_path.unlink()
             else:
                 log.info("Using existing versions cache.")
-                _manifest_cache = mf
-                return _manifest_cache
+                manifest_cache = mf
+                return manifest_cache
         else:
             log.info("Existing manifest is too old, getting a new one.")
 
-    log.info("Fetching version manifest from '%s'" % VERSION_MANIFEST_URL)
+    log.info("Fetching version manifest from '%s'", VERSION_MANIFEST_URL)
     VERSION_DIR.mkdir(parents=True, exist_ok=True)
     try:
         resp = session.get(VERSION_MANIFEST_URL, timeout=30)
     except:
         log.error("Failed to get version manifest!")
-        return _manifest_cache
-    _manifest_cache = resp.json()
+        return manifest_cache
+    manifest_cache = resp.json()
     mf_path.touch()
-    mf_path.write_text(json.dumps(_manifest_cache))
-    return _manifest_cache
+    mf_path.write_text(json.dumps(manifest_cache))
+    return manifest_cache
 
-def _build_local_version_list(exclude:list[GameVersionStub]|None=None):
+
+def _build_local_version_list(exclude: list[GameVersionStub] | None = None):
     if not exclude:
         exclude = []
     versions_dir = MINECRAFT_DIR / "versions"
-    ver_list:list[GameVersionStub] = []
+    ver_list: list[GameVersionStub] = []
     for folder in os.scandir(versions_dir):
         if not folder.is_dir():
             continue
         jar_path = versions_dir / folder.name / f"{folder.name}.jar"
         json_path = versions_dir / folder.name / f"{folder.name}.json"
         if not json_path.exists():
-            log.warning("Version %s doesn't have a JSON file!" % folder.name)
+            log.warning("Version %s doesn't have a JSON file!", folder.name)
             continue
         try:
             ver_json_text = json_path.read_text()
         except Exception as err:
-            log.warning("Failed to read file at '%s' for version %s"
-                        % (str(json_path), folder.name), exc_info=err)
+            log.warning(
+                "Failed to read file at '%s' for version %s",
+                str(json_path),
+                folder.name,
+                exc_info=err,
+            )
             continue
         try:
             ver_json = json.loads(ver_json_text)
         except json.JSONDecodeError as err:
-            log.warning("Failed to parse JSON in '%s':" % str(json_path),
-                        exc_info=err)
+            log.warning(
+                "Failed to parse JSON in '%s':", str(json_path), exc_info=err
+            )
             continue
-        if ("downloads" not in ver_json
-                and "inheritsFrom" not in ver_json
-                and not jar_path.exists()):
+        if (
+            "downloads" not in ver_json
+            and "inheritsFrom" not in ver_json
+            and not jar_path.exists()
+        ):
             log.warning(
                 "Version '%s' has no jar file and doesn't inherit from "
-                "anything!" % folder.name)
-        version_info = GameVersionStub(folder.name,
-                                       ver_json.get("type", "release"),
-                                       json_path, True,
-                                       ver_json.get("releaseTime"),
-                                       ver_json.get("time"))
+                "anything!",
+                folder.name,
+            )
+        version_info = GameVersionStub(
+            folder.name,
+            ver_json.get("type", "release"),
+            json_path,
+            True,
+            ver_json.get("releaseTime"),
+            ver_json.get("time"),
+        )
         if version_info in exclude:
             continue
         ver_list.append(version_info)
     return ver_list
 
-def get_version_list(include_snapshots:bool=True,
-                     include_old:bool=True,
-                     override:bool=False) -> list[GameVersionStub]:
+
+def get_version_list(
+    include_snapshots: bool = True,
+    include_old: bool = True,
+    override: bool = False,
+) -> list[GameVersionStub]:
     """
     Returns a list of versions from both the manifest and locally installed.
-    
+
     Duplicates will side with the manifest and the local version won't be
     included.
-    
+
     Each entry is a dict with at least `id` and `type`, and will contain `url`
     or `path`.
     """
     global _version_list_cache
     global _inheritence_cache
     manifest = fetch_version_manifest()
-    mf_versions:list[dict] = manifest.get("versions", [])
+    mf_versions: list[dict] = manifest.get("versions", [])
     if _version_list_cache and not override:
         return _version_list_cache
     elif override:
@@ -177,15 +191,18 @@ def get_version_list(include_snapshots:bool=True,
         _inheritence_cache = {}
     versions = []
     for ver in mf_versions:
-        id = ver.get("id")
-        if not id:
-            log.warning("Skipping unknown version (no ID) in\
-                        get_version_list().")
+        id_ = ver.get("id")
+        if not id_:
+            log.warning(
+                "Skipping unknown version (no ID) in\
+                        get_version_list()."
+            )
             continue
         url = ver.get("url")
         if not url:
-            log.warning("Skipping version '%s' since it has no manifest URL."
-                        % id)
+            log.warning(
+                "Skipping version '%s' since it has no manifest URL.", id_
+            )
             continue
         type_ = ver.get("type", "release")
         match type_:
@@ -198,10 +215,10 @@ def get_version_list(include_snapshots:bool=True,
             case "release":
                 pass
             case _:
-                log.debug("Unexpected release type: '%s'" % type_)
+                log.debug("Unexpected release type: '%s'", type_)
         timestamp = ver.get("releaseTime", ver.get("time"))
         build_ts = ver.get("time", ver.get("releaseTime"))
-        new_ver = GameVersionStub(id, type_, url, False, timestamp, build_ts)
+        new_ver = GameVersionStub(id_, type_, url, False, timestamp, build_ts)
         versions.append(new_ver)
     versions.extend(_build_local_version_list(versions))
     _version_list_cache = versions
@@ -212,26 +229,30 @@ def get_version_list(include_snapshots:bool=True,
     log.info("Parsed complete versions list successfully.")
     return versions
 
+
 def get_latest_release() -> str:
     """Returns the latest version ID, if possible."""
     fetch_version_manifest()
-    if not _manifest_cache.get("latest"):
+    if not manifest_cache.get("latest"):
         return ""
-    return _manifest_cache["latest"].get("release")
+    return manifest_cache["latest"].get("release")
+
 
 def get_latest_snapshot() -> str:
     """Returns the latest snapshot ID, if possible."""
     fetch_version_manifest()
-    if not _manifest_cache.get("latest"):
+    if not manifest_cache.get("latest"):
         return ""
-    return _manifest_cache["latest"].get("snapshot")
+    return manifest_cache["latest"].get("snapshot")
 
-def _get_manifest_entry(version_id:str) -> dict[str, Any]|None:
-    for ver in _manifest_cache["versions"]:
+
+def _get_manifest_entry(version_id: str) -> dict[str, Any] | None:
+    for ver in manifest_cache["versions"]:
         if ver["id"] == version_id:
             return ver
 
-def fetch_version_json(version_id:str) -> dict[str, Any]:
+
+def fetch_version_json(version_id: str) -> dict[str, Any]:
     """
     Fetch and return the full version JSON for `version_id`.
 
@@ -264,24 +285,34 @@ def fetch_version_json(version_id:str) -> dict[str, Any]:
             try:
                 return json.loads(local_text)
             except json.JSONDecodeError as err:
-                log.error("JSON decode failed for '%s':" % str(local_path),
-                          exc_info=err)
-                raise ValueError("Version '%s' has corrupted JSON"
-                                 % version_id)
+                log.error(
+                    "JSON decode failed for '%s':",
+                    str(local_path),
+                    exc_info=err,
+                )
+                raise ValueError(
+                    f"Version '{version_id}' has corrupted JSON"
+                ) from err
         else:
-            log.warning("Version info at '%s' doesn't match SHA1 in manifest!"
-                        % str(local_path))
+            log.warning(
+                "Version info at '%s' doesn't match SHA1 in manifest!",
+                str(local_path),
+            )
     # no local file + no mf entry = bad bad very bad
     if not mf_entry:
-        raise ValueError("Version '%s' not found in manifest or locally"
-                         % version_id)
-    
+        raise ValueError(
+            f"Version '{version_id}' not found in manifest or locally"
+        )
+
     url = mf_entry["url"]
     sha1 = mf_entry["sha1"]
-    log.info("Downloading version JSON for '%s' from '%s'" % (version_id, url))
+    log.info("Downloading version JSON for '%s' from '%s'", version_id, url)
     try:
-        resp = download(url, hash=sha1)
-    except:
+        resp = download(url, sha=sha1)
+    except Exception as err:
+        log.error(
+            "Failed to download version.json for %s!", version_id, exc_info=err
+        )
         raise
 
     if not ver_dir.exists():
@@ -290,23 +321,23 @@ def fetch_version_json(version_id:str) -> dict[str, Any]:
     local_path.write_text(resp.text)
     return resp.json()
 
-def _resolve_inheritence(version_json:dict, recursion:int=0, *,
-                         force_refresh:bool=False) -> dict[str, Any]:
-    global _inheritence_cache
+
+def _resolve_inheritence(
+    version_json: dict, recursion: int = 0, *, force_refresh: bool = False
+) -> dict[str, Any]:
     if version_json["id"] in _inheritence_cache and not force_refresh:
         return _inheritence_cache[version_json["id"]]
     if recursion > 20:
         raise RecursionError()
-    
+
     if "inheritsFrom" not in version_json.keys():
         return version_json
-    
-    parent_id:str = version_json["inheritsFrom"]
+
+    parent_id: str = version_json["inheritsFrom"]
     log.info(
-        "Game version '%s' inherits from '%s'"
-        % (version_json["id"], parent_id)
+        "Game version '%s' inherits from '%s'", version_json["id"], parent_id
     )
-    
+
     parent_json = fetch_version_json(parent_id)
     parent_json = _resolve_inheritence(parent_json, recursion=recursion + 1)
 
@@ -337,8 +368,8 @@ def _resolve_inheritence(version_json:dict, recursion:int=0, *,
             merged_dict.update(val)
             merged_json[key] = merged_dict
         elif isinstance(val, list) and isinstance(merged_json.get(key), list):
-            parent_list:list = merged_json[key]
-            child_list:list = version_json[key]
+            parent_list: list = merged_json[key]
+            child_list: list = version_json[key]
             parent_list = [x for x in parent_list if x not in child_list]
             child_list.extend(parent_list)
             merged_json[key] = child_list
@@ -347,7 +378,8 @@ def _resolve_inheritence(version_json:dict, recursion:int=0, *,
     _inheritence_cache[version_json["id"]] = merged_json
     return merged_json
 
-def resolve_inheritence(version_json:dict):
+
+def resolve_inheritence(version_json: dict):
     """
     Resolve `inheritsFrom` chains and merges all data into the given JSON.
 
@@ -357,15 +389,18 @@ def resolve_inheritence(version_json:dict):
     """
     return _resolve_inheritence(version_json)
 
-def get_client_jar_info(version_json:dict) -> dict[str, Any]|None:
+
+def get_client_jar_info(version_json: dict) -> dict[str, Any] | None:
     """
     Returns either the `version_json.downloads.client` dict (containing `sha1`,
     `size`, and `url`) or `None` if not present.
     """
     return version_json.get("downloads", {}).get("client")
 
-def download_client_jar(version_json:dict, *,
-                        progress_callback:Callable|None=None):
+
+def download_client_jar(
+    version_json: dict, *, progress_callback: Callable | None = None
+):
     """
     Downloads the client JAR file for the given version JSON, if it doesn't
     exist; or check the existing JAR file's SHA1 and either return its path,
@@ -383,12 +418,12 @@ def download_client_jar(version_json:dict, *,
     occurs.
     - `RuntimeError`, if the download failed enough times.
     """
-    ver_id:str = version_json["id"]
+    ver_id: str = version_json["id"]
     client_info = get_client_jar_info(version_json)
     if not client_info:
-        raise ValueError("No download info for version '%s'" % ver_id)
+        raise ValueError(f"No download info for version '{ver_id}'")
     expected_sha1 = client_info.get("sha1")
-    
+
     ver_dir = VERSION_DIR / ver_id
     jar_path = ver_dir / f"{ver_id}.jar"
 
@@ -397,20 +432,28 @@ def download_client_jar(version_json:dict, *,
         jar_bytes = jar_path.read_bytes()
         sha1 = hashlib.sha1(jar_bytes).hexdigest()
         if sha1 == expected_sha1:
-            log.debug("Skipping download for '%s.jar' since it already exists."
-                      % ver_id)
+            log.debug(
+                "Skipping download for '%s.jar' since it already exists.",
+                ver_id,
+            )
             return jar_path
         else:
-            log.warning("'%s.jar' SHA1 doesn't match expected: '%s' != '%s'"
-                        % (ver_id, sha1, str(expected_sha1)))
+            log.warning(
+                "'%s.jar' SHA1 doesn't match expected: '%s' != '%s'",
+                ver_id,
+                sha1,
+                str(expected_sha1),
+            )
     elif jar_path.exists() and jar_path.is_file() and not redownload_option:
-        log.info("Skipping download for '%s.jar' since it exists and option is"
-                 "to not redownload")
+        log.info(
+            "Skipping download for '%s.jar' since it exists and option is"
+            "to not redownload"
+        )
         return jar_path
-    
+
     url = client_info["url"]
     total_size = client_info.get("size", 0)
-    log.info("Downloading client JAR for %s (%s bytes)" % (ver_id, total_size))
+    log.info("Downloading client JAR for %s (%s bytes)", ver_id, total_size)
 
     ver_dir.mkdir(parents=True, exist_ok=True)
 
@@ -431,23 +474,23 @@ def download_client_jar(version_json:dict, *,
         log.debug("SHA1 mismatch, deleting JAR.")
         jar_path.unlink()
         err = RuntimeError("SHA1 mismatch for client JAR")
-        err.add_note("Expected '%s', got '%s'"
-                     % (expected_sha1, sha1.hexdigest()))
+        err.add_note(f"Expected '{expected_sha1}', got '{sha1.hexdigest()}'")
         raise err
-    
+
     return jar_path
 
-def check_client_jar(version_json:dict):
+
+def check_client_jar(version_json: dict):
     """
     Checks if the client jar is installed or not.
-    
+
     Returns `True` if the client JAR is installed.
     """
-    ver_id:str = version_json["id"]
+    ver_id: str = version_json["id"]
     client_info = get_client_jar_info(version_json)
     if not client_info:
-        raise ValueError("No download info for version '%s'" % ver_id)
-    expected_sha1:str|None = client_info.get("sha1")
+        raise ValueError(f"No download info for version '{ver_id}'")
+    expected_sha1: str | None = client_info.get("sha1")
 
     ver_dir = VERSION_DIR / ver_id
     jar_path = ver_dir / f"{ver_id}.jar"
@@ -457,37 +500,40 @@ def check_client_jar(version_json:dict):
         sha1 = hashlib.sha1(jar_bytes).hexdigest()
         return bool(sha1 == expected_sha1)
     elif jar_path.exists() and jar_path.is_file():
-        log.warning("Unable to check SHA1 for JAR at '%s'" % str(jar_path))
+        log.warning("Unable to check SHA1 for JAR at '%s'", str(jar_path))
         return True
     return False
 
-def version_exists(id:str):
+
+def version_exists(id_: str):
     """
     Checks if a version exists in the Mojang manifest or locally
-    
+
     Returns a bool
     """
-    if id in [a.get("id", "") for a in _manifest_cache["versions"]]:
+    if id_ in [a.get("id", "") for a in manifest_cache["versions"]]:
         return True
-    elif (VERSION_DIR / id / f"{id}.json").exists():
+    elif (VERSION_DIR / id_ / f"{id_}.json").exists():
         try:
-            json.loads((VERSION_DIR / id / f"{id}.json").read_text())
+            json.loads((VERSION_DIR / id_ / f"{id_}.json").read_text())
         except:
             return False
         else:
             return True
     return False
 
-def is_vanilla(id:str):
+
+def is_vanilla(id_: str):
     """
     Check if a version ID points towards a Mojang release, or a modded version
     locally installed.
     """
-    if id in [a.get("id", "") for a in _manifest_cache["versions"]]:
+    if id_ in [a.get("id", "") for a in manifest_cache["versions"]]:
         return True
     return False
 
-def check_fabric_mod_arg_support(version_id:str):
+
+def check_fabric_mod_arg_support(version_id: str):
     """
     Checks if a given version ID is newer than Fabric 0.12.0
     """
@@ -496,7 +542,7 @@ def check_fabric_mod_arg_support(version_id:str):
         return False
     elif not fabric_match[1]:
         return False
-    
+
     fabric_ver_split = fabric_match[1].split(".")
     if fabric_ver_split[0].isdecimal():
         i = int(fabric_ver_split[0])

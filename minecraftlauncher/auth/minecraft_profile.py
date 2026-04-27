@@ -1,37 +1,31 @@
-from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
 from enum import StrEnum
-from functools import lru_cache
 import logging
 import hashlib
 import uuid
 import time
-import json
 
-from PySide6.QtCore import QRect
 from PySide6.QtGui import QImage, QIcon, QPixmap
 import requests
 import requests.exceptions
 
 from minecraftlauncher.auth.minecraft_token import MinecraftToken
 from minecraftlauncher.constants import (
-    MOJ_PROF_URL, STEVE_SKIN_URL, LAUNCHER_DATA_DIR, offline_mode
+    MOJ_PROF_URL,
+    STEVE_SKIN_URL,  # type: ignore
 )
 from minecraftlauncher import constants, session
 from minecraftlauncher.back.download_helpers import download as try_request
 from minecraftlauncher.front import resources
-from .auth_error import AuthStep, AuthError
 
 log = logging.getLogger(__name__)
 
-KNOWN_DICT_KEYS = [
-    "id", "name", "skins", "capes", "last_updated"
-]
+KNOWN_DICT_KEYS = ["id", "name", "skins", "capes", "last_updated"]
 
 _STEVE_UUID = str(uuid.UUID(int=0))
-SKIN_CACHE_PATH = LAUNCHER_DATA_DIR / "textures_cache" / "skins"
-CAPE_CACHE_PATH = LAUNCHER_DATA_DIR / "textures_cache" / "capes"
+SKIN_CACHE_PATH = resources.TEXTURE_CACHE_DIR / "skins"
+CAPE_CACHE_PATH = resources.TEXTURE_CACHE_DIR / "capes"
 if not SKIN_CACHE_PATH.exists():
     SKIN_CACHE_PATH.mkdir(parents=True, exist_ok=True)
 if not CAPE_CACHE_PATH.exists():
@@ -40,12 +34,15 @@ if not CAPE_CACHE_PATH.exists():
 _cached_skins: dict[str, QIcon] = {}
 _cached_capes: dict[str, QPixmap] = {}
 
+
 class TextureState(StrEnum):
     """Enums for skin/cape "state\"."""
+
     ACTIVE = "ACTIVE"
     """Skin/cape is in use and will show in-game"""
     INACTIVE = "INACTIVE"
     """Skin/cape is not in use and will not show in-game"""
+
 
 class SkinModel(StrEnum):
     CLASSIC = "CLASSIC"
@@ -59,39 +56,47 @@ class SkinModel(StrEnum):
     ALEX = SLIM
     """Alias for `SLIM`"""
 
-def check_redownload_skin(p: Path, url: str, sha: str | None = None,
-                          name: str | None = None):
+
+def check_redownload_skin(
+    p: Path, url: str, sha: str | None = None, name: str | None = None
+):
     if not sha:
         sha = url.split("/")[-1]
+    name = name or sha[:10]
     if p.exists():
         file_sha = hashlib.sha256(p.read_bytes()).hexdigest()
         if file_sha == sha:
             return
+        else:
+            log.warning("Cached texture '%s' has mismatched SHA", name)
     if name:
-        log.debug("Downloading player texture for '%s'" % name)
+        log.debug("Downloading player texture for '%s'", name)
     resp = try_request(url)
     p.write_bytes(resp.content)
     return
 
-class MinecraftProfile:
-    _token:MinecraftToken|None
-    owned_items:list
-    uuid:str
-    name:str
-    skins:list[dict[str, str]]
-    capes:list[dict[str, str]]
 
-    def __init__(self, profile_info:dict, mc_token:MinecraftToken|None=None):
+class MinecraftProfile:
+    _token: MinecraftToken | None
+    owned_items: list
+    uuid: str
+    name: str
+    skins: list[dict[str, str]]
+    capes: list[dict[str, str]]
+
+    def __init__(
+        self, profile_info: dict, mc_token: MinecraftToken | None = None
+    ):
         """Don't use this for new profiles. Use `cls.from_token()` instead."""
         self._token = mc_token
         self.uuid = profile_info["id"]
         self.name = profile_info.get("name", "Steve")
         self.skins = profile_info.get("skins", [])
         self.capes = profile_info.get("capes", [])
-        self.last_updated:float|None = profile_info.get("last_updated")
-        self._other_info = {k:v
-                            for k, v in profile_info.items()
-                            if k not in KNOWN_DICT_KEYS}
+        self.last_updated: float | None = profile_info.get("last_updated")
+        self._other_info = {
+            k: v for k, v in profile_info.items() if k not in KNOWN_DICT_KEYS
+        }
         self._cape_list_cache: list[tuple[str, str, str, QImage]] | None = None
         self._cape_thumbnails: list[tuple[str, str, str, QImage]] | None = None
 
@@ -99,8 +104,8 @@ class MinecraftProfile:
             "id": _STEVE_UUID,
             "state": "ACTIVE",
             "url": STEVE_SKIN_URL,
-            "textureKey": STEVE_SKIN_URL.split("/")[-1],
-            "variant": "CLASSIC"
+            "textureKey": STEVE_SKIN_URL.rsplit("/", maxsplit=1)[-1],
+            "variant": "CLASSIC",
         }
 
         self.current_cape = None
@@ -119,7 +124,7 @@ class MinecraftProfile:
             if current:
                 self.current_skin = current
             del current
-        
+
         self.current_cape = None
         if self.capes:
             current: dict | None = None
@@ -131,19 +136,19 @@ class MinecraftProfile:
             if current:
                 self.current_cape = current
             del current
-        
+
     @staticmethod
     def steve_skin_bytes():
         skin_path = SKIN_CACHE_PATH / (_STEVE_UUID + ".png")
         check_redownload_skin(skin_path, STEVE_SKIN_URL)
         return skin_path.read_bytes()
-    
+
     @staticmethod
     def steve_skin_path():
         skin_path = SKIN_CACHE_PATH / (_STEVE_UUID + ".png")
         check_redownload_skin(skin_path, STEVE_SKIN_URL)
         return skin_path
-    
+
     @staticmethod
     def steve_skin_icon():
         uid = _STEVE_UUID + "_thumb"
@@ -158,10 +163,8 @@ class MinecraftProfile:
         return _cached_skins[uid]
 
     @classmethod
-    def from_token(cls, mc_token:MinecraftToken):
-        headers = {
-            "Authorization": "Bearer %s" % mc_token.access_token
-        }
+    def from_token(cls, mc_token: MinecraftToken):
+        headers = {"Authorization": f"Bearer {mc_token.access_token}"}
 
         max_retries = 3
         response = None
@@ -171,15 +174,18 @@ class MinecraftProfile:
                 response = session.get(MOJ_PROF_URL, headers=headers)
                 response.raise_for_status()
                 break
-            except (requests.exceptions.ConnectTimeout,
-                    requests.exceptions.ConnectionError) as err:
-                log.error("Failed to connect to %s:" % MOJ_PROF_URL,
-                          exc_info=err)
+            except (
+                requests.exceptions.ConnectTimeout,
+                requests.exceptions.ConnectionError,
+            ) as err:
+                log.error(
+                    "Failed to connect to %s:", MOJ_PROF_URL, exc_info=err
+                )
                 log.info("Waiting 5 seconds before next attempt...")
                 time.sleep(5)
                 continue
             except requests.HTTPError as err:
-                log.error("Failed to fetch profile info!:")
+                log.error("Failed to fetch profile info!:", exc_info=err)
                 raise
             except Exception as err:
                 log.error("Unknown error occured while fetching profile info:")
@@ -193,32 +199,32 @@ class MinecraftProfile:
         prof_info_json["last_updated"] = datetime.now().timestamp()
 
         return cls(prof_info_json, mc_token)
-    
+
     @property
     def should_refresh(self):
         if not self.token:
             return False
         elif not self.last_updated:
             return True
-        elif (self.last_updated <
-              (datetime.now() - timedelta(minutes=5)).timestamp()):
+        elif (
+            self.last_updated
+            < (datetime.now() - timedelta(minutes=5)).timestamp()
+        ):
             return True
         return False
-    
+
     @property
     def token(self):
         return self._token.access_token if self._token else None
-    
+
     @token.setter
-    def token(self, token:MinecraftToken):
+    def token(self, token: MinecraftToken):
         self._token = token
-    
+
     def refresh_profile_info(self):
         if not self._token:
             raise RuntimeError("No Minecraft token present")
-        headers = {
-            "Authorization": "Bearer %s" % self.token
-        }
+        headers = {"Authorization": f"Bearer {self.token}"}
 
         max_retries = 3
         response = None
@@ -228,27 +234,36 @@ class MinecraftProfile:
                 response = session.get(MOJ_PROF_URL, headers=headers)
                 response.raise_for_status()
                 break
-            except (requests.exceptions.ConnectTimeout,
-                    requests.exceptions.ConnectionError) as exc:
-                log.warning("Failed to connect to %s: %s"
-                            % (MOJ_PROF_URL, exc.__qualname__))
+            except (
+                requests.exceptions.ConnectTimeout,
+                requests.exceptions.ConnectionError,
+            ) as exc:
+                log.warning(
+                    "Failed to connect to %s: %s",
+                    MOJ_PROF_URL,
+                    exc.__qualname__,
+                )
                 log.debug("Waiting 5 seconds before next attempt")
                 time.sleep(5)
                 continue
             except requests.HTTPError as exc:
-                log.error("Failed to fetch profile info: HTTP %s"
-                          % exc.response.status_code)
+                log.error(
+                    "Failed to fetch profile info: HTTP %s",
+                    exc.response.status_code,
+                )
                 raise exc
             except Exception as exc:
-                log.error("Unknown error occured fetching profile info:",
-                          exc_info=True)
+                log.error(
+                    "Unknown error occured fetching profile info:",
+                    exc_info=True,
+                )
                 raise exc
         if max_retries < 1:
             constants.offline_mode = True
 
         if response is None:
             raise ValueError("Response shouldn't be none!")
-        prof_info_json:dict = response.json()
+        prof_info_json: dict = response.json()
 
         # dummy data in case of demo account
         self.uuid = prof_info_json.get("id", "UNKNOWN")
@@ -259,39 +274,45 @@ class MinecraftProfile:
         self.last_updated = datetime.now().timestamp()
         self._check_current_skin()
         return self
-    
+
     def serialize(self):
         """
         Convert this into a dict
         """
-        return {k:v for k, v in {
-            "id": self.uuid,
-            "name": self.name,
-            "skins": self.skins,
-            "capes": self.capes,
-            "last_updated": self.last_updated,
-            **self._other_info
-        }.items() if v}
-    
+        return {
+            k: v
+            for k, v in {
+                "id": self.uuid,
+                "name": self.name,
+                "skins": self.skins,
+                "capes": self.capes,
+                "last_updated": self.last_updated,
+                **self._other_info,
+            }.items()
+            if v
+        }
+
     def current_skin_bytes(self):
         p = SKIN_CACHE_PATH / (str(self.current_skin["textureKey"]) + ".png")
         check_redownload_skin(
-            p, self.current_skin["url"],
-            name=str(self.current_skin["textureKey"])
+            p,
+            self.current_skin["url"],
+            name=str(self.current_skin["textureKey"]),
         )
         return p.read_bytes()
-    
+
     def current_skin_path(self):
         p = SKIN_CACHE_PATH / (str(self.current_skin["textureKey"]) + ".png")
         check_redownload_skin(
-            p, self.current_skin["url"],
-            name=str(self.current_skin["textureKey"])
+            p,
+            self.current_skin["url"],
+            name=str(self.current_skin["textureKey"]),
         )
         return p
-    
+
     def current_skin_model(self):
         return self.current_skin["variant"]
-    
+
     def current_skin_icon(self):
         uid = self.current_skin["textureKey"] + "_thumb"
         if uid in _cached_skins:
@@ -303,7 +324,7 @@ class MinecraftProfile:
         ico = resources.icon_from_qimg(img.copy(8, 8, 8, 8), True)
         _cached_skins[uid] = ico
         return _cached_skins[uid]
-    
+
     def get_all_cape_paths(self) -> list[dict[str, str]]:
         capes_out = []
         for cape in self.capes:
@@ -314,14 +335,14 @@ class MinecraftProfile:
             new_cape_obj = {**cape, "path": p}
             capes_out.append(new_cape_obj)
         return capes_out
-    
+
     def get_all_cape_thumbs(self) -> list[dict[str, str | Path | QPixmap]]:
         capes_out = []
         c = self.get_all_cape_paths()
         for cape in c:
             name = cape["alias"]
             if name + "_thumb" in _cached_capes:
-                cape["thumb"] = _cached_capes[name + "_thumb"] # type: ignore
+                cape["thumb"] = _cached_capes[name + "_thumb"]  # type: ignore
                 capes_out.append(cape)
                 continue
             img_full = QImage()
@@ -330,10 +351,10 @@ class MinecraftProfile:
             pix = QPixmap.fromImage(img)
             del img_full, img
             _cached_capes[name + "_thumb"] = pix
-            cape["thumb"] = _cached_capes[name + "_thumb"] # type: ignore
+            cape["thumb"] = _cached_capes[name + "_thumb"]  # type: ignore
             capes_out.append(cape)
         return capes_out
-    
+
     def current_cape_path(self):
         if self.current_cape:
             url: str = self.current_cape["url"]

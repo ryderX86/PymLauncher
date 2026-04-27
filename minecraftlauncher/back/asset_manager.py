@@ -4,23 +4,20 @@ minecraftlauncher.back.asset_manager
 Handles downloading the asset index and individual asset objects
 for a given Minecraft version.
 """
+
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Callable
-from time import sleep
 import hashlib
 import json
 import logging
-import os
 from xml.etree import ElementTree
 
 import requests
-from PySide6.QtCore import QThreadPool, QDeadlineTimer
+from PySide6.QtCore import QThreadPool
 
 from minecraftlauncher.constants import RESOURCES_URL, MINECRAFT_DIR
-from minecraftlauncher.back.download_helpers import (
-    download, RunnableDownloader
-)
+from minecraftlauncher.back.download_helpers import download, RunnableDownloader
 from minecraftlauncher import session
 
 log = logging.getLogger(__name__)
@@ -34,7 +31,8 @@ if (not ASSETS_DIR.exists()) or (not ASSETS_DIR.is_dir()):
 if (not ASSETS_INDEX_DIR.exists()) or (not ASSETS_INDEX_DIR.is_dir()):
     ASSETS_INDEX_DIR.mkdir(parents=True)
 
-def fetch_asset_index(version_json:dict) -> dict:
+
+def fetch_asset_index(version_json: dict) -> dict:
     """
     Download (or load cached) the asset index for the given version.
 
@@ -44,7 +42,7 @@ def fetch_asset_index(version_json:dict) -> dict:
     asset_index_info = version_json.get("assetIndex")
     if asset_index_info is None:
         raise ValueError("Version JSON has no 'assetIndex' field")
-    
+
     index_id = asset_index_info["id"]
     index_url = asset_index_info["url"]
     expected_sha1 = asset_index_info.get("sha1")
@@ -56,20 +54,20 @@ def fetch_asset_index(version_json:dict) -> dict:
             # using SHA1 to verify file
             file_sha = hashlib.sha1(index_path.read_bytes()).hexdigest()
             if file_sha == expected_sha1:
-                log.debug("Using cached asset index '%s'" % str(index_id))
+                log.debug("Using cached asset index '%s'", str(index_id))
                 return json.loads(index_path.read_text())
         else:
             # using file timestamp to verify
             file_time = index_path.stat().st_mtime
             compare_time = (datetime.now() - timedelta(days=1)).timestamp()
             if compare_time < file_time:
-                log.debug("Using cached asset index '%s' (time-based)"
-                          % str(index_id))
+                log.debug(
+                    "Using cached asset index '%s' (time-based)", str(index_id)
+                )
                 return json.loads(index_path.read_text())
-    
+
     # download the index and return it
-    log.info("Downloading asset index '%s' from '%s'"
-             % (str(index_id), index_url))
+    log.info("Downloading asset index '%s' from '%s'", str(index_id), index_url)
     resp = session.get(index_url, timeout=30)
     resp.raise_for_status()
 
@@ -77,6 +75,7 @@ def fetch_asset_index(version_json:dict) -> dict:
     index_path.write_text(resp.text)
 
     return resp.json()
+
 
 def patch_logging_config(path: Path):
     PATTERN = r"[%d{HH:mm:ss}] [%t/%level]: %msg{nolookups}%n"
@@ -89,46 +88,45 @@ def patch_logging_config(path: Path):
         c.set("pattern", PATTERN)
         patched = True
     if patched:
-        log.debug("Patched '%s' with non-XML config" % path.name)
-        new_path = path.parent / (''.join([path.stem, "_patched", path.suffix]))
+        log.debug("Patched '%s' with non-XML config", path.name)
+        new_path = path.parent / ("".join([path.stem, "_patched", path.suffix]))
         new_path.write_bytes(ElementTree.tostring(xml))
         return new_path
     else:
         log.warning("Couldn't patch logging config")
     return path
 
-def check_or_download_logging_config(version_json:dict) -> str:
+
+def check_or_download_logging_config(version_json: dict) -> str:
     """
     Check for the client logging info and if it doesn't exist, download it.
-    
+
     Returns the complete argument to add to the JVM args if there's a logging
     config for the client, or a blank str otherwise.
 
     Also tries to patch the config to not use XML layouts
     """
-    p = ("<PatternLayout pattern=\"[%d{HH:mm:ss}] [%t/%level]: "
-         "%msg{nolookups}%n\"/>")
-    logging_info:dict = version_json.get("logging", {}).get("client", {})
+    logging_info: dict = version_json.get("logging", {}).get("client", {})
     # older versions didn't have logging stuff:
     if not logging_info:
         return ""
-    
-    arg:str = logging_info.get("argument", "-Dlog4j.configurationFile=${path}")
-    file_info:dict = logging_info.get("file", {})
+
+    arg: str = logging_info.get("argument", "-Dlog4j.configurationFile=${path}")
+    file_info: dict = logging_info.get("file", {})
     if not file_info:
         raise ValueError("Expected key 'file' in version_json['logging']")
-    name:str = file_info["id"]
-    sha1:str = file_info.get("sha1", "")
-    size:int = file_info["size"]
-    url:str = file_info["url"]
+    name: str = file_info["id"]
+    sha1: str = file_info.get("sha1", "")
+    url: str = file_info["url"]
 
     dest_folder = ASSETS_DIR / "log_configs"
     if not (dest_folder.exists() and dest_folder.is_dir()):
         dest_folder.mkdir(parents=True, exist_ok=True)
 
     dest_path = dest_folder / name
-    dest_path_patched = dest_path.parent / ''.join(
-        [dest_path.stem, '_patched', dest_path.suffix])
+    dest_path_patched = dest_path.parent / "".join(
+        [dest_path.stem, "_patched", dest_path.suffix]
+    )
 
     if dest_path.exists() and dest_path.is_file():
         f_sha1 = hashlib.sha1(dest_path.read_bytes()).hexdigest()
@@ -136,9 +134,10 @@ def check_or_download_logging_config(version_json:dict) -> str:
             dest_path.unlink()
     if not dest_path.exists():
         try:
-            resp = download(url, hash=sha1)
+            resp = download(url, sha=sha1)
             dest_path.write_bytes(resp.content)
         except Exception as err:
+            log.error("Failed to download logging config:", exc_info=err)
             raise
 
     if not dest_path_patched.exists():
@@ -147,20 +146,24 @@ def check_or_download_logging_config(version_json:dict) -> str:
     else:
         return arg.replace("${path}", str(dest_path_patched))
 
-def filter_assets_downloads(asset_index:dict, *,
-                            progress_callback:Callable[[int, int], None]|None=None):
+
+def filter_assets_downloads(
+    asset_index: dict,
+    *,
+    progress_callback: Callable[[int, int], None] | None = None,
+):
     """
     Filters the given asset index by removing files that are already
     downloaded.
     """
-    objects:dict = asset_index.get("objects", {})
+    objects: dict = asset_index.get("objects", {})
     asset_index_out = {**asset_index}
     asset_index_out["objects"] = {}
     total = len(objects.keys())
-    map_virtual_assets:bool = asset_index.get("map_to_resources", False)
+    map_virtual_assets: bool = asset_index.get("map_to_resources", False)
     if map_virtual_assets:
         total *= 2
-    
+
     objects_dir = ASSETS_DIR / "objects"
     objects_dir.mkdir(parents=True, exist_ok=True)
 
@@ -173,7 +176,7 @@ def filter_assets_downloads(asset_index:dict, *,
         prefix = file_hash[:2]
         dest_dir = objects_dir / prefix
         dest_path = dest_dir / file_hash
-        
+
         dest_path_v = VIRTUAL_BASE / virtual_path
         if dest_path.exists() and dest_path.is_file():
             file_bytes = dest_path.read_bytes()
@@ -185,7 +188,7 @@ def filter_assets_downloads(asset_index:dict, *,
         processed += 1
         if progress_callback:
             progress_callback(processed, total)
-        
+
         if map_virtual_assets:
             if dest_path_v.exists() and dest_path_v.is_file():
                 file_bytes = dest_path_v.read_bytes()
@@ -199,24 +202,25 @@ def filter_assets_downloads(asset_index:dict, *,
             processed += 1
             if progress_callback:
                 progress_callback(processed, total)
-    
+
     return asset_index_out
 
-def download_assets(asset_index:dict, *,
-                    progress_callback:Callable|None=None):
-    objects:dict = asset_index.get("objects", {})
+
+def download_assets(
+    asset_index: dict, *, progress_callback: Callable | None = None
+):
+    objects: dict = asset_index.get("objects", {})
     total = len(objects.keys())
 
     objects_dir = ASSETS_DIR / "objects"
     if (not objects_dir.exists()) or (not objects_dir.is_dir()):
         objects_dir.mkdir(parents=True)
-    
+
     downloaded_count = 0
     processed = 0
 
     for virtual_path, info in objects.items():
-        file_hash:str = info["hash"]
-        file_size = info.get("size", 0)
+        file_hash: str = info["hash"]
         prefix = file_hash[:2]
 
         dest_dir = objects_dir / "prefix"
@@ -231,61 +235,69 @@ def download_assets(asset_index:dict, *,
                     progress_callback(processed, total)
                 continue
             else:
-                log.debug("Overriding asset '%s' (SHA1 didn't match)"
-                          % file_hash)
+                log.debug(
+                    "Overriding asset '%s' (SHA1 didn't match)", file_hash
+                )
 
         url = f"{RESOURCES_URL}/{prefix}/{file_hash}"
         try:
-            resp = download(url, hash=file_hash)
+            resp = download(url, sha=file_hash)
         except requests.RequestException as err:
-            log.warning("Failed to download asset %s:" % virtual_path,
-                        exc_info=err)
+            log.warning(
+                "Failed to download asset %s:", virtual_path, exc_info=err
+            )
             processed += 1
             if progress_callback:
                 progress_callback(processed, total)
             continue
 
         dest_path.write_bytes(resp.content)
-        log.debug("Downloaded '%s' successfully." % virtual_path)
+        log.debug("Downloaded '%s' successfully.", virtual_path)
         processed += 1
         downloaded_count += 1
         if progress_callback:
             progress_callback(processed, total)
         continue
 
-    log.debug("Asset download complete: %d new / %d total"
-              % (downloaded_count, total))
+    log.debug(
+        "Asset download complete: %d new / %d total", downloaded_count, total
+    )
     return downloaded_count
 
-def download_assets_threaded(asset_index:dict, *,
-                             progress_callback:Callable|None=None):
+
+def download_assets_threaded(
+    asset_index: dict, *, progress_callback: Callable | None = None
+):
     # check pool before anything
     pool = QThreadPool.globalInstance()
     if not pool:
-        log.warning("Couldn't get thread pool, downloading single-threaded "
-                    "instead.")
-        return download_assets(asset_index,
-                               progress_callback=progress_callback)
-    
-    objects:dict = asset_index.get("objects", {})
+        log.warning(
+            "Couldn't get thread pool, downloading single-threaded instead."
+        )
+        return download_assets(asset_index, progress_callback=progress_callback)
+
+    objects: dict = asset_index.get("objects", {})
     total = len(objects.keys())
 
     objects_dir = ASSETS_DIR / "objects"
     objects_dir.mkdir(parents=True, exist_ok=True)
 
     if progress_callback:
-        def add_number(i:int):
+
+        def add_number(i: int):
             nonlocal processed, download_list, total
             processed += i
             progress_callback(processed, total)
+
     else:
-        def add_number(i:int):
+
+        def add_number(i: int):
             pass
 
-    download_list:list[RunnableDownloader] = []
+    download_list: list[RunnableDownloader] = []
     processed = 0
 
-    map_virtual_assets:bool = asset_index.get("map_to_resources", False)
+    map_virtual_assets: bool = asset_index.get("map_to_resources", False)
     if map_virtual_assets:
         total *= 2
     for virtual_path, info in objects.items():
@@ -297,14 +309,14 @@ def download_assets_threaded(asset_index:dict, *,
             f"{RESOURCES_URL}/{prefix}/{file_hash}",
             dest_path,
             file_hash,
-            callback=add_number
+            callback=add_number,
         )
         if map_virtual_assets:
             v_downloader = RunnableDownloader(
                 f"{RESOURCES_URL}/{prefix}/{file_hash}",
                 VIRTUAL_BASE / virtual_path,
                 file_hash,
-                callback=add_number
+                callback=add_number,
             )
             download_list.append(v_downloader)
         download_list.append(downloader)
@@ -325,10 +337,12 @@ def download_assets_threaded(asset_index:dict, *,
     pool.waitForDone(-1)
     return len(download_list)
 
-def is_virtual_asset(asset_index:dict):
+
+def is_virtual_asset(asset_index: dict):
     """Returns `True` if the asset index uses the `virtual` layout."""
     return asset_index.get("virtual", False)
 
-def is_resource_mapped(asset_index:dict):
+
+def is_resource_mapped(asset_index: dict):
     """Returns `True` if the asset index uses the legacy `resources` dir."""
     return asset_index.get("map_to_resources", False)

@@ -4,18 +4,21 @@ minecraftlauncher.back.game_launcher
 Builds the launch command for Minecraft, performs argument-template
 substitution, and starts the game process.
 """
+
 from string import Template
 from pathlib import Path
-from time import sleep
 import logging
 import os
-import sys
 import subprocess
 import platform
-import uuid
 
 from minecraftlauncher.constants import (
-    LAUNCHER_NAME, LAUNCHER_VERSION, MINECRAFT_DIR, OS, DEFAULT_JVM_ARGS, DEV
+    LAUNCHER_NAME,
+    LAUNCHER_VERSION,
+    MINECRAFT_DIR,
+    OS,
+    DEFAULT_JVM_ARGS,
+    DEV,
 )
 from minecraftlauncher.back.library_manager import _evaluate_rules
 from .library_manager import build_classpath, filter_libraries
@@ -25,16 +28,18 @@ log = logging.getLogger(__name__)
 
 _args_cache: dict[str, str] = {}
 
-def _substitute(template:str, values:dict[str, str]):
+
+def _substitute(template: str, values: dict[str, str]):
     values = {k: v for k, v in values.items() if v is not None}
     t = Template(template)
     subbed = t.safe_substitute(values)
     # unfrozen only so auth tokens don't get leaked into logs when built:
     if DEV and "${" in subbed:
-        log.warning("Unsubstituted template leftover in string: '%s'" % subbed)
+        log.warning("Unsubstituted template leftover in string: '%s'", subbed)
     return subbed
 
-def _process_jvm_arg_entry(entry, values:dict[str, str]):
+
+def _process_jvm_arg_entry(entry, values: dict[str, str]):
     """
     Process an element from the JVM arguments list.
 
@@ -54,15 +59,17 @@ def _process_jvm_arg_entry(entry, values:dict[str, str]):
         elif isinstance(value, list):
             return [_substitute(v, values) for v in value if v]
         else:
-            log.warning("Unexpected argument value type: '%s'"
-                        % type(value).__name__)
+            log.warning(
+                "Unexpected argument value type: '%s'", type(value).__name__
+            )
     elif isinstance(entry, list):
         return [_substitute(v, values) for v in entry]
 
-    log.warning("Unexpected argument type: '%s'" % type(entry).__name__)
+    log.warning("Unexpected argument type: '%s'", type(entry).__name__)
     return []
 
-def _process_arg_entry(entry, values:dict[str, str], features:list[str]):
+
+def _process_arg_entry(entry, values: dict[str, str], features: list[str]):
     """
     Process an element from the game arguments list.
 
@@ -99,16 +106,22 @@ def _process_arg_entry(entry, values:dict[str, str], features:list[str]):
         elif isinstance(value, list):
             return " ".join([_substitute(v, values) for v in value if v])
         else:
-            log.warning("Skipping unexpected entry value type: '%s'"
-                        % type(value).__name__)
+            log.warning(
+                "Skipping unexpected entry value type: '%s'",
+                type(value).__name__,
+            )
     elif isinstance(entry, list):
         return " ".join([_substitute(v, values) for v in entry])
     else:
-        log.warning("Skipping unexpected entry type: '%s'"
-                    % type(entry).__name__)
+        log.warning(
+            "Skipping unexpected entry type: '%s'", type(entry).__name__
+        )
     return ""
 
-def _build_args(version_json:dict, values:dict[str, str], features:list[str]):
+
+def _build_args(
+    version_json: dict, values: dict[str, str], features: list[str]
+):
     """Builds JVM and game args. Returns a tuple in order of `(jvm, game)`"""
     args = version_json.get("arguments", {})
 
@@ -121,7 +134,7 @@ def _build_args(version_json:dict, values:dict[str, str], features:list[str]):
     # new since 26.1
     # for entry in args.get("default-user-jvm", []):
     #     jvm_args.extend(_process_jvm_arg_entry(entry, values))
-    
+
     game_args = []
     for entry in args.get("game", []):
         added_args = _process_arg_entry(entry, values, features)
@@ -130,32 +143,41 @@ def _build_args(version_json:dict, values:dict[str, str], features:list[str]):
 
     return jvm_args, game_args
 
-def _build_legacy_args(version_json:dict, values:dict[str, str],
-                       features:list[str]):
+
+def _build_legacy_args(
+    version_json: dict, values: dict[str, str], features: list[str]
+):
     """Builds JVM and game args. Returns a tuple in order of `(jvm, game)`"""
-    raw_game_args:str = version_json.get(
+    raw_game_args: str = version_json.get(
         "minecraftArguments",
         "--username ${auth_player_name} --session ${auth_session} "
         "--versionName ${version_name} "
         "--accessToken ${auth_access_token} --gameDir ${game_directory} "
         "--assetsDir ${assets_root} --userProperties {} "
-        "--userType msa"
+        "--userType msa",
     )
     game_args = _substitute(raw_game_args, values).split()
 
-    jar_path = MINECRAFT_DIR / "versions" / version_json["id"] / f"{version_json["id"]}.jar"
+    jar_path = (
+        MINECRAFT_DIR
+        / "versions"
+        / version_json["id"]
+        / f"{version_json["id"]}.jar"
+    )
 
     default_jvm_args = [
         f"-Djava.library.path={values["natives_directory"]}",
         f"-Dminecraft.launcher.brand={LAUNCHER_NAME}",
         f"-Dminecraft.launcher.version={LAUNCHER_VERSION}",
         f"-Dminecraft.client.jar={jar_path}",
-        "-cp", values["classpath"],
+        "-cp",
+        values["classpath"],
     ]
 
     return default_jvm_args, game_args
 
-def default_user_jvm_args_factory(version_json:dict):
+
+def default_user_jvm_args_factory(version_json: dict):
     if version_json["id"] in _args_cache:
         return _args_cache[version_json["id"]]
     args = version_json.get("arguments", {})
@@ -177,8 +199,10 @@ def default_user_jvm_args_factory(version_json:dict):
                         else:
                             jvm_args.append(text)
                 case _:
-                    raise TypeError("Expected list or str, got %s"
-                                    % type(arg["value"].__name__))
+                    raise TypeError(
+                        "Expected list or str, "
+                        f"got {type(arg["value"].__name__)}"
+                    )
         # mojang is very interesting at making decisions regarding their
         # manifest files
         # if "-XX:UseZGC" in jvm_args and "-XX:UseG1GC" in jvm_args:
@@ -188,46 +212,61 @@ def default_user_jvm_args_factory(version_json:dict):
         return " ".join(jvm_args)
     return DEFAULT_JVM_ARGS
 
-def build_launch_command(version_json:dict, player_name:str, player_uuid:str,
-                         player_auth_token:str, player_type:str, demo:bool,
-                         xuid:str|None=None, java_path:str|None=None,
-                         log4j_config:str|None=None, classpath:str|None=None,
-                         game_dir:str|None=None, prof_jvm_args:str|None=None,
-                         memory_min:str|None=None, memory_max:str|None=None,
-                         resolution_width:int|None=None,
-                         resolution_height:int|None=None,
-                         mods_folder:str|None=None,
-                         mods_folder_mode:str|None=None, **kwargs):
+
+def build_launch_command(
+    version_json: dict,
+    player_name: str,
+    player_uuid: str,
+    player_auth_token: str,
+    player_type: str,
+    demo: bool,
+    xuid: str | None = None,
+    java_path: str | None = None,
+    log4j_config: str | None = None,
+    classpath: str | None = None,
+    game_dir: str | None = None,
+    prof_jvm_args: str | None = None,
+    memory_min: str | None = None,
+    memory_max: str | None = None,
+    resolution_width: int | None = None,
+    resolution_height: int | None = None,
+    mods_folder: str | None = None,
+    mods_folder_mode: str | None = None,
+    **kwargs,
+):
     """
     Builds the full command to launch the game.
-    
+
     Returns a list suitable for `subprocess.Popen`.
     """
-    version_id:str = version_json.get("id", "")
+    version_id: str = version_json.get("id", "")
     if not version_id:
         raise ValueError("'version_json' missing expected value for 'id'")
-    
+
     if not java_path:
         java_info = version_json.get("javaVersion", {})
         needed_java_version = java_info.get("component", "")
         java_path = str(find_java_exc(needed_java_version))
-    
+
     jar_path = MINECRAFT_DIR / "versions" / version_id / f"{version_id}.jar"
-    
+
     asset_index_id = version_json.get("assetIndex", {}).get("id")
     if not asset_index_id:
         asset_index_id = version_json.get("assets")
     if not asset_index_id:
-        raise ValueError("'version_json' missing expected value for 'assets'"
-                         " or 'assetsIndex'")
-    
+        raise ValueError(
+            "'version_json' missing expected value for 'assets'"
+            " or 'assetsIndex'"
+        )
+
     if game_dir:
         if not os.path.isdir(game_dir):
             try:
                 Path(game_dir).resolve().mkdir(parents=True, exist_ok=True)
             except Exception as err:
-                raise ValueError("'game_dir' value '%s' is an invalid path"
-                                % game_dir) from err
+                raise ValueError(
+                    f"'game_dir' value '{game_dir}' is an invalid path"
+                ) from err
     else:
         game_dir = str(MINECRAFT_DIR)
 
@@ -243,7 +282,7 @@ def build_launch_command(version_json:dict, player_name:str, player_uuid:str,
         resolution_width = 1024
     if resolution_width and not resolution_height:
         resolution_height = 768
-    
+
     values = {
         "auth_player_name": player_name,
         "auth_uuid": player_uuid,
@@ -267,48 +306,44 @@ def build_launch_command(version_json:dict, player_name:str, player_uuid:str,
         "launcher_name": LAUNCHER_NAME,
         "launcher_version": LAUNCHER_VERSION,
         "jar_path": str(jar_path),
-        **kwargs
+        **kwargs,
     }
 
-    features:list[str] = []
+    features: list[str] = []
     if resolution_height or resolution_width:
         features.append("has_custom_resolution")
     if demo:
         features.append("is_demo_user")
-    
+
     if "arguments" in version_json.keys():
         jvm_args, game_args = _build_args(version_json, values, features)
     else:
-        jvm_args, game_args = _build_legacy_args(version_json, values,
-                                                 features)
-        
+        jvm_args, game_args = _build_legacy_args(version_json, values, features)
+
     if mods_folder:
         if " " in mods_folder:
             if mods_folder[0] != '"' or mods_folder[-1] != '"':
                 mods_folder = f'"{mods_folder.strip('"')}"'
         if not mods_folder_mode:
             mods_folder_mode = "modsFolder"
-        jvm_args.insert(-2, "-Dfabric.%s=%s" % (mods_folder_mode, mods_folder))
-    
-    cmd:list[str] = [java_path]
+        jvm_args.insert(-2, f"-Dfabric.{mods_folder_mode}={mods_folder}")
+
+    cmd: list[str] = [java_path]
 
     if OS == "windows":
-        cmd.extend(
-            ["-Dos.name=Windows 10", "-Dos.version=10.0"]
-        )
+        cmd.extend(["-Dos.name=Windows 10", "-Dos.version=10.0"])
 
     cmd.extend(jvm_args)
     if log4j_config:
         cmd.append(log4j_config)
-    
-    main_class = version_json.get("mainClass",
-                                  "net.minecraft.client.main.Main")
+
+    main_class = version_json.get("mainClass", "net.minecraft.client.main.Main")
     cmd.extend([f"-Xms{memory_min}", f"-Xmx{memory_max}"])
     if prof_jvm_args:
         cmd.extend(prof_jvm_args.split(" "))
     cmd.append(main_class)
     cmd.extend(game_args)
-    
+
     if resolution_width and resolution_height and "--width" not in cmd:
         cmd.extend(["--width", str(resolution_width)])
     if resolution_width and resolution_height and "--height" not in cmd:
@@ -316,10 +351,11 @@ def build_launch_command(version_json:dict, player_name:str, player_uuid:str,
 
     return cmd
 
-def launch_game(command:list[str], cwd:str|Path|None):
+
+def launch_game(command: list[str], cwd: str | Path | None):
     if not cwd:
         cwd = MINECRAFT_DIR
-    
+
     log.info("Launching Minecraft")
     kwargs = {}
     if platform.system() == "Windows":
@@ -327,7 +363,7 @@ def launch_game(command:list[str], cwd:str|Path|None):
         si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
         si.wShowWindow = 1
         kwargs["startupinfo"] = si
-    
+
     process = subprocess.Popen(
         command,
         cwd=cwd,
@@ -336,7 +372,7 @@ def launch_game(command:list[str], cwd:str|Path|None):
         text=True,
         universal_newlines=True,
         bufsize=1,
-        **kwargs
+        **kwargs,
     )
-    log.info("Minecraft started; PID: %d" % process.pid)
+    log.info("Minecraft started; PID: %d", process.pid)
     return process

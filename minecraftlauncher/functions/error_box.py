@@ -1,16 +1,23 @@
 import logging
+import sys
 
-from PySide6.QtWidgets import QMessageBox
+from PySide6.QtWidgets import QApplication, QMessageBox
 
 from minecraftlauncher import DEV
 
 log = logging.getLogger(__name__)
 
-def error_box(message:str, error_type:Exception|None=None, *,
-              fatal:bool=False, dev_only:bool=False):
+
+def error_box(
+    message: str,
+    error_type: type[Exception] | Exception | None = None,
+    *,
+    fatal: bool = False,
+    dev_only: bool = False
+):
     """
     Show an error box.
-    
+
     If `type` is included, Qt will allow the user to dismiss the box
     permenantly via a checkbox.
 
@@ -24,8 +31,7 @@ def error_box(message:str, error_type:Exception|None=None, *,
     if dev_only and not DEV:
         log.debug("Not showing error box ('dev_only' is True)")
         return
-    log.debug("Showing error dialog... (%s)"
-              % "FATAL" if fatal else "not fatal")
+    log.debug("Showing error dialog... (%s)", "FATAL" if fatal else "not fatal")
     error_win = QMessageBox()
     error_win.setText(message)
     if error_type:
@@ -33,9 +39,10 @@ def error_box(message:str, error_type:Exception|None=None, *,
     else:
         error_win.setWindowTitle("Error")
     error_win.setStandardButtons(QMessageBox.StandardButton.Ok)
+    QApplication.beep()
     error_win.exec()
     log.debug("Error dialog dismissed.")
     if fatal:
         log.info("We had a fatal error, shutting down. Goodbye")
-        exit(1)
+        sys.exit(1)
     return

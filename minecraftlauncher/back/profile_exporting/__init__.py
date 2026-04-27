@@ -2,19 +2,23 @@ from enum import StrEnum, IntEnum
 
 from .portable_profile import PortableProfile
 
+
 class ChunkUpdatePrioritization(IntEnum):
     THREADED = 0
     SEMI_BLOCKING = 1
     BLOCKING = 2
 
+
 class FPSLimitAFK(StrEnum):
     AFK = "afk"
     MINIMIZED = "minimized"
+
 
 class CloudRender(StrEnum):
     TRUE = "true"
     FAST = "fast"
     FALSE = "false"
+
 
 class GameOption(StrEnum):
     VERSION = "version"
@@ -92,12 +96,11 @@ class GameOption(StrEnum):
     ROTATE_MINECART = "rotateWithMinecart"
     """bool"""
     AUTO_SUGGEST = "autoSuggestions"
-    
 
     # ALIAS
     BRIGHTNESS = GAMMA
     """float 0.0-1.0 (alias for `GAMMA`)"""
-    
+
     # old values (check version before using)
     GAME_DIFFICULTY = "difficulty"
     """int 0-3"""

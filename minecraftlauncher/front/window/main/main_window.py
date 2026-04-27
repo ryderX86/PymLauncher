@@ -3,24 +3,37 @@ minecraftlauncher.front.window.main.main_window
 
 Main application window.
 """
+
 import logging
 
-from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QResizeEvent
+from PySide6.QtCore import Signal
 from PySide6.QtWidgets import (
-    QHBoxLayout, QMainWindow, QPushButton, QStackedWidget, QVBoxLayout,
-    QWidget, QLabel, QStatusBar, QFrame)
+    QHBoxLayout,
+    QMainWindow,
+    QPushButton,
+    QStackedWidget,
+    QVBoxLayout,
+    QWidget,
+    QLabel,
+    QStatusBar,
+    QFrame,
+)
 
 from minecraftlauncher import config
+from minecraftlauncher.args import launch_profile
 from minecraftlauncher.front import styles
-from minecraftlauncher.back import account_manager
+from minecraftlauncher.back import profile_manager
 from minecraftlauncher.constants import LAUNCHER_VERSION
+from minecraftlauncher.functions.error_box import error_box
 from .home_page import HomePage
 from .profiles_page import ProfilesPage
 from .settings_page import SettingsPage
 from .account_page import AccountPage
 from .account_select import AccountSelect
 from .utilities_page import UtilitiesPage
+
+log = logging.getLogger(__name__)
+
 
 class MainWindow(QMainWindow):
     """Primary application window"""
@@ -33,7 +46,7 @@ class MainWindow(QMainWindow):
         ("Profiles", "profiles"),
         ("Account", "account"),
         ("Utilities", "utilities"),
-        ("Settings", "settings")
+        ("Settings", "settings"),
     ]
 
     def __init__(self, parent=None):
@@ -44,13 +57,24 @@ class MainWindow(QMainWindow):
         height = config.window_size[1]
         self.resize(*config.window_size)
         geo = self.screen().geometry()
-        if geo.width() <= 1280: # fix for small/scaled displays
+        if geo.width() <= 1280:  # fix for small/scaled displays
             x = geo.width() // 2 - width // 2
             y = geo.height() // 2 - height // 2
             self.setGeometry(x, y, *config.window_size)
 
-        self._nav_buttons:dict[str, QPushButton] = {}
+        self._nav_buttons: dict[str, QPushButton] = {}
         self._build_ui()
+
+    def check_for_launch_arg(self):
+        if launch_profile:
+            log.info("We're launching from the jump-list!")
+            if launch_profile in profile_manager.profiles:
+                profile_manager.set_current_profile_uuid(launch_profile)
+                log.debug("Clicking play button")
+                # is this even a good idea? lol
+                self.home_page.play_button.click()
+            else:
+                error_box(f'Couldn\'t find profile by ID: "{launch_profile}"!')
 
     def _on_window_closed(self):
         geo = self.geometry()
@@ -59,7 +83,6 @@ class MainWindow(QMainWindow):
         else:
             config.window_size = [geo.width(), geo.height()]
             config.maximized = False
-        config.save()
 
     def closeEvent(self, a0):
         self._on_window_closed()
@@ -67,18 +90,19 @@ class MainWindow(QMainWindow):
 
     def hide(self):
         self._on_window_closed()
-        config.save()
         return super().hide()
-    
+
     def _process_game_open(self):
         match config.post_launch_option:
-            case (config.PostLaunchBehavior.HIDE |
-                  config.PostLaunchBehavior.CLOSE_WHEN_DONE):
+            case (
+                config.PostLaunchBehavior.HIDE
+                | config.PostLaunchBehavior.CLOSE_WHEN_DONE
+            ):
                 self.hide()
             case config.PostLaunchBehavior.CLOSE:
                 self.close()
 
-    def _process_game_closed(self, exit_code:str):
+    def _process_game_closed(self, exit_code: str):
         match config.post_launch_option:
             case config.PostLaunchBehavior.KEEP_OPEN:
                 return
@@ -92,6 +116,7 @@ class MainWindow(QMainWindow):
                     self.show()
 
     def _build_ui(self):
+        log.debug("Building MainWindow UI")
         central = QWidget()
         self.setCentralWidget(central)
 
@@ -105,7 +130,7 @@ class MainWindow(QMainWindow):
         top_bar.setStyleSheet(f"background-color: {styles.BG_DARK};")
         top_bar_layout = QHBoxLayout(top_bar)
         top_bar_layout.setContentsMargins(16, 0, 16, 0)
-        
+
         top_bar_layout.addStretch(2)
 
         self.account_dropdown = AccountSelect()
@@ -166,7 +191,7 @@ class MainWindow(QMainWindow):
             self.profiles_page,
             self.account_page,
             self.utilities_page,
-            self.settings_page
+            self.settings_page,
         ]
 
         self.utilities_page.modloader_installed.connect(
@@ -199,7 +224,7 @@ class MainWindow(QMainWindow):
 
         self._navigate("home")
 
-    def _navigate(self, key:str):
+    def _navigate(self, key: str):
         pages = [*self._nav_buttons.keys()]
         index = pages.index(key)
         self.pages.setCurrentIndex(index)
@@ -211,6 +236,6 @@ class MainWindow(QMainWindow):
             if b_style:
                 b_style.unpolish(button)
                 b_style.polish(button)
-    
-    def set_status(self, message:str):
+
+    def set_status(self, message: str):
         self.status.showMessage(message)

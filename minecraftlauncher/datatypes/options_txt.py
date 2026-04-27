@@ -1,30 +1,26 @@
+# pylint: disable-all
 from enum import IntEnum
 from typing import Callable, Any
-import json
 import logging
-import string
 
 log = logging.getLogger(__name__)
 
-def match_chars(func:Callable[[Any], bool], obj:str):
+
+def match_chars(func: Callable[[Any], bool], obj: str):
     """
     Filters either a string by `func` (must take 1 arg and return a `bool`).
     """
-    match list:
-        case str():
-            STRING_MODE = True
-        case list():
-            STRING_MODE = False
-    
     for char in obj:
         if not func(char):
             return False
     return True
 
+
 class OptionsTxt:
     """
     Hacky class for handling an options.txt file from a profile import/export.
     """
+
     class ValueType(IntEnum):
         UNKNOWN = 0
         BOOL = 1
@@ -49,28 +45,27 @@ class OptionsTxt:
     true = lambda s, v: v == "true"
     false = lambda s, v: v == "false"
     list_test = lambda s, v: v.startswith("[") and v.endswith("]")
-    def __init__(self, options:str):
+
+    def __init__(self, options: str):
         option_lines = options.split("\n")
         options_dict = {}
         for line in option_lines:
             keyval = line.split(":")
             if len(keyval) > 2:
-                log.warning("Multiple colons in options.txt line: \"%s\""
-                            % line)
+                log.warning('Multiple colons in options.txt line: "%s"' % line)
                 keyval = [keyval[0], ":".join(keyval[1:])]
-                log.debug("Parsing line as {\"%s\": \"%s\"}"
-                          % keyval[0], keyval[1])
+                log.debug('Parsing line as {"%s": "%s"}' % keyval[0], keyval[1])
             key = keyval[0]
             val = keyval[1]
 
             get_test = lambda t: lambda v, i=t: v in i
-            
+
             # determine type
             t = self.ValueType.UNKNOWN
 
             if self.enum_test(val):
                 t = self.ValueType.ENUM
-            elif match_chars(get_test(self.alpha_lower + "\""), val):
+            elif match_chars(get_test(self.alpha_lower + '"'), val):
                 t = self.ValueType.ENUM
             elif self.keyboard_test(val):
                 t = self.ValueType.KEYBIND
@@ -88,9 +83,9 @@ class OptionsTxt:
                     t = self.ValueType.FLOAT
             if self.bool_test(val):
                 t = self.ValueType.BOOL
-            
+
             if t == self.ValueType.UNKNOWN:
-                log.warning("Couldn't determine options.txt value type for "
-                            "'%s', proceeded as a string.")
-            
-            
+                log.warning(
+                    "Couldn't determine options.txt value type for "
+                    "'%s', proceeded as a string."
+                )

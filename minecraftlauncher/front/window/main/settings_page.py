@@ -3,28 +3,34 @@ minecraftlauncher.front.window.main.settings_page
 
 Stub settings page
 """
-from enum import StrEnum
+
 import logging
 
 from PySide6.QtCore import Qt, QUrl, Signal
-from PySide6.QtGui import QIcon, QDesktopServices
+from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
-    QLabel, QVBoxLayout, QWidget, QHBoxLayout, QComboBox, QPushButton,
-    QCheckBox
+    QLabel,
+    QVBoxLayout,
+    QWidget,
+    QHBoxLayout,
+    QComboBox,
+    QPushButton,
+    QCheckBox,
 )
 
 from minecraftlauncher import config, constants
-from minecraftlauncher.front import resources
 from minecraftlauncher.front.qt.widgets import TooltipHint, Section
 
 log = logging.getLogger(__name__)
+
 
 class SettingsPage(QWidget):
     """Settings page (STUB)"""
 
     settings_changed = Signal()
     status_update = Signal(str)
-    def __init__(self, parent = None):
+
+    def __init__(self, parent=None):
         super().__init__(parent)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(40, 40, 40, 40)
@@ -43,7 +49,7 @@ class SettingsPage(QWidget):
         post_launch_lo.setContentsMargins(0, 0, 4, 0)
         tooltip = TooltipHint(
             "How you want the launcher to behave after the game opens.\n\n"
-            "\"Close launcher completely\" may increase system resources "
+            '"Close launcher completely" may increase system resources '
             "available to Minecraft on low-end systems, however the launcher "
             "will be completely unable to detect crashes and automatically "
             "show you logs."
@@ -58,19 +64,24 @@ class SettingsPage(QWidget):
 
         behavior.addWidget(post_launch_w)
 
-        open_browser_for_login = QCheckBox("Open browser automatically for " \
-                                           "sign-in")
+        open_browser_for_login = QCheckBox(
+            "Open browser automatically for sign-in"
+        )
         open_browser_for_login.setChecked(config.open_browser_for_login)
         open_browser_for_login.checkStateChanged.connect(
-            lambda c: config.set(
-                "open_browser_for_login", c == Qt.CheckState.Checked))
+            lambda c: config.set_(
+                "open_browser_for_login", c == Qt.CheckState.Checked
+            )
+        )
         behavior.addWidget(open_browser_for_login)
 
         copy_code_for_login = QCheckBox("Copy sign-in code to clipboard")
         copy_code_for_login.setChecked(config.copy_code_for_login)
         copy_code_for_login.checkStateChanged.connect(
-            lambda c: config.set(
-                "copy_code_for_login", c == Qt.CheckState.Checked))
+            lambda c: config.set_(
+                "copy_code_for_login", c == Qt.CheckState.Checked
+            )
+        )
         behavior.addWidget(copy_code_for_login)
 
         # Downloads
@@ -84,10 +95,10 @@ class SettingsPage(QWidget):
         rd_tooltip = TooltipHint(
             "How you want the launcher to behave with a lack of hash\n\n"
             "If you don't know what a file hash is, leave this at the default "
-            "option (\"Always redownload\"), unless you have a very bad "
+            'option ("Always redownload"), unless you have a very bad '
             "or unstable internet connection.\n\n"
-            "\"Redownload once\" will redownload the libraries/client JAR, "
-            "then set it back to \"Never redownload\" if the game closes with "
+            '"Redownload once" will redownload the libraries/client JAR, '
+            'then set it back to "Never redownload" if the game closes with '
             "a return code of 0."
         )
         rd_label = QLabel("When a file doesn't have a hash:")
@@ -109,8 +120,9 @@ class SettingsPage(QWidget):
         tooltips_enabled = QCheckBox("Show Tooltip Icons")
         tooltips_enabled.setChecked(config.tooltip_icons_enabled)
         tooltips_enabled.checkStateChanged.connect(
-            lambda c: config.set("tooltip_icons_enabled",
-                                 c == Qt.CheckState.Checked)
+            lambda c: config.set_(
+                "tooltip_icons_enabled", c == Qt.CheckState.Checked
+            )
         )
         tooltips_enabled.checkStateChanged.connect(
             lambda c: TooltipHint.refresh_visibility()
@@ -127,12 +139,14 @@ class SettingsPage(QWidget):
             "(Might slow your PC!)"
         )
         show_logs_check = QCheckBox("Show game logs on home page")
+
         # show_logs_check.setChecked(config.show_logs_on_home)
         def show_logs_changed(check_state: Qt.CheckState):
             nonlocal self
             checked = check_state == Qt.CheckState.Checked
-            config.set("show_logs_on_home", checked)
+            config.set_("show_logs_on_home", checked)
             self.settings_changed.emit()
+
         show_logs_check.checkStateChanged.connect(show_logs_changed)
         show_logs_lo.addWidget(show_logs_check)
         show_logs_lo.addWidget(show_logs_tt)
@@ -166,12 +180,14 @@ class SettingsPage(QWidget):
     def _open_settings_file(self):
         log.debug("Opened launcher settings file with default app")
         QDesktopServices.openUrl(
-            QUrl.fromLocalFile(constants.LAUNCHER_CONFIG_FILE))
+            QUrl.fromLocalFile(constants.LAUNCHER_CONFIG_FILE)
+        )
 
     def _open_data_folder(self):
         log.debug("Opened data folder with file explorer")
         QDesktopServices.openUrl(
-            QUrl.fromLocalFile(constants.LAUNCHER_DATA_DIR))
+            QUrl.fromLocalFile(constants.LAUNCHER_DATA_DIR)
+        )
 
     def build(self):
         self.post_launch_options.addItem(
@@ -182,29 +198,26 @@ class SettingsPage(QWidget):
         )
         self.post_launch_options.addItem(
             "Close launcher if game doesn't crash",
-            config.PostLaunchBehavior.CLOSE_WHEN_DONE
+            config.PostLaunchBehavior.CLOSE_WHEN_DONE,
         )
         self.post_launch_options.addItem(
-            "Close launcher completely",
-            config.PostLaunchBehavior.CLOSE
+            "Close launcher completely", config.PostLaunchBehavior.CLOSE
         )
-        self.post_launch_options.setCurrentIndex(
-            config.post_launch_option
-        )
+        self.post_launch_options.setCurrentIndex(config.post_launch_option)
         self.post_launch_options.currentIndexChanged.connect(
             self._on_post_launch_options_change
         )
         self.redownload_option.addItem(
             "Always redownload (default)",
-            config.JarRedownloadBehavior.REDOWNLOAD
+            config.JarRedownloadBehavior.REDOWNLOAD,
         )
         self.redownload_option.addItem(
             "Redownload once (not recommended)",
-            config.JarRedownloadBehavior.REDOWNLOAD_ONCE
+            config.JarRedownloadBehavior.REDOWNLOAD_ONCE,
         )
         self.redownload_option.addItem(
             "Never redownload (not recommended)",
-            config.JarRedownloadBehavior.NEVER
+            config.JarRedownloadBehavior.NEVER,
         )
         match config.redownload_option:
             case config.JarRedownloadBehavior.NEVER:
@@ -214,11 +227,12 @@ class SettingsPage(QWidget):
             case config.JarRedownloadBehavior.REDOWNLOAD_ONCE:
                 self.redownload_option.setCurrentIndex(1)
         self.redownload_option.currentIndexChanged.connect(
-            self._on_redownload_option_change)
+            self._on_redownload_option_change
+        )
 
     def _on_post_launch_options_change(self, i: int):
         config.post_launch_option = config.PostLaunchBehavior(i)
-    
+
     def _on_redownload_option_change(self, i: int):
         data: int = self.redownload_option.itemData(i)
         config.redownload_option = config.JarRedownloadBehavior(data)

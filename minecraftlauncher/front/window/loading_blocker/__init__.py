@@ -2,18 +2,17 @@ import logging
 import time
 import json
 
-from PySide6.QtCore import Qt, QThread, QUrl, Signal, QCoreApplication
-from PySide6.QtGui import QDesktopServices, QClipboard, QPainter
+from PySide6.QtCore import Qt, QCoreApplication
 from PySide6.QtWidgets import (
-    QDialog, QLabel, QPushButton, QVBoxLayout, QWidget, QMainWindow
+    QDialog,
+    QLabel,
+    QVBoxLayout,
 )
-from PySide6.QtSvgWidgets import QSvgWidget
-
-from minecraftlauncher.front.resources import animation
 
 _FLAGS = Qt.WindowType.SplashScreen
 
 log = logging.getLogger(__name__)
+
 
 class LoadingBlockerWindow(QDialog):
     def __init__(self, parent=None, flags=_FLAGS):
@@ -23,11 +22,11 @@ class LoadingBlockerWindow(QDialog):
         self.resize(500, 360)
         self._build_layout()
         if QCoreApplication.instance():
-            QCoreApplication.instance().processEvents() # type: ignore
-    
+            QCoreApplication.instance().processEvents()  # type: ignore
+
     def _build_layout(self):
         _layout = QVBoxLayout(self)
-        
+
         # self.animator = QSvgWidget()
         # self.animator.load(animation("load"))
         # self.animator.renderer().setAnimationEnabled(True) # type: ignore
@@ -40,17 +39,17 @@ class LoadingBlockerWindow(QDialog):
 
         _layout.addWidget(self.label)
         return
-    
-    def set_text(self, text:str="Loading..."):
+
+    def set_text(self, text: str = "Loading..."):
         if not text.endswith("..."):
             text = text + "..."
         self.label.setText(text)
         if QCoreApplication.instance():
-            QCoreApplication.instance().processEvents() # type: ignore
+            QCoreApplication.instance().processEvents()  # type: ignore
 
     def show(self):
         if QCoreApplication.instance():
-            QCoreApplication.instance().processEvents() # type: ignore
+            QCoreApplication.instance().processEvents()  # type: ignore
         return super().show()
 
     def hide(self):

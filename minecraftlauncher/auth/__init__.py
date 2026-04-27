@@ -5,7 +5,8 @@ from .minecraft_token import MinecraftToken
 from .xbox_token import XboxToken
 from .xsts_token import XstsToken
 
-def auth_flow(msa:MicrosoftAccount):
+
+def auth_flow(msa: MicrosoftAccount):
     xbox_account = XboxToken.auth(msa)
     if not xbox_account:
         return xbox_account
@@ -13,6 +14,7 @@ def auth_flow(msa:MicrosoftAccount):
     if not xbox_profile:
         return xbox_profile
     gamertag = xbox_profile.gamertag
+    # NOTE: XUID can also be gathered from MinecraftToken.xuid
     xuid = xbox_profile.xuid
     uhs = xbox_profile.user_hash
     acc = LauncherAccount(msa, gamertag, xuid, uhs, xbox_token=xbox_account)

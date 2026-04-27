@@ -1,37 +1,21 @@
-from dataclasses import dataclass
-from datetime import datetime
-import json
-import time
 import logging
-
-from PySide6.QtGui import QImage
-import requests
-import requests.exceptions
 
 from minecraftlauncher.auth.microsoft_account import MicrosoftAccount
 from minecraftlauncher.auth.xbox_token import XboxToken
 from minecraftlauncher.auth.xsts_token import XstsToken
 from minecraftlauncher.auth.minecraft_token import MinecraftToken
 from minecraftlauncher.auth.minecraft_profile import MinecraftProfile
-from minecraftlauncher import constants
 
 log = logging.getLogger(__name__)
 
+
 class LauncherAccount:
     msa: MicrosoftAccount
-    xbox: XboxToken|None
-    token: MinecraftToken|None
-    profile: MinecraftProfile|None
+    xbox: XboxToken | None
+    token: MinecraftToken | None
+    profile: MinecraftProfile | None
 
-    demo_mode: bool # default: True
-    """
-    Whether or not the game should be in demo mode.
-    (Default: `True`)
-
-    Once a game profile has been established, set
-    this to `False`.
-    """
-    has_profile: bool # default: False
+    has_profile: bool  # default: False
     """
     Whether or not the account has a profile associated
     with it or not. (Default: `False`)
@@ -47,61 +31,56 @@ class LauncherAccount:
     """
     Xbox Live gamertag, for identifying accounts
     """
-    def __init__(self, msa_token:MicrosoftAccount, gamertag:str, xuid:str,
-                 uhs:str, *, xbox_token:XboxToken|None=None,
-                 mc_token:MinecraftToken|None=None,
-                 profile:MinecraftProfile|None=None,
-                 use_demo_mode:bool=True):
+
+    def __init__(
+        self,
+        msa_token: MicrosoftAccount,
+        gamertag: str,
+        xuid: str,
+        uhs: str,
+        *,
+        xbox_token: XboxToken | None = None,
+        mc_token: MinecraftToken | None = None,
+        profile: MinecraftProfile | None = None
+    ):
         self.msa = msa_token
         self.gamertag = gamertag
         self.token = mc_token
         self.profile = profile
         self.xuid = xuid
         self.uhs = uhs
-        if self.token and self.token.is_active:
-            self.demo_mode = self.token.owns_game
-        else:
-            self.demo_mode = use_demo_mode
 
         # defaults
         self.xbox = xbox_token
         self.has_profile = bool(self.profile)
 
-        if self.demo_mode and self.token:
-            if not self.token.is_active:
-                return
-                if self.msa.expires_in < 5:
-                    success = self.msa.refresh()
-                    if not success:
-                        return
-                xbox = XboxToken.auth(self.msa)
-                if not xbox:
-                    return
-                self.xbox = xbox
-                xsts = XstsToken.auth(self.xbox)
-                if not xsts:
-                    return
-                new_token = MinecraftToken.auth(xsts)
-                if not new_token:
-                    return
-                self.token = new_token
-            self.demo_mode = self.token.owns_game
+    @property
+    def demo_mode(self):
+        """
+        Whether or not the game should be in demo mode.
+        (Default: `True`)
+
+        Once a game profile has been established, this
+        should become `False` automatically.
+        """
+        if self.token:
+            return not self.token.owns_game
+        return True
 
     def refresh(self):
         if self.token and self.token.is_active and self.msa.is_active:
-            log.debug("Skipping refresh since we don't need it")
             return True
-        log.info("Refreshing tokens for '%s'" % self.gamertag)
-        if not self.msa_valid:
+        if not self.msa_valid and not self.token_valid:
+            log.info("Refreshing tokens for '%s'", self.gamertag)
             success = self.msa.refresh()
             if not success:
                 return success
-        if not self.xbox:
-            xbox = XboxToken.auth(self.msa)
-            if not xbox:
-                return xbox
-            self.xbox = xbox
         if not self.token_valid:
+            if not self.xbox:
+                xbox = XboxToken.auth(self.msa)
+                if not xbox:
+                    return xbox
+                self.xbox = xbox
             xsts = XstsToken.auth(self.xbox)
             if not xsts:
                 return xsts
@@ -116,24 +95,24 @@ class LauncherAccount:
             return True
         else:
             return True
-        
+
     minecraft_auth = refresh
 
     def skin_path(self):
         if self.profile:
             return self.profile.current_skin_path()
         return MinecraftProfile.steve_skin_path()
-    
+
     def skin_bytes(self):
         if self.profile:
             return self.profile.current_skin_bytes()
         return MinecraftProfile.steve_skin_bytes()
-    
+
     def skin_icon(self):
         if self.profile:
             return self.profile.current_skin_icon()
         return MinecraftProfile.steve_skin_icon()
-    
+
     def cape_path(self):
         if self.profile:
             return self.profile.current_cape_path()
@@ -144,21 +123,21 @@ class LauncherAccount:
         """Returns `True` if the token exists and is valid, else `False`"""
         if not self.token:
             return False
-        return self.token.expires_in > 10
-    
+        return self.token.is_active
+
     @property
     def msa_valid(self):
         return self.msa.is_active
-    
+
     @property
     def player_type(self):
         return "msa"
-    
+
     @property
     def username(self):
         """
         Retrieves the username safely, always returns str.
-        
+
         If the profile isn't loaded or there's no username, it will return
         `""`.
         """
@@ -166,7 +145,7 @@ class LauncherAccount:
             return self.profile.name
         else:
             return ""
-        
+
     @property
     def uuid(self):
         """
@@ -178,18 +157,24 @@ class LauncherAccount:
         if self.profile and self.profile.uuid:
             return self.profile.uuid
         return "<uuid>"
-    
+
     def serialize(self):
         """Returns a JSON-serializable dict version of the current instance."""
-        return {k:v for k, v in {
-            "msa_token": self.msa.serialize(),
-            "mc_token": self.token.serialize() if self.token else None,
-            "game_profile": self.profile.serialize() if self.profile else None,
-            "gamertag": self.gamertag,
-            "xuid": self.xuid,
-            "uhs": self.uhs
-        }.items() if v}
-    
+        return {
+            k: v
+            for k, v in {
+                "msa_token": self.msa.serialize(),
+                "mc_token": self.token.serialize() if self.token else None,
+                "game_profile": (
+                    self.profile.serialize() if self.profile else None
+                ),
+                "gamertag": self.gamertag,
+                "xuid": self.xuid,
+                "uhs": self.uhs,
+            }.items()
+            if v
+        }
+
     @classmethod
     def from_json(cls, json_: dict):
         """
@@ -207,28 +192,33 @@ class LauncherAccount:
             mc_token = MinecraftToken(raw_mc_token)
         else:
             mc_token = None
-        
-        if mc_token and mc_token.owns_game:
-            demo_mode = False
-        else:
-            demo_mode = True
 
         if raw_profile:
             profile = MinecraftProfile(raw_profile, mc_token)
         else:
             profile = None
-        
+
         return cls(
-            msa_token, xbl_name, xuid, uhs, mc_token=mc_token,
-            use_demo_mode=demo_mode, profile=profile)
-    
+            msa_token,
+            xbl_name,
+            xuid,
+            uhs,
+            mc_token=mc_token,
+            profile=profile,
+        )
+
     @property
     def user_hash(self):
         return self.uhs
-    
+
     def get_profile_info(self):
         if (not self.token) or (not self.token.is_active):
-            raise Exception("Minecraft token is empty, authenticate first!")
+            raise RuntimeError("Minecraft token is empty, authenticate first!")
         prof_info = MinecraftProfile.from_token(self.token)
         self.profile = prof_info
         return self.profile
+
+    def __eq__(self, other):
+        if isinstance(other, str):
+            return other == self.xuid
+        return super().__eq__(other)

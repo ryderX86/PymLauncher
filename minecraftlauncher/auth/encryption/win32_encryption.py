@@ -1,13 +1,14 @@
 """
 crypt32.dll based encryption for accounts.bin
 """
+
 __all__ = ["encrypt", "decrypt", "data_load_hook", "data_save_hook"]
-from typing import ByteString
+from collections.abc import Buffer
 import logging
 import json
 
 from win32 import win32crypt
-import pywintypes # type: ignore
+import pywintypes  # type: ignore
 
 from minecraftlauncher.constants import LAUNCHER_NAME
 from .winerr_codes import WinErrorCode
@@ -18,9 +19,10 @@ protect_data = win32crypt.CryptProtectData
 unprotect_data = win32crypt.CryptUnprotectData
 
 ENTROPY = b"WTF IS A KILOMETER!!!!!!!!!!"
-DESCRIPTION = "Accounts data for %s" % LAUNCHER_NAME
+DESCRIPTION = f"Accounts data for {LAUNCHER_NAME}"
 
-def encrypt(data:str|bytes) -> ByteString:
+
+def encrypt(data: str | bytes) -> Buffer:
     if isinstance(data, str):
         data = data.encode("utf-8")
 
@@ -31,40 +33,47 @@ def encrypt(data:str|bytes) -> ByteString:
     else:
         raise RuntimeError("Failed to encrypt")
 
-def decrypt(data:bytes) -> str:
+
+def decrypt(data: bytes) -> str:
     try:
         desc, data_out = unprotect_data(data, ENTROPY)
-    except pywintypes.error as err:
+    except pywintypes.error as err:  # pylint: disable=no-member
         err_code = err.winerror
         if err_code in WinErrorCode:
-            error_name = "%s (%s)" % (hex(err_code),
-                                      WinErrorCode(err_code).name)
+            error_name = "%s (%s)" % (
+                hex(err_code),
+                WinErrorCode(err_code).name,
+            )
         else:
             error_name = hex(err_code)
         desc = err.strerror
         func = err.funcname
         new = RuntimeError("Failed to decrypt user data")
-        new.add_note("Error code: %s" % error_name)
+        new.add_note(f"Error code: {error_name}")
         new.add_note(desc)
-        new.add_note("Function called: %s" % func)
+        new.add_note(f"Function called: {func}")
         raise new from err
 
     if desc != DESCRIPTION:
         log.warning(
             "Encrypted data description doesn't match. "
             "Something very likely went wrong.\n"
-            "Default description: '%s'\nEncryption description: '%s'"
-            % (DESCRIPTION, desc))
+            "Default description: '%s'\nEncryption description: '%s'",
+            DESCRIPTION,
+            desc,
+        )
 
     if data_out:
         return data_out.decode("utf-8")
     else:
         raise RuntimeError("Couldn't decrypt data!")
-    
-def data_save_hook(j:dict|str) -> ByteString:
+
+
+def data_save_hook(j: dict | str) -> Buffer:
     if isinstance(j, dict):
         j = json.dumps(j)
-    
+
     return encrypt(j)
+
 
 data_load_hook = decrypt

@@ -1,17 +1,18 @@
 import weakref
 
 from PySide6.QtCore import Qt, QSize, Signal
-from PySide6.QtGui import QAction, QIcon, QFont
-from PySide6.QtWidgets import QWidget, QLabel
+from PySide6.QtWidgets import QLabel
 
 from minecraftlauncher.front import resources
 from minecraftlauncher import config
 
 _instances = []
 
+
 class TooltipHint(QLabel):
     hide_all = Signal(bool)
-    def __init__(self, tooltip:str|None=None, parent=None):
+
+    def __init__(self, tooltip: str | None = None, parent=None):
         super().__init__(parent)
         self.setPixmap(resources.symbol("info").pixmap(12, 12))
         self.setProperty("tooltipHint", True)
@@ -31,13 +32,13 @@ class TooltipHint(QLabel):
         _instances.remove(self.ref)
         return super().deleteLater()
 
-    def _hide_all_sig(self, hide:bool):
+    def _hide_all_sig(self, hide: bool):
         if hide:
             self.setHidden(True)
         else:
             self.setHidden(False)
 
-    def setText(self, text:str):
+    def setText(self, text: str):
         if not text:
             self.setToolTip("")
         lines = text.splitlines()
@@ -45,11 +46,11 @@ class TooltipHint(QLabel):
             lines[0] = f"<nobr>{lines[0]}</nobr>"
             text = f"<font>{"<br>".join(lines)}</font>"
         self.setToolTip(text)
-    
+
     def text(self):
         return self.toolTip()
-    
-    def setIconSize(self, w:int|QSize, h:int|None=None):
+
+    def setIconSize(self, w: int | QSize, h: int | None = None):
         if isinstance(w, QSize):
             self.setPixmap(resources.symbol("info").pixmap(w))
         elif h:
@@ -57,7 +58,7 @@ class TooltipHint(QLabel):
         if w and h:
             return
         raise ValueError("Missing height argument!")
-    
+
     @staticmethod
     def refresh_visibility():
         _remove = []

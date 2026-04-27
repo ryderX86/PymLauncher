@@ -1,5 +1,3 @@
-from string import hexdigits
-from functools import singledispatch
 import logging
 
 log = logging.getLogger(__name__)
@@ -123,11 +121,14 @@ class RGB:
         h = (h/6) % 1
         return h * 360, s * 100, maxc * 100
 """
-def hex_to_rgb(h:str):
+
+
+def hex_to_rgb(h: str):
     r = int(h[0:2], 16) / 255
     g = int(h[2:4], 16) / 255
     b = int(h[4:], 16) / 255
     return r, g, b
+
 
 def rgb_to_hex(r, g, b):
     r = int(r * 255)

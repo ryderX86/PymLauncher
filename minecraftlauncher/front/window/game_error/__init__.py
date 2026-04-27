@@ -3,16 +3,25 @@ minecraftlauncher.front.window.game_error
 
 Module containing a class with a window to show game errors/logs.
 """
+
 from pathlib import Path
 import logging
 import os
 
 from PySide6.QtCore import Qt, QUrl
-from PySide6.QtGui import QDesktopServices, QClipboard, QFont
+from PySide6.QtGui import QDesktopServices, QFont
 from PySide6.QtWidgets import (
-    QDialog, QMessageBox, QPushButton, QLabel, QPlainTextEdit, QVBoxLayout,
-    QHBoxLayout, QScrollBar, QSizePolicy, QFrame, QMainWindow, QApplication)
+    QDialog,
+    QPushButton,
+    QLabel,
+    QPlainTextEdit,
+    QVBoxLayout,
+    QHBoxLayout,
+    QFrame,
+    QApplication,
+)
 
+from minecraftlauncher.functions import copy_to_clipboard, clipboard_present
 from minecraftlauncher import constants
 
 log = logging.getLogger(__name__)
@@ -24,12 +33,18 @@ match constants.OS:
         mono_font = QFont("monospace")
 mono_font.setStyleHint(QFont.StyleHint.TypeWriter)
 
+
 class ErrorDisplay(QDialog):
-    def __init__(self, parent=None, exit_code:str|None=None,
-                 logs:str|None=None, log_path:str|Path|None=None):
+    def __init__(
+        self,
+        parent=None,
+        exit_code: str | None = None,
+        logs: str | None = None,
+        log_path: str | Path | None = None,
+    ):
         """
         Game crash display.
-        
+
         No args required, but are preferred.
 
         `logs` should be a str of the crash report, and `log_path` should be
@@ -56,8 +71,7 @@ class ErrorDisplay(QDialog):
         # TODO: find out why this won't bring it to the forefront
         self.setWindowState(
             (self.windowState() & ~Qt.WindowState.WindowMinimized)
-            |
-            Qt.WindowState.WindowActive
+            | Qt.WindowState.WindowActive
         )
         self.show()
         self.raise_()
@@ -73,7 +87,7 @@ class ErrorDisplay(QDialog):
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._layout.addWidget(title)
 
-        exit_code = QLabel("Exit code: %s" % self._exit_code)
+        exit_code = QLabel(f"Exit code: {self._exit_code}")
         exit_code.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._layout.addWidget(exit_code)
 
@@ -81,47 +95,43 @@ class ErrorDisplay(QDialog):
         self._log_display.setPlainText(self._log)
         self._log_display.setReadOnly(True)
         self._log_display.setLineWrapMode(QPlainTextEdit.LineWrapMode.NoWrap)
-        self._log_display.setStyleSheet(self._log_display.styleSheet()
-                                        + " font-family: Courier, monospace; "
-                                        "font-weight: 600; "
-                                        "font-size: 12;")
+        self._log_display.setStyleSheet(
+            self._log_display.styleSheet()
+            + " font-family: Courier, monospace; "
+            "font-weight: 600; "
+            "font-size: 12;"
+        )
         self._log_display.setFont(mono_font)
         self._layout.addWidget(self._log_display)
-        
+
         buttons_parent = QFrame()
         buttons_layout = QHBoxLayout(buttons_parent)
 
         clipboard_button = QPushButton()
         clipboard_button.setText("Copy to Clipboard")
         clipboard_button.clicked.connect(self._copy_logs_to_clipboard)
-        qapp = QApplication.instance()
-        if not qapp or not isinstance(qapp, QApplication):
-            log.warning("Couldn't get %sQApplication instance!"
-                        % "correct " if qapp else "")
-            self.clip = None
-        else:
-            self.clip = qapp.clipboard()
         if not self._log:
             clipboard_button.setDisabled(True)
             clipboard_button.setText("No logs to copy...")
-            clipboard_button.setStyleSheet(clipboard_button.styleSheet()
-                                           + " font: italic;")
-        elif not self.clip:
+            clipboard_button.setStyleSheet(
+                clipboard_button.styleSheet() + " font: italic;"
+            )
+        elif not clipboard_present:
             log.warning("No clipboard found")
             clipboard_button.setDisabled(True)
         buttons_layout.addWidget(clipboard_button)
-        
+
         open_log_button = QPushButton()
         open_log_button.setText("Open Log File")
         open_log_button.clicked.connect(self._open_log_file)
-        if ((not self._log_file) or
-            (not os.path.isfile(self._log_file))):
+        if (not self._log_file) or (not os.path.isfile(self._log_file)):
             open_log_button.setDisabled(True)
             open_log_button.setText("No file...")
-            open_log_button.setStyleSheet(open_log_button.styleSheet()
-                                          + " font: italic;")
+            open_log_button.setStyleSheet(
+                open_log_button.styleSheet() + " font: italic;"
+            )
         buttons_layout.addWidget(open_log_button)
-        
+
         self._layout.addWidget(buttons_parent)
 
         close_button = QPushButton()
@@ -146,22 +156,20 @@ class ErrorDisplay(QDialog):
                 crash_end_index = logs.index(line)
         if crash_start_index < 0 or crash_end_index < 0:
             return
-        crash_log_fp = logs[crash_end_index][len(CRASH_END):].strip()
+        crash_log_fp = logs[crash_end_index][len(CRASH_END) :].strip()
 
-        if (os.path.isfile(crash_log_fp) and ((not self._log_file) or not
-                                              os.path.isdir(self._log_file))):
+        if os.path.isfile(crash_log_fp) and (
+            (not self._log_file) or not os.path.isdir(self._log_file)
+        ):
             self._log_file = crash_log_fp
 
-        self._log = "\n".join(logs[crash_start_index:crash_end_index+1])
+        self._log = "\n".join(logs[crash_start_index : crash_end_index + 1])
 
     def _copy_logs_to_clipboard(self):
-        if not self.clip:
-            log.warning("No clipboard! Function shouldn't have been called")
-            return
-        self.clip.setText(self._log, self.clip.Mode.Clipboard)
+        copy_to_clipboard(self._log)
         log.debug("Copied game crash log to clipboard.")
         return
-    
+
     def _open_log_file(self):
         if (not self._log_file) or (not os.path.isfile(self._log_file)):
             log.warning("No log file! Function shouldn't have been called")

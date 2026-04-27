@@ -3,44 +3,62 @@ minecraftlauncher.front.window.main.home_page
 
 Home page, play button, profile info, progress bar, all that stuff.
 """
+
 from typing import Callable
 from pathlib import Path
-from time import sleep
 import logging
 import subprocess
 
 import requests
 
-from PySide6.QtCore import (
-    Qt, QThread, Signal, QUrl, QItemSelection, QSize, QTimer)
+from PySide6.QtCore import Qt, QThread, Signal, QUrl, QItemSelection, QSize
 from PySide6.QtGui import QDesktopServices, QIcon, QFont
 from PySide6.QtWidgets import (
-    QFrame, QHBoxLayout, QLabel, QProgressBar, QPushButton, QVBoxLayout,
-    QWidget, QComboBox, QCheckBox, QPlainTextEdit)
+    QFrame,
+    QHBoxLayout,
+    QLabel,
+    QProgressBar,
+    QPushButton,
+    QVBoxLayout,
+    QWidget,
+    QComboBox,
+    QPlainTextEdit,
+)
 
 from minecraftlauncher.functions.error_box import error_box
 from minecraftlauncher.back.profile_manager import GameProfile
-from minecraftlauncher.back import (version_manager, asset_manager,
-                                    java_manager, library_manager,
-                                    game_launcher, profile_manager,
-                                    account_manager)
+from minecraftlauncher.back import (
+    version_manager,
+    asset_manager,
+    java_manager,
+    library_manager,
+    game_launcher,
+    profile_manager,
+    account_manager,
+)
 from minecraftlauncher.exceptions.datatypes import InvalidVersionIdError
 from minecraftlauncher.constants import MINECRAFT_DIR, offline_mode, DEV
 from minecraftlauncher.auth import LauncherAccount
 from minecraftlauncher.front import styles, resources
 from minecraftlauncher.front.qt.models import ProfileSelectionModel
-from minecraftlauncher.front.window import Warning, WarningType, ButtonConfig
+from minecraftlauncher.front.window import (
+    WarningDialog,
+    WarningType,
+    ButtonConfig,
+)
 from minecraftlauncher import config
 
 log = logging.getLogger(__name__)
+
 
 class LaunchWorker(QThread):
     """Background worker for downloading game files and launching."""
 
     progress = Signal(
-        str, float, float, bool) # step label, current, total, is mb
-    finished = Signal(bool, str) # successful, message
-    status = Signal(str) # status text
+        str, float, float, bool
+    )  # step label, current, total, is mb
+    finished = Signal(bool, str)  # successful, message
+    status = Signal(str)  # status text
     game_closed = Signal(str, str)
     game_log = Signal(str)
     """
@@ -51,24 +69,32 @@ class LaunchWorker(QThread):
 
     log = log.getChild("LaunchWorker")
 
-    def __init__(self, version_id: str, profile_data: GameProfile,
-                 auth_info: LauncherAccount,
-                 emit_logs: bool = True,
-                 log_hook: Callable[[str], None] | None = None,
-                 parent = None):
+    def __init__(
+        self,
+        version_id: str,
+        profile_data: GameProfile,
+        auth_info: LauncherAccount,
+        emit_logs: bool = True,
+        log_hook: Callable[[str], None] | None = None,
+        parent=None,
+    ):
         super().__init__(parent)
         self.version_id = version_id
         self.profile_data = profile_data
         self.auth_info = auth_info
         self._hook = log_hook
         self.emit_logs = emit_logs
+        self._p: subprocess.Popen
 
     def run(self):
         if offline_mode:
-            allow_run = Warning.warn(
-                self, "Offline mode is experimental. Do you want to continue?",
-                WarningType.OFFLINE_MODE_LAUNCH, "Launch in offline mode?",
-                button_config=ButtonConfig.YES_NO)
+            allow_run = WarningDialog.warn(
+                self,
+                "Offline mode is experimental. Do you want to continue?",
+                WarningType.OFFLINE_MODE_LAUNCH,
+                "Launch in offline mode?",
+                button_config=ButtonConfig.YES_NO,
+            )
             if not allow_run:
                 self.finished.emit(False, "User aborted launch")
                 return
@@ -77,16 +103,18 @@ class LaunchWorker(QThread):
                 self.version_id = version_manager.get_latest_release()
             case "latest-snapshot":
                 self.version_id = version_manager.get_latest_snapshot()
-        
+
         self.status.emit("Fetching version info...")
         version_json = version_manager.fetch_version_json(self.version_id)
         version_json = version_manager.resolve_inheritence(version_json)
-        
+
         self.status.emit("Downloading client JAR...")
         jar_path = version_manager.download_client_jar(
             version_json,
             progress_callback=lambda c, t: self.progress.emit(
-                f"{self.version_id}.jar", c/1_000_000, t/1_000_000, True))
+                f"{self.version_id}.jar", c / 1_000_000, t / 1_000_000, True
+            ),
+        )
 
         # self.status.emit("Checking for assets...")
         # asset_index = asset_manager.filter_assets_downloads(
@@ -99,8 +127,10 @@ class LaunchWorker(QThread):
         asset_manager.download_assets_threaded(
             asset_manager.fetch_asset_index(version_json),
             progress_callback=lambda c, t: self.progress.emit(
-                "Downloading assets", c, t, False))
-        
+                "Downloading assets", c, t, False
+            ),
+        )
+
         self.status.emit("Checking log4j config file...")
         log4j_config = asset_manager.check_or_download_logging_config(
             version_json
@@ -111,7 +141,9 @@ class LaunchWorker(QThread):
         library_manager.download_libraries_threaded(
             libs,
             progress_callback=lambda c, t: self.progress.emit(
-                "Downloading libraries", c, t, False))
+                "Downloading libraries", c, t, False
+            ),
+        )
         library_manager.download_natives(libs)
         natives_dir = MINECRAFT_DIR / "bin" / self.version_id
         natives_dir = library_manager.extract_natives(libs, natives_dir)
@@ -120,17 +152,22 @@ class LaunchWorker(QThread):
         profile_jre = self.profile_data.java_path
         if profile_jre:
             try:
-                success = subprocess.run(
+                subprocess.run(
                     [profile_jre.replace("javaw", "java"), "-version"],
                     stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE)
+                    stderr=subprocess.PIPE,
+                    check=True,
+                )
             except subprocess.CalledProcessError as err:
                 self.log.error(
-                    "Java exited with code %d:\n%s"
-                    % (err.returncode, str(err.output)))
+                    "Java exited with code %d:\n%s",
+                    err.returncode,
+                    str(err.output),
+                )
                 self.log.info(
                     "Aborting launch, and notifying user of invalid "
-                    "JRE location.")
+                    "JRE location."
+                )
                 self.finished.emit(False, str(err.output))
                 return
             else:
@@ -141,19 +178,22 @@ class LaunchWorker(QThread):
             if not offline_mode:
                 self.status.emit("Downloading Java...")
                 java_exc = java_manager.install_java_version_threaded(
-                    jre_name, jre_manifest,
+                    jre_name,
+                    jre_manifest,
                     progress_callback=lambda c, t: self.progress.emit(
                         "Downloading Java", c, t, False
-                    )
+                    ),
                 )
             else:
-                self.log.warning("Offline mode active, JRE executable may be "
-                                 "broken!")
+                self.log.warning(
+                    "Offline mode active, JRE executable may be broken!"
+                )
                 try:
                     java_exc = java_manager.find_java_exc(jre_name)
                 except RuntimeError as err:
-                    self.log.error("Failed to find JRE installation!",
-                                   exc_info=err)
+                    self.log.error(
+                        "Failed to find JRE installation!", exc_info=err
+                    )
                     self.finished.emit(False, str(err))
                     return
 
@@ -162,19 +202,28 @@ class LaunchWorker(QThread):
         if self.auth_info.token_valid:
             reauth = False
         else:
-            self.log.warning("User account doesn't have a valid token, "
-                             "trying to refresh...")
+            self.log.warning(
+                "User account doesn't have a valid token, "
+                "trying to refresh..."
+            )
             self.status.emit("Reauthenticating...")
             try:
                 self.auth_info.minecraft_auth()
             except RuntimeError as err:
-                self.log.error("Failed to authenticate account, aborting "
-                               "launch.", exc_info=err)
-                self.finished.emit(False, str(err.__notes__))
+                self.log.error(
+                    "Failed to authenticate account, aborting launch.",
+                    exc_info=err,
+                )
+                if getattr(err, "__notes__", None):
+                    self.finished.emit(False, str(err.__notes__))
+                else:
+                    self.finished.emit(False, str(err))
                 return
             except requests.RequestException as err:
-                self.log.error("Failed to authenticate account (are we "
-                               "offline?):", exc_info=err)
+                self.log.error(
+                    "Failed to authenticate account (are we offline?):",
+                    exc_info=err,
+                )
                 self.finished.emit(False, str(err))
                 return
             reauth = True
@@ -182,43 +231,55 @@ class LaunchWorker(QThread):
         if self.auth_info.profile:
             reauth = max(reauth, False)
         else:
-            log.warning("Account doesn't have associated profile info, trying "
-                        "to fetch it...")
+            log.warning(
+                "Account doesn't have associated profile info, trying "
+                "to fetch it..."
+            )
             try:
                 self.auth_info.get_profile_info()
             except Exception as err:
-                self.log.error("Failed to fetch profile info (are we "
-                               "offline?)", exc_info=err)
+                self.log.error(
+                    "Failed to fetch profile info (are we offline?)",
+                    exc_info=err,
+                )
                 self.finished.emit(False, str(err))
                 return
             else:
-                log.info("Got profile info for '%s'" % self.auth_info.gamertag)
+                log.info("Got profile info for '%s'", self.auth_info.gamertag)
                 assert self.auth_info.profile
                 reauth = True
 
         if reauth:
             account_manager.save_or_replace_account(self.auth_info)
-                
+
         self.status.emit("Launching Minecraft...")
         cmd = game_launcher.build_launch_command(
-            version_json, self.auth_info.profile.name,
-            self.auth_info.profile.uuid, self.auth_info.token.access_token,
-            self.auth_info.player_type, self.auth_info.demo_mode,
-            self.auth_info.xuid, str(java_exc), log4j_config, classpath,
-            self.profile_data.game_dir, self.profile_data.jvm_args,
-            self.profile_data.memory_min, self.profile_data.memory_max,
+            version_json,
+            self.auth_info.profile.name,
+            self.auth_info.profile.uuid,
+            self.auth_info.token.access_token,
+            self.auth_info.player_type,
+            self.auth_info.demo_mode,
+            self.auth_info.xuid,
+            str(java_exc),
+            log4j_config,
+            classpath,
+            self.profile_data.game_dir,
+            self.profile_data.jvm_args,
+            self.profile_data.memory_min,
+            self.profile_data.memory_max,
             self.profile_data.resolution_width,
             self.profile_data.resolution_height,
             self.profile_data.mods_folder,
-            self.profile_data.mods_folder_mode
+            self.profile_data.mods_folder_mode,
         )
-        logged_cmd = " ".join(cmd).replace(self.auth_info.token.access_token,
-                                           "TOKEN")
-        self.log.info("Launch command: '%s'" % logged_cmd)
+        logged_cmd = " ".join(cmd).replace(
+            self.auth_info.token.access_token, "TOKEN"
+        )
+        self.log.info("Launch command: '%s'", logged_cmd)
 
         sub_logger = logging.getLogger(Path(cmd[0]).name)
-        self._p = game_launcher.launch_game(cmd,
-                                            cwd=self.profile_data.game_dir)
+        self._p = game_launcher.launch_game(cmd, cwd=self.profile_data.game_dir)
         if self._p.poll() is None:
             self.finished.emit(True, "Minecraft launched successfully.")
         else:
@@ -228,16 +289,17 @@ class LaunchWorker(QThread):
         if DEV and config.post_launch_option < 1:
             game_log_func = sub_logger.debug
         else:
-            def game_log_func(msg:object, *args):
-                ...
+
+            def game_log_func(msg: object, *args): ...
 
         # reverse this when reading:
-        stdout_cache:list[str] = []
+        stdout_cache: list[str] = []
 
         if self.emit_logs and not self._hook:
             self._hook = self.game_log.emit
 
         if self._hook:
+
             def loop(self):
                 nonlocal stdout_cache
                 if self._p.stdout:
@@ -248,32 +310,32 @@ class LaunchWorker(QThread):
                         self._p.stdout.flush()
                         stdout_cache = stdout_cache[:255]
                 self._p.wait()
+
         else:
+
             def loop(self):
                 nonlocal stdout_cache
                 if self._p.stdout:
                     for line in iter(self._p.stdout.readline, ""):
-                        game_log_func(line[:-1]) # skip newline
+                        game_log_func(line[:-1])  # skip newline
                         stdout_cache.insert(0, line[:-1])
 
                         # memory usage
                         self._p.stdout.flush()
-                        stdout_cache = stdout_cache[:255] # 256 lines
+                        stdout_cache = stdout_cache[:255]  # 256 lines
                 self._p.wait()
-        
+
         loop(self)
 
         stdout_cache.reverse()
         stdout = "\n".join(stdout_cache)
 
-        self.log.debug("Returned with code %d" % self._p.returncode)
+        self.log.debug("Returned with code %d", self._p.returncode)
         if self._p.returncode == 0:
             if config.redownload_option > 1:
                 config.redownload_option = 0
-        self.game_closed.emit(
-            str(self._p.returncode),
-            stdout
-        )
+        self.game_closed.emit(str(self._p.returncode), stdout)
+
 
 class HomePage(QWidget):
     """Home/Play button page"""
@@ -291,10 +353,10 @@ class HomePage(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.selection_model = ProfileSelectionModel.instance()
-        self._worker:LaunchWorker|None = None
+        self._worker: LaunchWorker | None = None
         self._no_icon = QIcon().pixmap(QSize(32, 32))
         self._build_ui()
-        self.profile_needs_install:bool = True
+        self.profile_needs_install: bool = True
 
     def build(self):
         pass
@@ -327,18 +389,14 @@ class HomePage(QWidget):
         info_sub_frame = QFrame()
         info_sub_layout = QHBoxLayout(info_sub_frame)
 
-        info_sub_layout.addWidget(
-            QLabel("Profile: "), 0
-        )
+        info_sub_layout.addWidget(QLabel("Profile: "), 0)
 
-        info_sub_layout.setContentsMargins(10,4,10,0)
+        info_sub_layout.setContentsMargins(10, 4, 10, 0)
 
         self.profile_dropdown = QComboBox()
         self.profile_dropdown.activated.connect(self._on_dropdown_select)
         self.selection_model.currentChanged.connect(self._on_global_profile)
-        profile_manager.add_profile_refresh_handler(
-            self._refresh_profiles
-        )
+        profile_manager.add_profile_refresh_handler(self._refresh_profiles)
         self.profile_dropdown.setIconSize(QSize(32, 32))
         self.profile_dropdown.setProperty("bigIcons", True)
         self.profile_dropdown.setMaxVisibleItems(6)
@@ -375,9 +433,7 @@ class HomePage(QWidget):
         profile_action_row.addWidget(open_save_button, 0)
 
         open_mods_button = QPushButton("Mods")
-        open_mods_button.clicked.connect(
-            lambda: self._open_prof_folder("mods")
-        )
+        open_mods_button.clicked.connect(lambda: self._open_prof_folder("mods"))
         open_mods_button.setProperty("mini", True)
         profile_action_row.addWidget(open_mods_button, 0)
 
@@ -390,7 +446,8 @@ class HomePage(QWidget):
 
         open_versions_button = QPushButton("Versions")
         open_versions_button.clicked.connect(
-            lambda: self._open_prof_folder("versions"))
+            lambda: self._open_prof_folder("versions")
+        )
         open_versions_button.setProperty("mini", True)
         profile_action_row.addWidget(open_versions_button, 0)
 
@@ -398,7 +455,7 @@ class HomePage(QWidget):
 
         self.version_label = QLabel("Version: [unknown]")
         self.version_label.setProperty("secondary", True)
-        self.version_label.setContentsMargins(10,0,10,0)
+        self.version_label.setContentsMargins(10, 0, 10, 0)
         self.version_label.setOpenExternalLinks(True)
         info_layout.addWidget(self.version_label)
 
@@ -408,13 +465,14 @@ class HomePage(QWidget):
             lineWrapMode=QPlainTextEdit.LineWrapMode.WidgetWidth,
             readOnly=True,
             plainText="*taps mic* This thing on?",
-            centerOnScroll=False
+            centerOnScroll=False,
         )
         self.game_logs.setStyleSheet(
             self.game_logs.styleSheet()
-            + f"; background-color: {styles.BG_DARK};")
+            + f"; background-color: {styles.BG_DARK};"
+        )
         self.game_logs.setFont(QFont("consolas"))
-        self.game_logs.setMaximumBlockCount(2000) # change if needed
+        self.game_logs.setMaximumBlockCount(2000)  # change if needed
 
         info_layout.addWidget(self.game_logs)
 
@@ -455,8 +513,7 @@ class HomePage(QWidget):
 
         play_layout = QHBoxLayout()
         play_layout.setProperty("surface", True)
-        play_layout.addWidget(self.play_button, 0,
-                              Qt.AlignmentFlag.AlignCenter)
+        play_layout.addWidget(self.play_button, 0, Qt.AlignmentFlag.AlignCenter)
         layout.addLayout(play_layout)
 
     def _refresh_profiles(self):
@@ -469,29 +526,21 @@ class HomePage(QWidget):
         for prof in profs:
             if prof.icon:
                 ico = resources.profile_icon(prof.icon)
-                self.profile_dropdown.addItem(
-                    ico,
-                    prof.name or prof.uuid,
-                    prof
-                )
+                self.profile_dropdown.addItem(ico, prof.name or prof.uuid, prof)
             else:
                 self.profile_dropdown.addItem(
-                    self._no_icon,
-                    prof.name or prof.uuid,
-                    prof
+                    self._no_icon, prof.name or prof.uuid, prof
                 )
             if prof == current:
-                self.profile_dropdown.setCurrentIndex(
-                    profs.index(current)
-                )
-    
-    def _on_dropdown_select(self, index:int):
-        prof:GameProfile = self.profile_dropdown.itemData(index)
+                self.profile_dropdown.setCurrentIndex(profs.index(current))
+
+    def _on_dropdown_select(self, index: int):
+        prof: GameProfile = self.profile_dropdown.itemData(index)
         current_prof = profile_manager.get_current_profile()
         if prof != current_prof:
             self.selection_model.setCurrentIndex(
                 self.selection_model.model().index(index, 0),
-                self.selection_model.SelectionFlag.ClearAndSelect
+                self.selection_model.SelectionFlag.ClearAndSelect,
             )
             # handle what happens if the pop-up is cancelled/ignored
             if self.selection_model.currentIndex().row() != index:
@@ -503,24 +552,23 @@ class HomePage(QWidget):
                 self.profile_dropdown.blockSignals(False)
                 return
 
-    def _on_global_profile(self, current:QItemSelection,
-                           previous:QItemSelection):
-        if current.isValid(): # type: ignore
+    def _on_global_profile(
+        self, current: QItemSelection, previous: QItemSelection
+    ):
+        if current.isValid():  # type: ignore
             self.profile_dropdown.blockSignals(True)
-            self.profile_dropdown.setCurrentIndex(
-                current.row() # type: ignore
-            )
+            self.profile_dropdown.setCurrentIndex(current.row())  # type: ignore
             self.profile_dropdown.blockSignals(False)
-        row:int = current.row() # type: ignore
+        row: int = current.row()  # type: ignore
         profile = profile_manager.get_profile(row)
         self._profile_change(profile)
 
-    def _profile_change(self, profile:GameProfile):
+    def _profile_change(self, profile: GameProfile):
         try:
             prof_exists = profile.check_install()
         except InvalidVersionIdError:
             self.progress_label.setText(
-                "Unknown game version: %s" % profile.version_id
+                f"Unknown game version: {profile.version_id}"
             )
             self.play_button.setText("Invalid version")
             self.play_button.setDisabled(True)
@@ -534,7 +582,7 @@ class HomePage(QWidget):
             self.play_button.setDisabled(False)
         else:
             self.progress_label.setText("Ready to install.")
-            self.play_button.setText("Install %s" % profile.real_version_id)
+            self.play_button.setText(f"Install {profile.real_version_id}")
             self.play_button.setDisabled(offline_mode)
         self.version_label.setText(f"Version: {profile.version_id}")
 
@@ -548,9 +596,12 @@ class HomePage(QWidget):
             self.play_button.setText("Installing...")
         self.play_requested.emit()
 
-    def install_launch_game(self, version_id:str,
-                            profile_data:GameProfile,
-                            auth_info:LauncherAccount):
+    def install_launch_game(
+        self,
+        version_id: str,
+        profile_data: GameProfile,
+        auth_info: LauncherAccount,
+    ):
         """Start download/launch process in a background thread"""
         log.debug("Preparing to install/launch game...")
         self.progress_bar.setValue(0)
@@ -571,20 +622,23 @@ class HomePage(QWidget):
         log.debug("Starting background worker for install...")
         self._worker.start()
 
-    def _on_progress(self, label:str, current:float, total:float, use_mb:bool):
+    def _on_progress(
+        self, label: str, current: float, total: float, use_mb: bool
+    ):
         if total > 0:
-            progress = int(current/total*100)
+            progress = int(current / total * 100)
             self.progress_bar.setValue(progress)
             if use_mb:
                 self.progress_label.setText(f"{label}: {current}MB/{total}MB")
             else:
                 self.progress_label.setText(
-                    f"{label}: {int(current)}/{int(total)}")
-    
-    def _on_status(self, text:str):
+                    f"{label}: {int(current)}/{int(total)}"
+                )
+
+    def _on_status(self, text: str):
         self.progress_label.setText(text)
 
-    def _on_game_closed(self, exit_code:str, stdout:str):
+    def _on_game_closed(self, exit_code: str, stdout: str):
         if int(exit_code) == 0:
             self.game_closed.emit("0")
         else:
@@ -599,7 +653,7 @@ class HomePage(QWidget):
             self.game_crash.emit(exit_code, stdout)
         self.kill_worker()
 
-    def _open_prof_folder(self, folder:str|None=None):
+    def _open_prof_folder(self, folder: str | None = None):
         prof = profile_manager.get_current_profile()
         if prof.game_dir:
             p = Path(prof.game_dir)
@@ -612,10 +666,9 @@ class HomePage(QWidget):
 
         match folder:
             case "rp":
-                p = p / "resourcepacks" # TODO: texturepacks dir for old ver
+                p = p / "resourcepacks"  # TODO: texturepacks dir for old ver
             case "mods":
-                if (prof.mods_folder
-                    and prof.mods_folder_mode != "addMods"):
+                if prof.mods_folder and prof.mods_folder_mode != "addMods":
                     p = Path(prof.mods_folder)
                 else:
                     p = p / "mods"
@@ -629,19 +682,23 @@ class HomePage(QWidget):
         # check again for subfolders
         if not p.exists():
             if p.parent.exists():
-                log.warning("Folder at '%s' doesn't exist, trying to create it."
-                            % str(p))
+                log.debug(
+                    "Folder at '%s' doesn't exist, trying to create it.", str(p)
+                )
                 try:
                     p.mkdir(parents=False, exist_ok=True)
                 except Exception as err:
-                    log.error("Failed to make directory. Notifying user and "
-                              "returning.", exc_info=err)
+                    log.error(
+                        "Failed to make directory. Notifying user and "
+                        "returning.",
+                        exc_info=err,
+                    )
                     error_box("Failed to open folder. Does it exist?")
                     return
         qurl = QUrl.fromLocalFile(str(p))
         QDesktopServices.openUrl(qurl)
-    
-    def _on_finished(self, success:bool, message:str):
+
+    def _on_finished(self, success: bool, message: str):
         if success:
             self.play_button.setText("Playing...")
             self.play_button.setEnabled(False)
@@ -650,7 +707,7 @@ class HomePage(QWidget):
             self.progress_bar.setValue(0)
             self.game_open.emit()
         else:
-            error_box("Launch failed: %s" % message)
+            error_box(f"Failed to launch the game: {message}")
             prof = profile_manager.get_current_profile()
             assert prof
             self._profile_change(prof)
@@ -662,8 +719,9 @@ class HomePage(QWidget):
             if self.game_logs.blockCount() > 1:
                 log.debug(
                     "Resetting home page game logs due to option being "
-                    "unchecked")
+                    "unchecked"
+                )
                 self.game_logs.setPlainText("*taps mic* This thing on?")
 
-    def _handle_game_log(self, log: str):
-        self.game_logs.appendPlainText(log)
+    def _handle_game_log(self, log_text: str):
+        self.game_logs.appendPlainText(log_text)

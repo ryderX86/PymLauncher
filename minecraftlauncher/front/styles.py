@@ -1,6 +1,7 @@
 """
 QSS stylesheet
 """
+
 from colorsys import rgb_to_hsv, hsv_to_rgb
 
 from PySide6.QtGui import QFont
@@ -31,12 +32,14 @@ BORDER_LIGHT = "#3a3a3a"
 DANGER = "#e74c3c"
 DANGER_HOVER = "#c0392b"
 
+
 def mk_accent_hover(r: float, g: float, b: float):
     h, s, v = rgb_to_hsv(r, g, b)
     s = max(s * 0.95, 0)
     v = min(v * 1.1, 1)
     nr, ng, nb = hsv_to_rgb(h, s, v)
     return rgb_to_hex(nr, ng, nb)
+
 
 def mk_accent_light(r: float, g: float, b: float):
     h, s, v = rgb_to_hsv(r, g, b)
@@ -45,12 +48,14 @@ def mk_accent_light(r: float, g: float, b: float):
     nr, ng, nb = hsv_to_rgb(h, s, v)
     return rgb_to_hex(nr, ng, nb)
 
+
 def mk_accent_lighter(r: float, g: float, b: float):
     h, s, v = rgb_to_hsv(r, g, b)
     s = max(s * 0.8, 0)
     v = min(v * 1.25, 1)
     nr, ng, nb = hsv_to_rgb(h, s, v)
     return rgb_to_hex(nr, ng, nb)
+
 
 def mk_accent_press(r: float, g: float, b: float):
     h, s, v = rgb_to_hsv(r, g, b)
@@ -59,6 +64,7 @@ def mk_accent_press(r: float, g: float, b: float):
     nr, ng, nb = hsv_to_rgb(h, s, v)
     return rgb_to_hex(nr, ng, nb)
 
+
 def mk_accent_dim(r: float, g: float, b: float):
     h, s, v = rgb_to_hsv(r, g, b)
     s = min(v * 1.33, 1)
@@ -66,14 +72,16 @@ def mk_accent_dim(r: float, g: float, b: float):
     nr, ng, nb = hsv_to_rgb(h, s, v)
     return rgb_to_hex(nr, ng, nb)
 
+
 def compile_colors(**kwargs):
     bg_darkest = kwargs.get("bg_darkest", BG_DARKEST).strip("#")
     bg_dark = kwargs.get("bg_dark", BG_DARK).strip("#")
     bg_surface = kwargs.get("bg_surface", BG_SURFACE).strip("#")
-    bg_surface_light = kwargs.get(
-        "bg_surface_light", BG_SURFACE_LIGHT).strip("#")
+    bg_surface_light = kwargs.get("bg_surface_light", BG_SURFACE_LIGHT).strip(
+        "#"
+    )
     bg_input = kwargs.get("bg_input", BG_INPUT).strip("#")
-    
+
     accent = kwargs.get("accent", ACCENT).strip("#")
     if accent != ACCENT:
         r, g, b = hex_to_rgb(accent)
@@ -93,7 +101,7 @@ def compile_colors(**kwargs):
         accent_hover = ACCENT_HOVER.strip("#")
         accent_press = ACCENT_PRESS.strip("#")
         accent_dim = ACCENT_DIM.strip("#")
-    
+
     text_primary = kwargs.get("text_primary", TEXT_PRIMARY).strip("#")
     text_secondary = kwargs.get("text_secondary", TEXT_SECONDARY).strip("#")
     text_muted = kwargs.get("text_muted", TEXT_MUTED).strip("#")
@@ -110,22 +118,21 @@ def compile_colors(**kwargs):
         "BG_SURFACE": "#" + bg_surface,
         "BG_SURFACE_LIGHT": "#" + bg_surface_light,
         "BG_INPUT": "#" + bg_input,
-
         "ACCENT": "#" + accent,
         "ACCENT_LIGHTER": "#" + accent_lighter,
         "ACCENT_LIGHT": "#" + accent_light,
         "ACCENT_HOVER": "#" + accent_hover,
         "ACCENT_PRESS": "#" + accent_press,
         "ACCENT_DIM": "#" + accent_dim,
-
         "TEXT_PRIMARY": "#" + text_primary,
         "TEXT_SECONDARY": "#" + text_secondary,
         "TEXT_MUTED": "#" + text_muted,
         "BORDER": "#" + border,
         "BORDER_LIGHT": "#" + border_light,
         "DANGER": "#" + danger,
-        "DANGER_HOVER": "#" + danger_hover
+        "DANGER_HOVER": "#" + danger_hover,
     }
+
 
 template = """
 /* Main */
@@ -589,7 +596,10 @@ QDialog {{
 }}
 """
 
-def regen_styles(): return template.format(**globals())
+
+def regen_styles():
+    return template.format(**globals())
+
 
 STYLESHEET = regen_styles()
 

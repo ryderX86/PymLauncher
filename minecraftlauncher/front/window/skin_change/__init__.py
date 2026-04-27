@@ -3,6 +3,7 @@ All the (3D) code in here is genuinely horrifying and should probably be either
 rewritten from scratch or deleted permenantly and replaced with a generic
 QImage thumbnail
 """
+
 from pathlib import Path
 from string import ascii_letters
 import logging
@@ -13,10 +14,27 @@ import os
 from PySide6.QtCore import QSize, Qt, Signal, QTimer, QUrl, QObject
 from PySide6.QtGui import QCloseEvent, QPixmap, QSurfaceFormat, QImage
 from PySide6.QtWidgets import (
-    QApplication, QFileDialog, QFrame, QGridLayout, QGroupBox, QHBoxLayout,
-    QLabel, QListWidget, QListWidgetItem, QMessageBox, QPushButton,
-    QVBoxLayout, QWidget, QStyle, QDialog, QLineEdit, QRadioButton,
-    QButtonGroup, QCheckBox, QScrollBar)
+    QApplication,
+    QFileDialog,
+    QFrame,
+    QGridLayout,
+    QGroupBox,
+    QHBoxLayout,
+    QLabel,
+    QListWidget,
+    QListWidgetItem,
+    QMessageBox,
+    QPushButton,
+    QVBoxLayout,
+    QWidget,
+    QStyle,
+    QDialog,
+    QLineEdit,
+    QRadioButton,
+    QButtonGroup,
+    QCheckBox,
+    QScrollBar,
+)
 from PySide6.QtQml import QQmlImageProviderBase
 from PySide6.QtQuickWidgets import QQuickWidget
 from PySide6.QtQuick3D import QQuick3D, QQuick3DTextureData
@@ -28,21 +46,29 @@ from minecraftlauncher.auth import LauncherAccount, MinecraftProfile, SkinModel
 from minecraftlauncher.back import account_manager
 from minecraftlauncher.functions.error_box import error_box
 from minecraftlauncher.constants import (
-    SKIN_CHANGE_URL, SKIN_URL_BASE, OS_PATH_DELIM, CAPE_URL)
+    SKIN_CHANGE_URL,
+    SKIN_URL_BASE,
+    OS_PATH_DELIM,
+    CAPE_URL,
+)
 from minecraftlauncher import session, config
 
 log = logging.getLogger(__name__)
 
+
 class SkinChange(QDialog):
     skin_changed = Signal()
+
     def __init__(self, profile: LauncherAccount, parent=None):
         super().__init__(parent)
         self._current_win_environment = (
-            QSurfaceFormat.defaultFormat().__copy__())
+            QSurfaceFormat.defaultFormat().__copy__()
+        )
         self.profile = profile
         self._build_ui()
         self.current_cloud_hash = hashlib.sha256(
-            profile.skin_bytes()).hexdigest()
+            profile.skin_bytes()
+        ).hexdigest()
         self.current_hash = self.current_cloud_hash
         self.setWindowTitle("Change skin")
         self.current_texture_path = profile.skin_path()
@@ -84,7 +110,7 @@ class SkinChange(QDialog):
 
         top.addWidget(self.reset_button)
         top.addWidget(self.file_input, 1)
-        top.addWidget(browse_button)        
+        top.addWidget(browse_button)
 
         cape_label = QLabel("Cape")
 
@@ -102,15 +128,17 @@ class SkinChange(QDialog):
         if self.profile.profile:
             not_found_cape = True
             for cape in self.profile.profile.get_all_cape_thumbs():
-                if ("alias" not in cape
-                        or "thumb" not in cape
-                        or "id" not in cape):
+                if (
+                    "alias" not in cape
+                    or "thumb" not in cape
+                    or "id" not in cape
+                ):
                     log.warning("Skipping cape with invalid data")
                     continue
-                alias: str = cape["alias"] # type: ignore
-                thumb: QPixmap = cape["thumb"] # type: ignore
-                id_: str = cape["id"] # type: ignore
-                p: Path = cape["path"] # type: ignore
+                alias: str = cape["alias"]  # type: ignore
+                thumb: QPixmap = cape["thumb"]  # type: ignore
+                id_: str = cape["id"]  # type: ignore
+                p: Path = cape["path"]  # type: ignore
                 item = QListWidgetItem()
                 item.setToolTip(alias)
                 item.setData(256, id_)
@@ -167,14 +195,14 @@ class SkinChange(QDialog):
         mid.addWidget(preview_row_w)
 
         self.skin_preview = QQuickWidget()
-        format = QSurfaceFormat()
+        surface_format = QSurfaceFormat()
         self.skin_preview.setAttribute(Qt.WidgetAttribute.WA_AlwaysStackOnTop)
-        self.skin_preview.setAttribute(
-            Qt.WidgetAttribute.WA_StyledBackground)
+        self.skin_preview.setAttribute(Qt.WidgetAttribute.WA_StyledBackground)
         self.skin_preview.setResizeMode(
-            QQuickWidget.ResizeMode.SizeRootObjectToView)
+            QQuickWidget.ResizeMode.SizeRootObjectToView
+        )
         self.skin_preview.setClearColor(Qt.GlobalColor.transparent)
-        self.skin_preview.setFormat(format)
+        self.skin_preview.setFormat(surface_format)
         self.engine = self.skin_preview.engine()
         self.skin_preview.setSource(QUrl("qrc:/3d/steve/scene.qml"))
         self.sp_root = self.skin_preview.rootObject()
@@ -196,16 +224,18 @@ class SkinChange(QDialog):
     def exec(self) -> int:
         self.set_skin_initial()
         return super().exec()
-    
+
     def _slim_selected(self):
         self.skin_preview.setSource(QUrl("qrc:/3d/alex/scene.qml"))
         self.sp_root = self.skin_preview.rootObject()
         self.player_model = self.sp_root.findChild(QObject, "steveModel")
         if self.player_model:
             self.player_model.setProperty(
-                "skin", QUrl.fromLocalFile(self.current_texture_path))
+                "skin", QUrl.fromLocalFile(self.current_texture_path)
+            )
             self.player_model.setProperty(
-                "cape", QUrl.fromLocalFile(self.current_cape_path or ""))
+                "cape", QUrl.fromLocalFile(self.current_cape_path or "")
+            )
         self.variant = "slim"
         self._show_anim(self.show_anim_sel.checkState())
 
@@ -215,9 +245,11 @@ class SkinChange(QDialog):
         self.player_model = self.sp_root.findChild(QObject, "steveModel")
         if self.player_model:
             self.player_model.setProperty(
-                "skin", QUrl.fromLocalFile(self.current_texture_path))
+                "skin", QUrl.fromLocalFile(self.current_texture_path)
+            )
             self.player_model.setProperty(
-                "cape", QUrl.fromLocalFile(self.current_cape_path or ""))
+                "cape", QUrl.fromLocalFile(self.current_cape_path or "")
+            )
         self.variant = "classic"
         self._show_anim(self.show_anim_sel.checkState())
 
@@ -236,10 +268,8 @@ class SkinChange(QDialog):
             self.current_texture_path = p
             c = self.profile.cape_path() or ""
             self.current_cape_path = c
-            self.player_model.setProperty(
-                "skin", QUrl.fromLocalFile(p))
-            self.player_model.setProperty(
-                "cape", QUrl.fromLocalFile(c))
+            self.player_model.setProperty("skin", QUrl.fromLocalFile(p))
+            self.player_model.setProperty("cape", QUrl.fromLocalFile(c))
         else:
             log.warning("No player model instance!")
 
@@ -262,34 +292,36 @@ class SkinChange(QDialog):
         if not os.path.isfile(fp):
             return
         if fp.split(".")[-1] != "png":
-            log.warning("Not a PNG: '%s'" % fp)
+            log.warning("Not a PNG: '%s'", fp)
             self.file_input.setText(None)
             return
         self.current_texture_path = fp
         with open(fp, "rb") as file:
             sha = hashlib.sha256(file.read()).hexdigest()
             self.current_hash = sha
-        if (sha == self.current_cloud_hash
-                and self.current_cape == self.current_cape_cloud):
+        if (
+            sha == self.current_cloud_hash
+            and self.current_cape == self.current_cape_cloud
+        ):
             self.reset_button.setDisabled(True)
             self.submit_button.setDisabled(True)
         else:
             self.reset_button.setDisabled(False)
             self.submit_button.setDisabled(False)
         if self.player_model:
-            self.player_model.setProperty(
-                "skin", QUrl.fromLocalFile(fp))
+            self.player_model.setProperty("skin", QUrl.fromLocalFile(fp))
 
     def _open_file_picker(self):
         file, _ = QFileDialog.getOpenFileName(
-            self, "Select skin",
+            self,
+            "Select skin",
             str(Path("~").expanduser().resolve()),
-            "PNG image (*.png);"
+            "PNG image (*.png);",
         )
         if not file:
             return
         if not os.path.isfile(file):
-            log.warning("Invaild file path: '%s'" % file)
+            log.warning("Invaild file path: '%s'", file)
             return
         img = QImage()
         img.load(file)
@@ -320,35 +352,36 @@ class SkinChange(QDialog):
         if not self.profile.token:
             self.profile.refresh()
         assert self.profile.token
-        headers = {
-            "Authorization": f"Bearer {self.profile.token.access_token}"
-        }
+        headers = {"Authorization": f"Bearer {self.profile.token.access_token}"}
         if self.current_cape:
             try:
-                payload = {
-                    "capeId": self.current_cape
-                }
+                payload = {"capeId": self.current_cape}
                 resp = session.put(CAPE_URL, headers=headers, json=payload)
                 resp.raise_for_status()
             except requests.exceptions.HTTPError as err:
-                log.warning("Cape PUT request returned HTTP %d:\n"
-                            "Details: %s"
-                            % (err.response.status_code, err.response.text))
+                log.warning(
+                    "Cape PUT request returned HTTP %d:\nDetails: %s",
+                    err.response.status_code,
+                    err.response.text,
+                )
+                c = self.cape_list.currentItem().text()
                 if "profile does not own cape" in err.response.text:
                     error_box(
-                        "Failed to set cape to \"%s\": You do not own it."
-                        % self.cape_list.currentItem().text())
+                        f'Failed to set cape to "{c}": You do not own it.'
+                    )
                 else:
                     error_box(
-                        "Failed to set cape to \"%s\": An unknown error "
-                        "occured." % self.cape_list.currentItem().text())
+                        f'Failed to set cape to "{c}": An unknown error '
+                        "occured."
+                    )
             else:
                 return True
         else:
             try:
                 resp = session.delete(CAPE_URL, headers=headers)
                 resp.raise_for_status()
-            except:
+            except Exception as err:
+                log.error("Failed to remove cape from player:", exc_info=err)
                 raise
             else:
                 return True
@@ -358,16 +391,16 @@ class SkinChange(QDialog):
         if not self.profile.profile:
             self.profile.get_profile_info()
         assert self.profile.profile
-        current_skin_hash = self.profile.profile.current_skin["url"].split("/")[-1]
+        current_skin_hash = self.profile.profile.current_skin["url"].split("/")[
+            -1
+        ]
         if current_skin_hash == self.current_hash:
             error_box("Skin is already set to this!")
             return
         if not self.profile.token:
             error_box("Invalid access token")
             return
-        headers = {
-            "Authorization": f"Bearer {self.profile.token.access_token}"
-        }
+        headers = {"Authorization": f"Bearer {self.profile.token.access_token}"}
 
         fp = self.file_input.text()
         name = "img_"
@@ -378,12 +411,17 @@ class SkinChange(QDialog):
             name = "".join([*name, char])
 
         try:
-            resp = session.post(SKIN_CHANGE_URL, headers=headers, files={
-                "variant": ("", self.variant),
-                "file": (name, open(fp, "rb"), "image/png")
-            })
+            resp = session.post(
+                SKIN_CHANGE_URL,
+                headers=headers,
+                files={
+                    "variant": ("", self.variant),
+                    "file": (name, open(fp, "rb"), "image/png"),
+                },
+            )
             resp.raise_for_status()
-        except:
+        except Exception as err:
+            log.error("Failed to upload skin:", exc_info=err)
             raise
         else:
             return True
@@ -393,14 +431,16 @@ class SkinChange(QDialog):
             config.show_animation_on_skin_dialog = True
             if self.player_model:
                 self.player_model.metaObject().invokeMethod(
-                    self.player_model, "enableAnimation") # type: ignore
+                    self.player_model, "enableAnimation"  # type: ignore
+                )
             return
         else:
             config.show_animation_on_skin_dialog = False
             if self.player_model:
                 self.player_model.metaObject().invokeMethod(
-                    self.player_model, "disableAnimation") # type: ignore
-                
+                    self.player_model, "disableAnimation"  # type: ignore
+                )
+
     def _cape_changed(self, item: QListWidgetItem):
         id_: str | None = item.data(256)
         path: Path | None = item.data(257)
@@ -410,10 +450,13 @@ class SkinChange(QDialog):
 
         if self.player_model:
             self.player_model.setProperty(
-                "cape", QUrl.fromLocalFile(path or ""))
+                "cape", QUrl.fromLocalFile(path or "")
+            )
 
-        if (self.current_cape == self.current_cape_cloud
-                and self.current_hash == self.current_cloud_hash):
+        if (
+            self.current_cape == self.current_cape_cloud
+            and self.current_hash == self.current_cloud_hash
+        ):
             self.reset_button.setDisabled(True)
             self.submit_button.setDisabled(True)
         else:

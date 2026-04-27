@@ -1,21 +1,25 @@
 import logging
-import time
-import json
 
-from PySide6.QtCore import Qt, QThread, QUrl, Signal
-from PySide6.QtGui import QDesktopServices, QClipboard, QPainter
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
-    QDialog, QLabel, QPushButton, QVBoxLayout, QWidget, QComboBox, QHBoxLayout,
-    QCheckBox, QMessageBox
+    QDialog,
+    QLabel,
+    QPushButton,
+    QVBoxLayout,
+    QWidget,
+    QComboBox,
+    QHBoxLayout,
+    QCheckBox,
+    QMessageBox,
 )
-from PySide6.QtSvgWidgets import QSvgWidget
-
-from minecraftlauncher.back import neoforge, version_manager
+from minecraftlauncher.back import neoforge
 
 log = logging.getLogger(__name__)
 
+
 class NeoForgeInstallWindow(QDialog):
     installed_fabric = Signal()
+
     def __init__(self, parent=None):
         super().__init__(parent)
         flags = Qt.WindowType.Window
@@ -38,13 +42,13 @@ class NeoForgeInstallWindow(QDialog):
         layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.setContentsMargins(8, 8, 8, 8)
         layout.setSpacing(16)
-        
+
         label = QLabel("Install NeoForge")
         label.setProperty("heading", True)
         label.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         layout.addWidget(label)
-        
+
         self.game_ver_dd = QComboBox()
         self.game_ver_dd.setPlaceholderText("Loading versions...")
         self.show_snapshots_box = QCheckBox()
@@ -79,9 +83,7 @@ class NeoForgeInstallWindow(QDialog):
         self.game_ver_dd.currentTextChanged.connect(
             self._game_ver_dd_txt_change
         )
-        self.game_ver_dd.currentTextChanged.connect(
-            self._set_button_disabled
-        )
+        self.game_ver_dd.currentTextChanged.connect(self._set_button_disabled)
         self.loader_ver_dd.clear()
         self.loader_ver_dd.addItem("")
         self.loader_ver_dd.setCurrentIndex(0)
@@ -89,14 +91,12 @@ class NeoForgeInstallWindow(QDialog):
         self.loader_ver_dd.currentTextChanged.connect(
             self._loader_ver_dd_txt_change
         )
-        self.loader_ver_dd.currentTextChanged.connect(
-            self._set_button_disabled
-        )
+        self.loader_ver_dd.currentTextChanged.connect(self._set_button_disabled)
         self.loader_ver_dd.setPlaceholderText("")
         self.game_ver_dd.setPlaceholderText("")
         return
 
-    def _game_ver_dd_txt_change(self, text:str):
+    def _game_ver_dd_txt_change(self, text: str):
         self.loader_ver_dd.clear()
         if not text:
             self.game_ver_selected = False
@@ -106,17 +106,17 @@ class NeoForgeInstallWindow(QDialog):
         self.game_ver_selected = True
         self.loader_ver_dd.addItems(neoforge.filter_neoforge_versions(text))
         self.loader_ver_dd.setCurrentIndex(0)
-        
+
         if self.loader_ver_dd.count() > 0:
             self.loader_ver_dd.setDisabled(False)
 
-    def _loader_ver_dd_txt_change(self, text:str):
+    def _loader_ver_dd_txt_change(self, text: str):
         if text:
             self.loader_ver_selected = True
         else:
             self.loader_ver_selected = False
 
-    def _set_button_disabled(self, text:str):
+    def _set_button_disabled(self, text: str):
         if self.game_ver_selected and self.loader_ver_selected:
             self.install_button.setDisabled(False)
         else:
@@ -133,10 +133,10 @@ class NeoForgeInstallWindow(QDialog):
             success = neoforge.install(loader_ver)
         except FileExistsError:
             msg_box = QMessageBox.question(
-                self, "NeoForge %s already installed" % loader_ver,
-                "NeoForge %s is already installed, re-install it?"
-                % loader_ver,
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+                self,
+                f"NeoForge {loader_ver} already installed",
+                f"NeoForge {loader_ver} is already installed, re-install it?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             )
             if msg_box == QMessageBox.StandardButton.Yes:
                 success = neoforge.install(loader_ver, True)
@@ -144,8 +144,9 @@ class NeoForgeInstallWindow(QDialog):
                 return
         if success:
             QMessageBox.information(
-                self, "Success", "Successfully installed NeoForge %s"
-                % loader_ver
+                self,
+                "Success",
+                f"Successfully installed NeoForge {loader_ver}",
             )
             self.installed_fabric.emit()
             self.done(QDialog.DialogCode.Accepted)

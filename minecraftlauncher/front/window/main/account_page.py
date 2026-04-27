@@ -3,27 +3,30 @@ minecraftlauncher.front.window.main.account_page
 
 Page with account info, skin management, log out button.
 """
-import logging
-import os
-import shiboken6
-import time
 
-from PySide6.QtCore import QSize, Qt, Signal, QTimer, QUrl, QObject
-from PySide6.QtGui import QPixmap, QClipboard, QSurfaceFormat, QImage
-from PySide6.QtQml import QQmlImageProviderBase
+import logging
+
+from PySide6.QtCore import Qt, Signal, QTimer
 from PySide6.QtWidgets import (
-    QApplication, QFileDialog, QFrame, QGridLayout, QGroupBox, QHBoxLayout,
-    QLabel, QListWidget, QListWidgetItem, QMessageBox, QPushButton,
-    QVBoxLayout, QWidget, QStyle, QApplication)
+    QGridLayout,
+    QGroupBox,
+    QHBoxLayout,
+    QLabel,
+    QMessageBox,
+    QPushButton,
+    QVBoxLayout,
+    QWidget,
+)
 
 from minecraftlauncher.front.resources import symbol
-from minecraftlauncher.back import account_manager
-from minecraftlauncher.auth import LauncherAccount, MinecraftProfile
+from minecraftlauncher.auth import LauncherAccount
 from minecraftlauncher.functions.error_box import error_box
+from minecraftlauncher.functions import copy_to_clipboard, clipboard_present
 from minecraftlauncher.constants import CHECKMARK_DELAY
 from minecraftlauncher.front.window.skin_change import SkinChange
 
 log = logging.getLogger(__name__)
+
 
 class AccountPage(QWidget):
     """Account info, skin management, logout button"""
@@ -36,8 +39,9 @@ class AccountPage(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self._account_info:LauncherAccount|None = None
+        self._account_info: LauncherAccount | None = None
         self._build_ui()
+        self.dialog: SkinChange
 
     def build(self):
         pass
@@ -83,6 +87,7 @@ class AccountPage(QWidget):
         self.copy_uuid_button.setFixedWidth(40)
         self.copy_uuid_button.setFixedHeight(40)
         self.copy_uuid_button.clicked.connect(self._copy_uuid)
+        self.copy_uuid_button.setEnabled(clipboard_present)
         uuid_row.addWidget(self.copy_uuid_button)
 
         info_layout.addLayout(uuid_row, 1, 1)
@@ -137,7 +142,7 @@ class AccountPage(QWidget):
 
         layout.addWidget(manage_w)
 
-    def set_account_info(self, info:LauncherAccount):
+    def set_account_info(self, info: LauncherAccount):
         """Update account info displayed on page"""
         self._account_info = info
         self.gtg_label.setText(info.gamertag)
@@ -153,23 +158,16 @@ class AccountPage(QWidget):
         self.title.setText(username)
         self.xuid_label.setText(info.xuid)
         self.change_skin_button.setDisabled(info.demo_mode)
-    
+
     def _copy_uuid(self):
         uuid_text = self.uuid_label.text()
         if uuid_text and uuid_text != "<uuid>":
-            qapp = QApplication.instance()
-            if not qapp:
-                error_box("Failed to get QApplication instance")
-                log.warning("Couldn't get QApplication instance!")
-                return
-            assert isinstance(qapp, QApplication)
-            clipboard = qapp.clipboard()
-            if not clipboard:
+            if not clipboard_present:
                 error_box("Failed to get clipboard instance to copy to.")
                 log.warning("Couldn't get clipboard instance!")
                 return
-            clipboard.setText(uuid_text, clipboard.Mode.Clipboard)
-            self.log.info("Copied '%s' to clipboard." % uuid_text)
+            copy_to_clipboard(uuid_text)
+            self.log.info("Copied '%s' to clipboard.", uuid_text)
             self.copy_uuid_button.setIcon(symbol("clipboard-checked"))
 
         def reset_button():
@@ -177,13 +175,14 @@ class AccountPage(QWidget):
             self.copy_uuid_button.setIcon(symbol("clipboard"))
 
         QTimer.singleShot(CHECKMARK_DELAY, reset_button)
-    
+
     def _on_logout(self):
         self.log.debug("User pressed logout button, opening dialog.")
         reply = QMessageBox.question(
-            self, "Log out",
+            self,
+            "Log out",
             "Are you sure you want to log out?",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
         )
         if reply == QMessageBox.StandardButton.Yes:
             self.logout_requested.emit()

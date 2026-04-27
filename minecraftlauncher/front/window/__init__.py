@@ -1,1 +1,1 @@
-from .warning import Warning, WarningType, ButtonConfig
+from .warning import WarningDialog, WarningType, ButtonConfig
