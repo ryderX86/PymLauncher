@@ -4,7 +4,7 @@ minecraftlauncher.front.window.main.home_page
 Home page, play button, profile info, progress bar, all that stuff.
 """
 
-from typing import Callable
+from collections.abc import Callable
 from pathlib import Path
 import logging
 import subprocess
