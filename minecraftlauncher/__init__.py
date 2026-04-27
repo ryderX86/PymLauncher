@@ -28,7 +28,6 @@ if not DEV:
                 f"{AUTHOR_USR}.{LAUNCHER_NAME}"
             )
 
-# TODO: log files
 if DEBUG_LOGGING:
     logging.basicConfig(level=logging.DEBUG)
 else:
