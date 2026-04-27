@@ -88,6 +88,7 @@ JAVA_MANIFEST_URL = (
 
 # Default paths
 _plat = platform.system()
+_friendly_plat = _plat
 base: Path
 if work_dir:
     base = work_dir
@@ -97,6 +98,9 @@ else:
             base = Path("~\\AppData\\Roaming").expanduser().resolve()
         case "Linux":
             base = Path("~").expanduser().resolve()
+            _friendly_plat = platform.freedesktop_os_release().get(
+                "PRETTY_NAME", _friendly_plat
+            )
         case "Darwin":
             base = Path("~/Library/Application Support").expanduser().resolve()
         case _:
@@ -107,8 +111,8 @@ else:
             del base_
 
 USER_AGENT = (
-    f"{AUTHOR_USR}/{LAUNCHER_NAME} {LAUNCHER_VERSION} ({_plat} "
-    f"{platform.version()}) (contact: {EMAIL})"
+    f"{AUTHOR_USR}/{LAUNCHER_NAME} {LAUNCHER_VERSION} ({_friendly_plat}) "
+    f"(contact: {EMAIL})"
 )
 
 MINECRAFT_DIR = base / ".minecraft"
