@@ -382,7 +382,7 @@ def install_java_version_threaded(
         k for k, v in path_list.items() if v["type"] == "directory"
     ]
 
-    total_size = len(files.keys()) - len(dirs)
+    total_size = len(files.keys())
     if progress_callback:
         progress_callback(0, total_size)
 
@@ -496,3 +496,24 @@ def install_java_version_threaded(
         return jre_path_default / "MinecraftJava.exe"
     else:
         return Path(jre_path_default, *exc_path)
+
+
+def mark_executable(exe_path: str | Path) -> bool:
+    match OS:
+        case "windows":
+            log.warning("mark_executable() called from Windows")
+            return Path(exe_path).suffix == ".exe"
+    if not os.path.isfile(exe_path):
+        raise ValueError(f"File at '{exe_path}' doesn't exist")
+    perms = stat.S_IXUSR | stat.S_IXOTH | stat.S_IXGRP
+    if os.stat(exe_path).st_mode & perms:
+        return True
+    log.debug("Attempting to mark file at '%s' as executable", exe_path)
+    try:
+        os.chmod(exe_path, perms)
+    except Exception as err:
+        log.error(
+            "Failed to mark file at '%s' as executable:", exe_path, exc_info=err
+        )
+        return False
+    return True

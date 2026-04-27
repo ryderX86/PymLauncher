@@ -37,7 +37,7 @@ from minecraftlauncher.back import (
     account_manager,
 )
 from minecraftlauncher.exceptions.datatypes import InvalidVersionIdError
-from minecraftlauncher.constants import MINECRAFT_DIR, offline_mode, DEV
+from minecraftlauncher.constants import MINECRAFT_DIR, offline_mode, DEV, OS
 from minecraftlauncher.auth import LauncherAccount
 from minecraftlauncher.front import styles, resources
 from minecraftlauncher.front.qt.models import ProfileSelectionModel
@@ -196,6 +196,12 @@ class LaunchWorker(QThread):
                     )
                     self.finished.emit(False, str(err))
                     return
+
+        match OS:
+            case "windows":
+                pass
+            case _:
+                java_manager.mark_executable(java_exc)
 
         classpath = library_manager.build_classpath(libs, jar_path)
 
