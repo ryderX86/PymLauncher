@@ -10,6 +10,7 @@ from PySide6.QtCore import (
     QtMsgType,
     QMessageLogContext,
 )
+from PySide6.QtWidgets import QApplication
 import requests
 
 from .constants import (
@@ -102,3 +103,7 @@ if not DEV:
 session = requests.sessions.Session()
 session.headers["User-Agent"] = USER_AGENT
 logging.debug("User agent: %s", USER_AGENT)
+
+# setting it here allows me to not fool around with detecting when it's created
+# or spam the functions to get it
+QAPP = QApplication(sys.argv)

@@ -9,7 +9,7 @@ import sys
 
 from PySide6.QtWidgets import QApplication
 
-from . import constants, FORMATTER, DEV, MEMORY_HANDLER, config
+from . import constants, FORMATTER, DEV, MEMORY_HANDLER, config, QAPP
 from .functions.error_box import error_box
 from .front.styles import STYLESHEET, FONT
 from .front.window.loading_blocker import LoadingBlockerWindow
@@ -86,7 +86,7 @@ class App:
 
     def __init__(self):
         self.log.debug("Setting up...")
-        self.qapp = QApplication(sys.argv)
+        self.qapp: QApplication = QAPP
         self.qapp.setApplicationName("Minecraft Launcher")
         self.qapp.setStyleSheet(STYLESHEET)
         self.qapp.setFont(FONT)

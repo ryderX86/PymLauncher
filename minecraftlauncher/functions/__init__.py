@@ -57,3 +57,6 @@ def copy_to_clipboard(item: str | int | QPixmap | QIcon | QImage):
             )
 
     log.info("Copied %s to clipboard.", type(item).__name__)
+
+
+_detect_set_clipboard()
