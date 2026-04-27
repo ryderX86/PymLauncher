@@ -5,8 +5,8 @@ Handles downloading/filtering Minecraft libraries, extracting native
 JARs, and building the classpath string.
 """
 
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable
 import logging
 import re
 import zipfile
@@ -36,7 +36,7 @@ LIBRARIES_BASE = MINECRAFT_DIR / "libraries"
 # Rule evaluation stuff
 
 
-def _evaluate_rules(rules: list[dict]):
+def _evaluate_rules(rules: list[dict]) -> bool:
     """
     Evaluate a list of library rules.
 
@@ -103,7 +103,7 @@ def _evaluate_rules(rules: list[dict]):
     return result
 
 
-def filter_libraries(version_json: dict):
+def filter_libraries(version_json: dict) -> list[dict]:
     """
     Filter out libraries that don't need to be downloaded on the version,
     by rules.
@@ -139,7 +139,9 @@ def _download_file(
     return False
 
 
-def _get_lib_filepath(library: dict):
+def _get_lib_filepath(
+    library: dict,
+) -> tuple[str, str, str | None] | tuple[None, None, None]:
     """
     Returns a tuple of `str, str, str|None` or `None, None, None` depending on
     if the full name is present in the library's JSON.
@@ -171,9 +173,13 @@ def _get_lib_filepath(library: dict):
     if not sha1:
         sha1_url = url + ".sha1"
         try:
-            sha1 = download(sha1_url).text
-        except:
-            log.warning("Failed to get SHA1 for library '%s'", name)
+            resp = download(sha1_url)
+            resp.raise_for_status()
+            sha1 = resp.text
+        except Exception as err:
+            log.warning(
+                "Failed to get SHA1 for library '%s'", name, exc_info=err
+            )
             sha1 = None
         finally:
             del sha1_url
@@ -184,7 +190,7 @@ def _get_lib_filepath(library: dict):
     return str(file_target), url, sha1
 
 
-def parse_lib_path(url: str, name: str):
+def parse_lib_path(url: str, name: str) -> tuple[str, str]:
     """Returns a tuple of `("<lib url>", "<lib fp>")`"""
     if not url:
         url = "https://libraries.minecraft.net/"

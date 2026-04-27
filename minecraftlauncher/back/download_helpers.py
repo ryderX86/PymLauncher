@@ -258,7 +258,7 @@ class RunnableDownloader(QRunnable):
     def download(self):
         if self._check_hash and self._path.exists() and self._path.is_file():
             if self._check_sha1():
-                return 0
+                return False
             self.log.debug("File exists but SHA1 doesn't match, deleting.")
             self._path.unlink(True)
         attempts = 0
@@ -301,7 +301,7 @@ class RunnableDownloader(QRunnable):
         else:
             if self._callback:
                 self._callback(1)
-        return 1
+        return True
 
     @classmethod
     def kill_all(cls):

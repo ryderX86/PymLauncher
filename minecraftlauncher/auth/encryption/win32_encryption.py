@@ -40,10 +40,7 @@ def decrypt(data: bytes) -> str:
     except pywintypes.error as err:  # pylint: disable=no-member
         err_code = err.winerror
         if err_code in WinErrorCode:
-            error_name = "%s (%s)" % (
-                hex(err_code),
-                WinErrorCode(err_code).name,
-            )
+            error_name = f"{hex(err_code)} ({WinErrorCode(err_code).name})"
         else:
             error_name = hex(err_code)
         desc = err.strerror

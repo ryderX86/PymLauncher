@@ -1,6 +1,7 @@
+from collections.abc import Sequence
 from enum import IntEnum
+from typing import Any
 import logging
-from typing import Sequence
 
 from PySide6.QtCore import (
     QMimeData,
@@ -167,7 +168,7 @@ class ProfileModel(QAbstractTableModel):
         assert isinstance(prof, GameProfile)
         return prof
 
-    def data(self, index, role: int = Qt.ItemDataRole.DisplayRole):
+    def data(self, index, role: int = Qt.ItemDataRole.DisplayRole) -> Any:
         if not index.isValid():
             return None
         profile = profile_manager.get_profile(index.row())

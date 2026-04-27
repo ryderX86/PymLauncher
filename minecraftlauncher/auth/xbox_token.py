@@ -27,7 +27,7 @@ class XboxToken:
     """
 
     def __init__(self, xbl_token: dict):
-        if type(xbl_token) is str:
+        if isinstance(xbl_token, str):
             try:
                 xbl_token = json.loads(xbl_token)
             except json.JSONDecodeError as err:
@@ -59,7 +59,7 @@ class XboxToken:
             "Properties": {
                 "AuthMethod": "RPS",
                 "SiteName": "user.auth.xboxlive.com",
-                "RpsTicket": "d=%s" % msa.access_token,
+                "RpsTicket": f"d={msa.access_token}",
             },
             "RelyingParty": "http://auth.xboxlive.com",
             "TokenType": "JWT",

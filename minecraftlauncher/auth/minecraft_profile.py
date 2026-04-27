@@ -310,7 +310,7 @@ class MinecraftProfile:
         )
         return p
 
-    def current_skin_model(self):
+    def current_skin_model(self) -> str:
         return self.current_skin["variant"]
 
     def current_skin_icon(self):

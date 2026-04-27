@@ -39,7 +39,7 @@ def _substitute(template: str, values: dict[str, str]):
     return subbed
 
 
-def _process_jvm_arg_entry(entry, values: dict[str, str]):
+def _process_jvm_arg_entry(entry, values: dict[str, str]) -> list[str]:
     """
     Process an element from the JVM arguments list.
 
@@ -125,7 +125,7 @@ def _build_args(
     """Builds JVM and game args. Returns a tuple in order of `(jvm, game)`"""
     args = version_json.get("arguments", {})
 
-    jvm_args = []
+    jvm_args: list[str] = []
     for entry in args.get("jvm", []):
         added_args = _process_jvm_arg_entry(entry, values)
         if added_args:
@@ -135,7 +135,7 @@ def _build_args(
     # for entry in args.get("default-user-jvm", []):
     #     jvm_args.extend(_process_jvm_arg_entry(entry, values))
 
-    game_args = []
+    game_args: list[str] = []
     for entry in args.get("game", []):
         added_args = _process_arg_entry(entry, values, features)
         if added_args:
@@ -177,7 +177,7 @@ def _build_legacy_args(
     return default_jvm_args, game_args
 
 
-def default_user_jvm_args_factory(version_json: dict):
+def default_user_jvm_args_factory(version_json: dict) -> str:
     if version_json["id"] in _args_cache:
         return _args_cache[version_json["id"]]
     args = version_json.get("arguments", {})

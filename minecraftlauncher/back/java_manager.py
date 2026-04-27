@@ -4,8 +4,8 @@ minecraftlauncher.back.java_manager
 Handles downloading/retrieving Java versions.
 """
 
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable
 from datetime import datetime, timedelta
 import hashlib
 import json
@@ -33,7 +33,7 @@ JVM_MANIFEST_PATH = MINECRAFT_DIR / "versions" / "jre_manifest.json"
 jvm_manifest = {}
 
 
-def get_jvm_manifest(force_update: bool = False):
+def get_jvm_manifest(force_update: bool = False) -> dict:
     """
     Fetches the jvm manifest either from disk or web.
     """
@@ -72,7 +72,7 @@ def get_jvm_manifest(force_update: bool = False):
     return jvm_manifest
 
 
-def get_jvm_version_manifest(version: str):
+def get_jvm_version_manifest(version: str) -> dict:
     """
     Fetches the JVM manifest for a specific version (i.e.
     `java-runtime-epsilon`)
@@ -313,7 +313,7 @@ def install_java_version(
             if e_sha1 and e_sha1 == f_sha1:
                 completed += 1
                 continue
-            elif e_sha1:
+            if e_sha1:
                 log.warning(
                     "File at '%s' has SHA1 ('%s') that doesn't match "
                     "expected value '%s'",

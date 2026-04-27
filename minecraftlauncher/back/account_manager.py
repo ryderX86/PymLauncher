@@ -96,7 +96,7 @@ def save_or_replace_account(
     save_accounts()
 
 
-def load_accounts():
+def load_accounts() -> tuple[list[LauncherAccount], str | None]:
     global accounts
     global active_account
 

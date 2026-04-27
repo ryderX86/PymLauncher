@@ -132,7 +132,9 @@ class ProfileResolutionTextValidator(QValidator):
     def set_resolutions(self, resolution_list: list[str]):
         self.resolutions = resolution_list
 
-    def validate(self, a0: str | None, a1: int):
+    def validate(
+        self, a0: str | None, a1: int
+    ) -> tuple[QValidator.State, str, int]:
         if not a0:
             return self.State.Intermediate, self.resolutions[0], 0
         if a0 == "Auto":
@@ -687,7 +689,9 @@ class ProfilesPage(QWidget):
         else:
             self._set_undirty()
 
-    def _parse_resolution(self, text: str):
+    def _parse_resolution(
+        self, text: str
+    ) -> tuple[None, None] | tuple[int, int]:
         """Parse `nxn` into `(n, n)`"""
         if text.lower() == "auto":
             return None, None

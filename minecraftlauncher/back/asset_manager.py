@@ -5,9 +5,9 @@ Handles downloading the asset index and individual asset objects
 for a given Minecraft version.
 """
 
+from collections.abc import Callable
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Callable
 import hashlib
 import json
 import logging

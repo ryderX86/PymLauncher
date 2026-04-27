@@ -396,10 +396,10 @@ class SkinChange(QDialog):
         ]
         if current_skin_hash == self.current_hash:
             error_box("Skin is already set to this!")
-            return
+            return False
         if not self.profile.token:
             error_box("Invalid access token")
-            return
+            return False
         headers = {"Authorization": f"Bearer {self.profile.token.access_token}"}
 
         fp = self.file_input.text()

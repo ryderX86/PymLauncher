@@ -152,8 +152,7 @@ class GameProfile:
             case _:
                 if isinstance(index, str):
                     raise IndexError(f"Bad index: '{index}'")
-                else:
-                    raise IndexError(f"Out of range: {index}")
+                raise IndexError(f"Out of range: {index}")
 
     @overload
     def __setitem__(
@@ -221,8 +220,7 @@ class GameProfile:
             case _:
                 if isinstance(index, str):
                     raise IndexError(f"Bad index: '{index}'")
-                else:
-                    raise IndexError(f"Out of range: {index}")
+                raise IndexError(f"Out of range: {index}")
 
     @property
     def resolution(self):
@@ -487,8 +485,7 @@ class GameProfile:
                     return False
             return True
 
-        if len(uid_fmt) == 32 and valid_chars():
-            return True
+        return len(uid_fmt) == 32 and valid_chars()
 
     def __hash__(self):
         if self.has_valid_uuid():

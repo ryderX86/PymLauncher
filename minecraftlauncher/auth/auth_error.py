@@ -28,7 +28,7 @@ class AuthError:
         return True
 
     @property
-    def error_code(self):
+    def error_code(self) -> str:
         match self.err:
             case AuthStep.MSA:
                 return "Microsoft authentication"
