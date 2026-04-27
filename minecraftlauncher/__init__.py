@@ -41,9 +41,11 @@ class _LoggingFormatter(logging.Formatter):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-    def format(self, record: logging.LogRecord):
-        record.name = record.name.replace("minecraftlauncher.", "")
-        return super().format(record)
+    if not DEBUG_LOGGING:
+
+        def format(self, record: logging.LogRecord):
+            record.name = record.name.replace("minecraftlauncher.", "")
+            return super().format(record)
 
 
 root_logger = logging.getLogger()
