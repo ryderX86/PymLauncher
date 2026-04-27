@@ -11,6 +11,8 @@ import hashlib
 import json
 import logging
 import lzma
+import stat
+import os
 
 from PySide6.QtCore import QThreadPool
 
