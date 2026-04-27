@@ -25,8 +25,6 @@ def error_box(
 
     If `dev_only` is set to `True`, the message box will only be shown if the
     program is running under a python executable and not a frozen executable.
-
-    **WARNING**: Application will stall until the box is dismissed.
     """
     if dev_only and not DEV:
         log.debug("Not showing error box ('dev_only' is True)")
