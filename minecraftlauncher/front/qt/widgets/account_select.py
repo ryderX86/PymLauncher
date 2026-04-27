@@ -92,6 +92,7 @@ class AccountSelect(QComboBox):
             if self.count() < 2:
                 return self.setCurrentIndex(1)
             self.setCurrentIndex(idx - 1)
+        return None
 
     # stop user scrolling to "add account"
     def wheelEvent(self, e):
@@ -102,5 +103,5 @@ class AccountSelect(QComboBox):
         degrees = e.angleDelta().y()
         if pixels < 0 or degrees < 0:
             if (self.currentIndex() + 1) == add_idx:
-                return
+                return None
         return super().wheelEvent(e)

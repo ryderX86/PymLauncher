@@ -25,11 +25,11 @@ from minecraftlauncher.front import styles
 from minecraftlauncher.back import profile_manager
 from minecraftlauncher.constants import LAUNCHER_VERSION
 from minecraftlauncher.functions.error_box import error_box
+from minecraftlauncher.front.qt.widgets import AccountSelect
 from .home_page import HomePage
 from .profiles_page import ProfilesPage
 from .settings_page import SettingsPage
 from .account_page import AccountPage
-from .account_select import AccountSelect
 from .utilities_page import UtilitiesPage
 
 log = logging.getLogger(__name__)
