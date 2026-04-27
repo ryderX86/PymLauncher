@@ -1,0 +1,6 @@
+[build-system]
+requires = ["nuitka"]
+
+[tool.black]
+line-length = 80
+extend-exclude = "^/*.*"
