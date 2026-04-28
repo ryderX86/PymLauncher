@@ -2,15 +2,30 @@ from pathlib import Path
 from xml.etree import ElementTree
 import logging
 import subprocess
-import importlib
+import platform
+
 
 TEXT_PRIMARY = "#e0e0e0"
 
 log = logging.getLogger("ico")
 
+WORKDIR = Path(__file__).parent
+
+PROJ_LICENSE = WORKDIR / "project_license.txt"
+OTHER_LICENSE = WORKDIR / "acknowledgements.txt"
+INSTALLER_LICENSE = WORKDIR / "dist" / "license.txt"
+
+project_license = PROJ_LICENSE.read_text()
+other_license = OTHER_LICENSE.read_text()
+
+INSTALLER_LICENSE.write_text("\n".join([project_license, other_license]))
+
+print("Successfully combined the license files.")
+
 ElementTree.register_namespace("", "http://www.w3.org/2000/svg")
 
-def change_color(raw_xml:str):
+
+def change_color(raw_xml: str):
     xml = ElementTree.fromstring(raw_xml)
     if xml.tag != "svg" and xml.tag != "{http://www.w3.org/2000/svg}svg":
         log.warning("change_color(): XML element is not <svg>, returning.")
@@ -19,7 +34,8 @@ def change_color(raw_xml:str):
     xml.attrib["fill"] = TEXT_PRIMARY
     return ElementTree.tostring(xml, encoding="unicode")
 
-def change_color_dark(raw_xml:str):
+
+def change_color_dark(raw_xml: str):
     xml = ElementTree.fromstring(raw_xml)
     if xml.tag != "svg" and xml.tag != "{http://www.w3.org/2000/svg}svg":
         log.warning("change_color(): XML element is not <svg>, returning.")
@@ -28,7 +44,8 @@ def change_color_dark(raw_xml:str):
     xml.attrib["fill"] = "current_color"
     return ElementTree.tostring(xml, encoding="unicode")
 
-ICON_DIR = Path(__file__).parent / "icon"
+
+ICON_DIR = WORKDIR / "icon"
 
 DEBUG = False
 
@@ -58,13 +75,26 @@ for file in ICON_DIR.rglob("*.svg"):
     file.write_text(new_text)
 
 qrc_name = ICON_DIR.parent / "resources.qrc"
-output_res_file = (ICON_DIR.parent.parent / "minecraftlauncher" / "front"
-                   / "_resources_bundled.py")
+output_res_file = (
+    ICON_DIR.parent.parent
+    / "minecraftlauncher"
+    / "front"
+    / "_resources_bundled.py"
+)
 cmd = [
-    "cmd.exe", "/c", "pyside6-rcc", str(qrc_name),
-    "-o", str(output_res_file)
+    "cmd.exe",
+    "/c",
+    "pyside6-rcc",
+    str(qrc_name),
+    "-o",
+    str(output_res_file),
 ]
-res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+if platform.system() != "Windows":
+    cmd = cmd[2:]
+    cmd[0] = str(WORKDIR.parent / ".venv" / "bin" / "pyside6-rcc")
+res = subprocess.run(
+    cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False
+)
 print(res.stdout.decode())
 print(res.stderr.decode())
 
@@ -76,4 +106,4 @@ if res.returncode != 0:
 # output_res_file.write_text(
 #     output_text.replace("PySide6", "PyQt6")
 # )
-print("Successfully compiled resources.")
+print("Successfully compiled QRC resources.")

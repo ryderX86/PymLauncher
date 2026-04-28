@@ -1,0 +1,99 @@
+SHDIR=$(cd -- "$(dirname -- "${BASH_SOURCE}" )" &> /dev/null && pwd)
+
+cd $SHDIR
+cd ..
+
+source ./.venv/lib/activate
+
+python ./resources/compile.py
+
+python -m nuitka \
+    --standalone \
+    --show-anti-bloat-changes \
+    --show-source-changes=minecraftlauncher \
+    --python-flag=-m \
+    --python-flag=isolated \
+    --enable-plugin=pyside6 \
+    --include-qt-plugins=sensible,qml \
+    --output-dir=./dist \
+    --noinclude-dlls=*.cpp.o \
+    --noinclude-dlls=*.qsb \
+    --noinclude-data-files=PySide6/qml/QtWebEngine/* \
+    --noinclude-data-files=PySide6/qml/Qt5Compat/* \
+    --noinclude-data-files=PySide6/qml/QtCharts/* \
+    --noinclude-data-files=PySide6/qml/QtDataVisualization/* \
+    --noinclude-data-files=PySide6/qml/QtGraphs/* \
+    --noinclude-data-files=PySide6/qml/QtLocation/* \
+    --noinclude-data-files=PySide6/qml/QtMultimedia/* \
+    --noinclude-data-files=PySide6/qml/QtRemoteObjects/* \
+    --noinclude-data-files=PySide6/qml/QtScxml/* \
+    --noinclude-data-files=PySide6/qml/QtSensors/* \
+    --noinclude-data-files=PySide6/qml/QtTest/* \
+    --noinclude-data-files=PySide6/qml/QtTextToSpeech/* \
+    --noinclude-data-files=PySide6/qml/QtWebChannel/* \
+    --noinclude-data-files=PySide6/qml/QtWebSockets/* \
+    --noinclude-data-files=PySide6/qml/QtWebView/* \
+    --noinclude-data-files=PySide6/qml/Qt/* \
+    --noinclude-data-files=PySide6/qml/QtCore/* \
+    --noinclude-data-files=PySide6/qml/QtNetwork/* \
+    --noinclude-data-files=PySide6/qml/QtPositioning/* \
+    --noinclude-data-files=PySide6/qml/QtQuick/Controls/* \
+    --noinclude-data-files=PySide6/qml/QtQuick/Dialogs/* \
+    --noinclude-data-files=PySide6/qml/QtQuick/Effects/* \
+    --noinclude-data-files=PySide6/qml/QtQuick/Layouts/* \
+    --noinclude-data-files=PySide6/qml/QtQuick/LocalStorage/* \
+    --noinclude-data-files=PySide6/qml/QtQuick/NativeStyle/* \
+    --noinclude-data-files=PySide6/qml/QtQuick/Particles/* \
+    --noinclude-data-files=PySide6/qml/QtQuick/Pdf/* \
+    --noinclude-data-files=PySide6/qml/QtQuick/Scene2D/* \
+    --noinclude-data-files=PySide6/qml/QtQuick/Scene3D/* \
+    --noinclude-data-files=PySide6/qml/QtQuick/Shapes/* \
+    --noinclude-data-files=PySide6/qml/QtQuick/Templates/* \
+    --noinclude-data-files=PySide6/qml/QtQuick/tooling/* \
+    --noinclude-data-files=PySide6/qml/QtQuick/VectorImage/* \
+    --noinclude-data-files=PySide6/qml/QtQuick/VirtualKeyboard/* \
+    --noinclude-data-files=PySide6/qml/QtQuick/Window/* \
+    --noinclude-data-files=PySide6/qml/QtQuick3D/designer/* \
+    --noinclude-data-files=PySide6/qml/QtQuick3D/Effects/* \
+    --noinclude-data-files=PySide6/qml/QtQuick3D/lightmapviewer/* \
+    --noinclude-data-files=PySide6/qml/QtQuick3D/MaterialEditor/* \
+    --noinclude-data-files=PySide6/qml/QtQuick3D/ParticleEffects/* \
+    --noinclude-data-files=PySide6/qml/QtQuick3D/Particles3D/* \
+    --noinclude-data-files=PySide6/qml/QtQuick3D/SpacialAudio/* \
+    --noinclude-data-files=PySide6/qml/QtQuick3D/Xr/* \
+    --noinclude-dlls=qt6datavisualization*.so \
+    --noinclude-dlls=qt6labswavefrontmesh.so \
+    --noinclude-dlls=qt6multimedia*.so \
+    --noinclude-dlls=qt6pdf*.so \
+    --noinclude-dlls=qt6quick3dparticle*.so \
+    --noinclude-dlls=qt6quick3dxr.so \
+    --noinclude-dlls=*texttospeech*.so \
+    --noinclude-dlls=qt6virualkeyboard*.so \
+    --noinclude-dlls=qt6web*.so \
+    --noinclude-dlls=qt6quickcontrols2*.so \
+    --noinclude-dlls=qt6quick3deffects.so \
+    --noinclude-dlls=qt6quickeffects.so \
+    --noinclude-dlls=qt6sensor*.so \
+    --noinclude-dlls=*spacialaudio*.so \
+    --noinclude-dlls=qt6sql.so \
+    --noinclude-dlls=*statemachine*.so \
+    --noinclude-dlls=*test*.so \
+    --noinclude-dlls=qt63danimation.so \
+    --noinclude-dlls=qt63dcore.so \
+    --noinclude-dlls=qt63dextras.so \
+    --noinclude-dlls=qt63dinput.so \
+    --noinclude-dlls=qt63dlogic.so \
+    --noinclude-dlls=qt63drender.so \
+    --noinclude-dlls=qt6labs*.so \
+    --noinclude-dlls=qt6quickdialogs*.so \
+    --noinclude-dlls=qt6charts*.so \
+    --noinclude-dlls=qt6graphs*.so \
+    --noinclude-dlls=qt6positioningquick.so \
+    --noinclude-dlls=qt6positioningquick.so \
+    --noinclude-dlls=qt6quick3dhelpersimpl.so \
+    --noinclude-dlls=qt6quick3dspatialaudio.so \
+    --noinclude-dlls=qt*particle*.so \
+    --windows-icon-from-ico=./resources/_dist/icon.ico \
+    --output-filename=launcher \
+    --file-description="Minecraft Launcher written in Python" \
+    ./minecraftlauncher

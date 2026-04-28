@@ -8,8 +8,9 @@ Supports reading the official Minecraft launcher's
 ``launcher_profiles.json`` format for compatibility.
 """
 
+from collections.abc import Callable, Iterable
 from datetime import datetime
-from typing import Literal, Callable, Iterable
+from typing import Literal
 from types import FunctionType
 from functools import lru_cache
 import json
@@ -20,6 +21,7 @@ from PySide6.QtCore import Signal, QObject
 
 from minecraftlauncher.constants import MINECRAFT_DIR
 from minecraftlauncher.datatypes import GameProfile
+from minecraftlauncher.functions import reswrite
 
 log = logging.getLogger(__name__)
 
@@ -249,7 +251,7 @@ def save_launcher_meta():
         log.error("Failed to dump _meta_cache JSON!", exc_info=err)
         raise
     else:
-        PROFILES_META.write_text(meta_json)
+        reswrite(PROFILES_META, meta_json)
 
 
 def get_profile_sorting():
@@ -479,7 +481,7 @@ def save_launcher_profiles(
     json_out = json.dumps(
         output, indent=2, sort_keys=True, separators=(", ", " : ")
     )
-    PROFILES_PATH.write_text(json_out)
+    reswrite(PROFILES_PATH, json_out)
     log.debug(
         "Saved %s profiles to 'launcher_profiles.json'", len(profiles_json)
     )

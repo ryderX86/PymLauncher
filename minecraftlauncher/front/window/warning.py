@@ -114,9 +114,11 @@ class WarningDialog(QDialog):
 
     def _ok_yes(self):
         self.status = UserReturn.OK_YES
+        self.accept()
 
     def _no(self):
         self.status = UserReturn.NO
+        self.accept()
 
     def exec(self):
         QApplication.beep()

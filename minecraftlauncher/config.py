@@ -5,6 +5,7 @@ import json
 import logging
 
 from .constants import LAUNCHER_DATA_DIR, LAUNCHER_CONFIG_FILE, OS, OS_VER
+from .functions import reswrite
 from . import DEV
 
 _log = logging.getLogger(__name__)
@@ -127,7 +128,7 @@ def save():
     json_out = json.dumps(obj_out, indent=2)
     if not LAUNCHER_DATA_DIR.exists():
         LAUNCHER_DATA_DIR.mkdir(parents=True, exist_ok=True)
-    LAUNCHER_CONFIG_FILE.write_text(json_out)
+    reswrite(LAUNCHER_CONFIG_FILE, json_out)
     _log.debug("Saved config.json.")
 
 

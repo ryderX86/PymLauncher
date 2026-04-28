@@ -2,11 +2,13 @@
 # nuitka-project-if: sys.platform == "win32":
 #   nuitka-project: --windows-console-mode=disable
 from logging.handlers import RotatingFileHandler
-from typing import Callable
+from collections.abc import Callable
 import logging
 import atexit
 import sys
 
+from PySide6.QtCore import QFile
+from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QApplication, QStyleFactory
 
 from . import constants, FORMATTER, DEV, MEMORY_HANDLER, config, QAPP
@@ -95,6 +97,10 @@ class App:
                 self.qapp.setStyle(QStyleFactory.create("Windows"))
         self.qapp.setStyleSheet(STYLESHEET)
         self.qapp.setFont(FONT)
+        if QFile(":/icon.ico").exists():
+            self.qapp.setWindowIcon(QIcon(":/icon.ico"))
+        else:
+            log.debug("Couldn't set app icon")
         # just in case it doesn't fully run the rest of main():
         self.qapp.aboutToQuit.connect(self._set_clean_exit)
 

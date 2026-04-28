@@ -17,7 +17,7 @@ Name "${NAME}"
 OutFile "${NAME}_install.exe"
 InstallDir "$PROGRAMFILES64\${NAME}"
 
-!define MUI_ICON "..\resources\_dist\icon.ico"
+!define MUI_ICON "..\resources\dist\icon.ico"
 !define MUI_WELCOMEPAGE_TITLE "${SLUG} Installation"
 
 !insertmacro MUI_PAGE_WELCOME

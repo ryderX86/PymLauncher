@@ -7,6 +7,7 @@ from minecraftlauncher.constants import SKIN_CHANGE_URL, LAUNCHER_DATA_DIR
 from minecraftlauncher.auth import LauncherAccount
 from minecraftlauncher.auth.encryption import data_load_hook, data_save_hook
 from minecraftlauncher.functions.text import indent
+from minecraftlauncher.functions import reswrite
 from minecraftlauncher import DEV, session
 
 log = logging.getLogger(__name__)
@@ -37,23 +38,19 @@ def save_accounts(
 
     LAUNCHER_DATA_DIR.mkdir(parents=True, exist_ok=True)
 
-    json_indent = 4 if DEV else 0
-    payload_str = json.dumps(
-        {
-            "active": active_xuid or active_account,
-            "accounts": [acc.serialize() for acc in accounts],
-            "last_saved": datetime.now().timestamp(),
-        },
-        indent=json_indent,
-    )
+    payload_json = {
+        "active": active_xuid or active_account,
+        "accounts": [acc.serialize() for acc in accounts],
+        "last_saved": datetime.now().timestamp(),
+    }
 
     if return_unencrypted:
         log.warning("Returning unencrypted accounts.bin to var (not saving)")
-        return payload_str
+        return json.dumps(payload_json, indent=4 if DEV else None)
 
-    payload = data_save_hook(payload_str)
+    payload = data_save_hook(payload_json)
 
-    ACCOUNTS_FILE.write_bytes(payload)
+    reswrite(ACCOUNTS_FILE, payload)
 
     log.info("Saved %s accounts to cache file.", len(accounts))
     return None

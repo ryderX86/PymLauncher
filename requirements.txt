@@ -3,3 +3,5 @@ requests
 nuitka
 qrcode
 pywin32; platform_system == "Windows"
+keyring==25.7.0; platform_system != "Windows"
+cryptography==47.0.0; platform_system != "Windows"
