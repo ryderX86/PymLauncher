@@ -1,7 +1,6 @@
 import logging
 
 from PySide6.QtCore import Qt, Signal, QSize
-from PySide6.QtGui import QResizeEvent
 from PySide6.QtWidgets import (
     QDialog,
     QLabel,
