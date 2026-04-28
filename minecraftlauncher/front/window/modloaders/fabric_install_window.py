@@ -1,6 +1,7 @@
 import logging
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, Signal, QSize
+from PySide6.QtGui import QResizeEvent
 from PySide6.QtWidgets import (
     QDialog,
     QLabel,
@@ -32,7 +33,7 @@ class FabricInstallWindow(QDialog):
         self.game_ver_selected = False
         self.loader_ver_selected = False
         self._build_ui()
-        size = self.baseSize()
+        size = QSize(400, 250)
         self.setMaximumSize(size)
         self.setMinimumSize(size)
         self.setSizeGripEnabled(False)

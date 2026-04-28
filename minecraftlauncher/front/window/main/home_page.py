@@ -46,6 +46,7 @@ from minecraftlauncher.front.window import (
     WarningType,
     ButtonConfig,
 )
+from minecraftlauncher.front.styles import TERMINAL_FONT
 from minecraftlauncher import config
 
 log = logging.getLogger(__name__)
@@ -480,7 +481,7 @@ class HomePage(QWidget):
             self.game_logs.styleSheet()
             + f"; background-color: {styles.BG_DARK};"
         )
-        self.game_logs.setFont(QFont("consolas"))
+        self.game_logs.setFont(TERMINAL_FONT)
         self.game_logs.setMaximumBlockCount(2000)  # change if needed
 
         info_layout.addWidget(self.game_logs)

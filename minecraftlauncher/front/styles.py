@@ -149,6 +149,10 @@ QWidget[surface="true"] QLabel {{
     background-color: {BG_SURFACE};
     border-radius: 5px;
 }}
+QWidget[border="true"] {{
+    border: 1px solid {BORDER};
+    border-radius: 6px;
+}}
 
 :focus {{
     outline: none;
@@ -608,7 +612,11 @@ def regen_styles():
 STYLESHEET = regen_styles()
 
 FONT = QFont()
-FONT.setFamilies(["Segoe UI", "Inter", "Roboto", "sans-serif"])
+FONT.setFamilies(["Segoe UI", "sans-serif"])
 FONT.setPointSize(10)
+
+TERMINAL_FONT = QFont()
+TERMINAL_FONT.setFamilies(["consolas", "hack", "monospace"])
+TERMINAL_FONT.setStyleHint(QFont.StyleHint.Monospace)
 
 uses_dark_mode = True

@@ -9,7 +9,14 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
-_FLAGS = Qt.WindowType.SplashScreen
+from minecraftlauncher.constants import OS
+from minecraftlauncher import QAPP
+
+match OS:
+    case "linux":
+        _FLAGS = Qt.WindowType.SplashScreen | Qt.WindowType.FramelessWindowHint
+    case _:
+        _FLAGS = Qt.WindowType.SplashScreen
 
 log = logging.getLogger(__name__)
 
@@ -20,6 +27,7 @@ class LoadingBlockerWindow(QDialog):
         self.setMinimumSize(500, 360)
         self.setMaximumSize(500, 360)
         self.resize(500, 360)
+        self.setProperty("border", True)
         self._build_layout()
         if QCoreApplication.instance():
             QCoreApplication.instance().processEvents()  # type: ignore
@@ -44,13 +52,11 @@ class LoadingBlockerWindow(QDialog):
         if not text.endswith("..."):
             text = text + "..."
         self.label.setText(text)
-        if QCoreApplication.instance():
-            QCoreApplication.instance().processEvents()  # type: ignore
+        QAPP.processEvents()
 
-    def show(self):
-        if QCoreApplication.instance():
-            QCoreApplication.instance().processEvents()  # type: ignore
-        return super().show()
+    def open(self) -> None:
+        QAPP.processEvents()
+        super().open()
 
     def hide(self):
         self.set_text()

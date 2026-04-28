@@ -3,6 +3,7 @@
 #   nuitka-project: --windows-console-mode=disable
 from logging.handlers import RotatingFileHandler
 from collections.abc import Callable
+from time import sleep
 import logging
 import atexit
 import sys
@@ -11,7 +12,7 @@ from PySide6.QtCore import QFile
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QApplication, QStyleFactory
 
-from . import constants, FORMATTER, DEV, MEMORY_HANDLER, config, QAPP
+from . import constants, FORMATTER, DEV, MEMORY_HANDLER, config, QAPP, args
 from .functions.error_box import error_box
 from .front.styles import STYLESHEET, FONT
 from .front.window.loading_blocker import LoadingBlockerWindow
@@ -123,6 +124,11 @@ class App:
         )
 
         self.main_window.home_page.game_crash.connect(self.show_crash_dialog)
+
+        if DEV:
+            if args.debug_splash_screen:
+                self.lb_window.set_text("Waiting 5s for splash debugging")
+                sleep(5)
 
     def _set_clean_exit(self):
         global clean_exit

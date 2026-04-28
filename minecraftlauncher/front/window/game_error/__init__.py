@@ -9,7 +9,7 @@ import logging
 import os
 
 from PySide6.QtCore import Qt, QUrl
-from PySide6.QtGui import QDesktopServices, QFont
+from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
     QDialog,
     QPushButton,
@@ -22,16 +22,10 @@ from PySide6.QtWidgets import (
 )
 
 from minecraftlauncher.functions import copy_to_clipboard, clipboard_present
+from minecraftlauncher.front.styles import TERMINAL_FONT
 from minecraftlauncher import constants
 
 log = logging.getLogger(__name__)
-
-match constants.OS:
-    case "windows" | "osx":
-        mono_font = QFont("Courier", 12)
-    case _:
-        mono_font = QFont("monospace")
-mono_font.setStyleHint(QFont.StyleHint.TypeWriter)
 
 
 class ErrorDisplay(QDialog):
@@ -96,12 +90,10 @@ class ErrorDisplay(QDialog):
         self._log_display.setReadOnly(True)
         self._log_display.setLineWrapMode(QPlainTextEdit.LineWrapMode.NoWrap)
         self._log_display.setStyleSheet(
-            self._log_display.styleSheet()
-            + " font-family: Courier, monospace; "
-            "font-weight: 600; "
+            self._log_display.styleSheet() + "font-weight: 600; "
             "font-size: 12;"
         )
-        self._log_display.setFont(mono_font)
+        self._log_display.setFont(TERMINAL_FONT)
         self._layout.addWidget(self._log_display)
 
         buttons_parent = QFrame()
