@@ -10,7 +10,6 @@ from pathlib import Path
 import logging
 import os
 import subprocess
-import platform
 
 from minecraftlauncher.constants import (
     LAUNCHER_NAME,
@@ -358,9 +357,10 @@ def launch_game(command: list[str], cwd: str | Path | None):
 
     log.info("Launching Minecraft")
     kwargs = {}
-    if platform.system() == "Windows":
-        si = subprocess.STARTUPINFO()
-        si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+
+    if OS == "windows":
+        si = subprocess.STARTUPINFO()  # type: ignore
+        si.dwFlags |= subprocess.STARTF_USESHOWWINDOW  # type: ignore
         si.wShowWindow = 1
         kwargs["startupinfo"] = si
 

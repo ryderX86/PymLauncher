@@ -150,6 +150,10 @@ QWidget[surface="true"] QLabel {{
     border-radius: 5px;
 }}
 
+:focus {{
+    outline: none;
+}}
+
 /* Window */
 QMainWindow {{
     background-color: {BG_DARKEST};
@@ -385,6 +389,9 @@ QComboBox QAbstractItemView {{
     selection-background-color: {ACCENT_DIM};
     outline: 0;
 }}
+QComboBox ::item {{
+    min-height: 2em;
+}}
 QComboBox ::item:selected {{
     background-color: {ACCENT_DIM};
     color: {TEXT_PRIMARY};
@@ -404,13 +411,10 @@ QComboBox[bigIcons="true"] ::item {{
     min-height: 48px;
     icon-size: 32px;
     padding: 0 12px;
-    margin: 2px 0;
 }}
 QComboBox[bigIcons="true"] ::item:selected {{
     background-color: {ACCENT_DIM};
     color: {TEXT_PRIMARY};
-    margin: 0 0;
-    padding-top: 2px;
 }}
 QComboBox[bigIcons="true"] QAbstractItemView {{
     background-color: {BG_INPUT};

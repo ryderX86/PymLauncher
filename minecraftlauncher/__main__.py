@@ -7,7 +7,7 @@ import logging
 import atexit
 import sys
 
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QStyleFactory
 
 from . import constants, FORMATTER, DEV, MEMORY_HANDLER, config, QAPP
 from .functions.error_box import error_box
@@ -88,6 +88,11 @@ class App:
         self.log.debug("Setting up...")
         self.qapp: QApplication = QAPP
         self.qapp.setApplicationName("Minecraft Launcher")
+        match constants.OS:
+            case "windows":
+                pass
+            case _:
+                self.qapp.setStyle(QStyleFactory.create("Windows"))
         self.qapp.setStyleSheet(STYLESHEET)
         self.qapp.setFont(FONT)
         # just in case it doesn't fully run the rest of main():

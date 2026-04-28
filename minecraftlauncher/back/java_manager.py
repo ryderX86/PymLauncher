@@ -510,7 +510,7 @@ def mark_executable(exe_path: str | Path) -> bool:
         return True
     log.debug("Attempting to mark file at '%s' as executable", exe_path)
     try:
-        os.chmod(exe_path, perms)
+        os.chmod(exe_path, os.stat(exe_path).st_mode | perms)
     except Exception as err:
         log.error(
             "Failed to mark file at '%s' as executable:", exe_path, exc_info=err

@@ -8,7 +8,6 @@ JARs, and building the classpath string.
 from collections.abc import Callable
 from pathlib import Path
 import logging
-import re
 import zipfile
 
 from PySide6.QtCore import QThreadPool
@@ -68,34 +67,43 @@ def _evaluate_rules(rules: list[dict]) -> bool:
                 arch_match = os_constraint["arch"] == ARCH
             if "versionRange" in os_constraint:
                 match OS:
-                    case "windows":
+                    case "windows" | "linux":
                         ver = OS_VER.split(".")
-                        comp_ver = os_constraint["versionRange"].get(
-                            "min",
-                            os_constraint["versionRange"].get("max", "120.0.0"),
+                        comp_ver = (
+                            os_constraint["versionRange"]
+                            .get(
+                                "min",
+                                os_constraint["versionRange"].get(
+                                    "max", "120.0.0"
+                                ),
+                            )
+                            .split(".")
                         )
                         if "min" in os_constraint["versionRange"]:
                             mode = "min"
                         else:
                             mode = "max"
                         match = True
-                        if ver[0] < comp_ver[0]:
-                            match = False
-                        elif ver[1] < comp_ver[1]:
-                            match = False
-                        elif ver[2] < comp_ver[2]:
-                            match = False
+                        try:
+                            if int(ver[0]) < int(comp_ver[0]):
+                                match = False
+                            elif int(ver[1]) < int(comp_ver[1]):
+                                match = False
+                            elif int(ver[2]) < int(comp_ver[2]):
+                                match = False
+                        except:
+                            log.warning(
+                                "Couldn't get rule, downloading lib just in "
+                                "case."
+                            )
+                            match = True
                         if match and mode == "min":
                             ver_match = True
                         else:
                             ver_match = False
                     case _:
-                        try:
-                            ver_match = bool(
-                                re.search(os_constraint["version"], OS_VER)
-                            )
-                        except re.error:
-                            ver_match = False
+                        log.debug("Unknown version rule, skipping")
+                        ver_match = True
 
             if name_match and arch_match and ver_match:
                 result = action

@@ -400,6 +400,9 @@ class HomePage(QWidget):
         info_sub_layout.setContentsMargins(10, 4, 10, 0)
 
         self.profile_dropdown = QComboBox()
+        # lv = QListView(self.profile_dropdown)
+        # lv.setUniformItemSizes(True)
+        # self.profile_dropdown.setView(lv)
         self.profile_dropdown.activated.connect(self._on_dropdown_select)
         self.selection_model.currentChanged.connect(self._on_global_profile)
         profile_manager.add_profile_refresh_handler(self._refresh_profiles)

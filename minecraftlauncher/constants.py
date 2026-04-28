@@ -129,6 +129,7 @@ if DEV:
 
 OS: Literal["windows", "osx", "linux", "unknown"]
 OS_PATH_DELIM: Literal["\\", "/"] = "/"
+OS_VER: str = platform.version()
 match _plat:
     case "Windows":
         OS = "windows"
@@ -137,6 +138,7 @@ match _plat:
         OS = "osx"
     case "Linux":
         OS = "linux"
+        OS_VER = platform.release()
     case _:
         OS = "unknown"
 
@@ -174,7 +176,6 @@ match OS, ARCH:
     case _:
         JAVA_OS = "gamecore"
 
-OS_VER: str = platform.version()
 
 CLASSPATH_SEPARATOR = ";" if OS == "windows" else ":"
 
