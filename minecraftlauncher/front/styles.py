@@ -3,6 +3,7 @@ QSS stylesheet
 """
 
 from colorsys import rgb_to_hsv, hsv_to_rgb
+import sys
 
 from PySide6.QtGui import QFont
 
@@ -393,9 +394,7 @@ QComboBox QAbstractItemView {{
     selection-background-color: {ACCENT_DIM};
     outline: 0;
 }}
-QComboBox ::item {{
-    min-height: 2em;
-}}
+
 QComboBox ::item:selected {{
     background-color: {ACCENT_DIM};
     color: {TEXT_PRIMARY};
@@ -405,6 +404,10 @@ QComboBox[compact="true"] {{
     padding: 4px 12px;
     min-height: 1em;
     max-height: 1em;
+}}
+QComboBox[compact="true"] ::item {{
+    max-height: 1em;
+    padding: 4px 4px;
 }}
 
 QComboBox[icons_only="true"] ::item {{
@@ -603,6 +606,19 @@ QDialog {{
     background-color: {BG_DARKEST};
 }}
 """
+
+match sys.platform:
+    case "win32":
+        pass
+    case "darwin":
+        pass
+    case _:
+        mixin = """
+            QComboBox ::item {{
+                min-height: 2em;
+            }}
+        """
+        template = "\n".join([template, mixin])
 
 
 def regen_styles():
