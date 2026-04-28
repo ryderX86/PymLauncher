@@ -493,3 +493,6 @@ class GameProfile:
         else:
             h = hash(self.uuid)
         return int(h)
+
+    def set_last_used(self):
+        self.last_used = datetime.now().isoformat()

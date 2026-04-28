@@ -656,7 +656,7 @@ class HomePage(QWidget):
         # we WILL have profiles by this point or i deserve the crash this will
         # allow
         prof = profile_manager.get_current_profile()
-        assert prof
+        prof.set_last_used()
         self._profile_change(prof)
         if int(exit_code) != 0:
             self.game_crash.emit(exit_code, stdout)

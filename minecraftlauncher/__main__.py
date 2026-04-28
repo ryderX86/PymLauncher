@@ -297,6 +297,8 @@ def exit_():
         return
     log.info("Cleaning up")
     config.save()
+    profile_manager.save_launcher_profiles()
+    profile_manager.save_launcher_meta()
     # if account_manager.accounts:
     #     account_manager.save_accounts()
 
