@@ -190,11 +190,11 @@ class App:
         dialog.exec()
 
     def _on_login_abort(self):
-        if self.close_if_login_aborted:
-            exit(1)
+        global clean_exit
         active_acc = account_manager.active_account
-        if not active_acc:
-            exit(1)
+        if self.close_if_login_aborted or not active_acc:
+            clean_exit = True
+            sys.exit(1)
         account_manager.set_active_account(active_acc)
         self._refresh_account_ui()
 
