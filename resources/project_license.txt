@@ -3,7 +3,7 @@ All original works (found at https://github.com/ryderX86/minecraftlauncher-py
 under the 3-Clause BSD License:
 
 ---
-Copyright (c) 2026, Owen Ryder Maddox (ryderX86)
+Copyright (c) 2026, Ryder Maddox (ryderX86)
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without

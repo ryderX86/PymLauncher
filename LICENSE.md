@@ -4,7 +4,7 @@ the 3-Clause BSD License unless stated otherwise in their respective files:
 
 ## BSD-3-Clause License
 ```
-Copyright (c) 2026, Owen Ryder Maddox (ryderX86)
+Copyright (c) 2026, Ryder Maddox (ryderX86)
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
