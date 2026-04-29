@@ -5,7 +5,6 @@ import binascii
 
 from PySide6.QtCore import Qt, QFile, QSize
 from PySide6.QtGui import QIcon, QPixmap, QImage
-from PySide6.QtSvg import QSvgRenderer
 import qrcode
 import qrcode.constants
 import qrcode.image.svg
@@ -24,7 +23,6 @@ from minecraftlauncher.constants import LAUNCHER_DATA_DIR, OS
 from . import _resources_bundled  # pylint: disable=W0611
 
 _icon_cache: dict[str, QIcon] = {}
-_svg_cache: dict[str, QSvgRenderer] = {}
 
 log = logging.getLogger(__name__)
 if not resource_debug:
