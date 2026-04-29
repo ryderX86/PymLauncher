@@ -11,6 +11,7 @@ import logging
 import zipfile
 
 from PySide6.QtCore import QThreadPool
+from packaging.version import Version, parse
 
 from minecraftlauncher.constants import (
     MINECRAFT_DIR,
@@ -68,39 +69,38 @@ def _evaluate_rules(rules: list[dict]) -> bool:
             if "versionRange" in os_constraint:
                 match OS:
                     case "windows" | "linux":
-                        ver = OS_VER.split(".")
-                        comp_ver = (
-                            os_constraint["versionRange"]
-                            .get(
-                                "min",
-                                os_constraint["versionRange"].get(
-                                    "max", "120.0.0"
-                                ),
+                        ver = parse(OS_VER)
+                        min_ver: Version = parse(
+                            os_constraint["versionRange"].get("min", "0.0.0.0")
+                        )
+                        max_ver: Version = parse(
+                            os_constraint["versionRange"].get(
+                                "max", "999.9.9.9"
                             )
-                            .split(".")
                         )
                         if "min" in os_constraint["versionRange"]:
                             mode = "min"
-                        else:
+                        elif set(os_constraint["versionRange"].keys()) == {
+                            "min",
+                            "max",
+                        }:
+                            mode = "minmax"
+                        elif "max" in os_constraint["versionRange"]:
                             mode = "max"
-                        match = True
-                        try:
-                            if int(ver[0]) < int(comp_ver[0]):
-                                match = False
-                            elif int(ver[1]) < int(comp_ver[1]):
-                                match = False
-                            elif int(ver[2]) < int(comp_ver[2]):
-                                match = False
-                        except:
-                            log.warning(
-                                "Couldn't get rule, downloading lib just in "
-                                "case."
-                            )
-                            match = True
-                        if match and mode == "min":
-                            ver_match = True
                         else:
-                            ver_match = False
+                            log.warning(
+                                "Can't determine version rule, downloading for safety."
+                            )
+                            mode = "skip"
+                        match mode:
+                            case "min":
+                                ver_match = ver >= min_ver
+                            case "max":
+                                ver_match = ver <= max_ver
+                            case "minmax":
+                                ver_match = max_ver >= ver >= min_ver
+                            case _:
+                                ver_match = action
                     case _:
                         log.debug("Unknown version rule, skipping")
                         ver_match = True
