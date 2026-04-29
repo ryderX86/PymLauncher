@@ -1,15 +1,12 @@
 """
-minecraftlauncher.front.window.game_error
+minecraftlauncher.front.window.text_popup
 
-Module containing a class with a window to show game errors/logs.
+Module containing a class with a window to show texts.
 """
 
-from pathlib import Path
 import logging
-import os
 
-from PySide6.QtCore import Qt, QUrl
-from PySide6.QtGui import QDesktopServices
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QDialog,
     QPushButton,
@@ -18,12 +15,10 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QHBoxLayout,
     QFrame,
-    QApplication,
 )
 
 from minecraftlauncher.functions import copy_to_clipboard, clipboard_present
 from minecraftlauncher.front.styles import TERMINAL_FONT
-from minecraftlauncher import constants
 
 log = logging.getLogger(__name__)
 

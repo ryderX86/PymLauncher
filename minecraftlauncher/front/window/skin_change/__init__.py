@@ -14,40 +14,29 @@ import os
 from PySide6.QtCore import QSize, Qt, Signal, QTimer, QUrl, QObject
 from PySide6.QtGui import QCloseEvent, QPixmap, QSurfaceFormat, QImage
 from PySide6.QtWidgets import (
-    QApplication,
     QFileDialog,
-    QFrame,
-    QGridLayout,
-    QGroupBox,
     QHBoxLayout,
     QLabel,
     QListWidget,
     QListWidgetItem,
-    QMessageBox,
     QPushButton,
     QVBoxLayout,
     QWidget,
-    QStyle,
     QDialog,
     QLineEdit,
     QRadioButton,
     QButtonGroup,
     QCheckBox,
-    QScrollBar,
 )
-from PySide6.QtQml import QQmlImageProviderBase
 from PySide6.QtQuickWidgets import QQuickWidget
-from PySide6.QtQuick3D import QQuick3D, QQuick3DTextureData
-from PySide6.QtQuick import QQuickImageProvider, QQuickTextureFactory
 import requests
 
 from minecraftlauncher.front import resources
-from minecraftlauncher.auth import LauncherAccount, MinecraftProfile, SkinModel
+from minecraftlauncher.auth import LauncherAccount, SkinModel
 from minecraftlauncher.back import account_manager
 from minecraftlauncher.functions.error_box import error_box
 from minecraftlauncher.constants import (
     SKIN_CHANGE_URL,
-    SKIN_URL_BASE,
     OS_PATH_DELIM,
     CAPE_URL,
 )
