@@ -15,18 +15,6 @@ class LauncherAccount:
     token: MinecraftToken | None
     profile: MinecraftProfile | None
 
-    has_profile: bool  # default: False
-    """
-    Whether or not the account has a profile associated
-    with it or not. (Default: `False`)
-
-    If the account doesn't have a profile but does
-    own the game, notify the user to go to minecraft.net
-    and sign in to activate their profile.
-
-    This can't be relied on if you haven't first run
-    `get_profile_info()` since initializing the class.
-    """
     gamertag: str
     """
     Xbox Live gamertag, for identifying accounts
@@ -52,7 +40,21 @@ class LauncherAccount:
 
         # defaults
         self.xbox = xbox_token
-        self.has_profile = bool(self.profile)
+
+    @property
+    def has_profile(self):
+        """
+        Whether or not the account has a profile associated
+        with it or not. (Default: `False`)
+
+        If the account doesn't have a profile but does
+        own the game, notify the user to go to minecraft.net
+        and sign in to activate their profile.
+
+        This can't be relied on if you haven't first run
+        `get_profile_info()` since initializing the class.
+        """
+        return bool(self.profile)
 
     @property
     def demo_mode(self):

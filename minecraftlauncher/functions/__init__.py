@@ -6,7 +6,10 @@ import os
 
 from PySide6.QtCore import QSize
 from PySide6.QtGui import QClipboard, QImage, QPixmap, QIcon
-from PySide6.QtWidgets import QApplication
+
+from minecraftlauncher import QAPP, config
+
+from .text import indent
 
 log = logging.getLogger(__name__)
 
@@ -19,20 +22,15 @@ def _detect_set_clipboard():
     global _clip, clipboard_present
     if bool(_clip):
         return
-    qapp = QApplication.instance()
-    if not qapp:
-        log.warning("Failed to get QCoreApplication instance!")
-        clipboard_present = False
-        return
-    elif not isinstance(qapp, QApplication):
-        log.warning(
-            "Got QCoreApplication, but it wasn't QApplication! "
-            "Aborting clipboard operation."
-        )
-        clipboard_present = False
-        return
-    _clip = qapp.clipboard()
+    _clip = QAPP.clipboard()
     clipboard_present = bool(_clip)
+
+
+def beep():
+    if config.allow_audio:
+        QAPP.beep()
+        return True
+    return False
 
 
 def copy_to_clipboard(item: str | int | QPixmap | QIcon | QImage):

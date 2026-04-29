@@ -85,6 +85,10 @@ class MinecraftToken:
     def is_active(self):
         return self.expires_in > 10
 
+    @property
+    def _req_header(self):
+        return {"Authorization": f"Bearer {self.access_token}"}
+
     @classmethod
     def auth_alternate(cls, xsts_token: XstsToken):
         payload = {
@@ -220,12 +224,10 @@ class MinecraftToken:
         return
 
     def get_launcher_entitlements(self):
-        headers = {"Authorization": f"Bearer {self.access_token}"}
+        resp = session.get(LAUNCH_ENTITLEMENTS_URL, headers=self._req_header)
+        resp.raise_for_status()
 
-        response = session.get(LAUNCH_ENTITLEMENTS_URL, headers=headers)
-        response.raise_for_status()
-
-        game_list = response.json()
+        game_list = resp.json()
 
         items: list[dict[str, str]] = game_list.get("items", [])
         self.owned_items = {i.get("name", "unidentified") for i in items}

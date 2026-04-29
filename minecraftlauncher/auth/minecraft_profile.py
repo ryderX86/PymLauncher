@@ -1,4 +1,6 @@
 from datetime import datetime, timedelta
+from string import ascii_letters, digits
+from typing import Literal
 from pathlib import Path
 from enum import StrEnum
 import logging
@@ -13,11 +15,16 @@ import requests.exceptions
 from minecraftlauncher.auth.minecraft_token import MinecraftToken
 from minecraftlauncher.constants import (
     MOJ_PROF_URL,
-    STEVE_SKIN_URL,  # type: ignore
+    STEVE_SKIN_URL,
+    NAME_CHANGE_INFO_URL,
+    USERNAME_CHANGE_URL,
+    USERNAME_CHECK_URL,
 )
-from minecraftlauncher import constants, session
 from minecraftlauncher.back.download_helpers import download as try_request
+from minecraftlauncher import constants, session
+from minecraftlauncher.functions import indent
 from minecraftlauncher.front import resources
+from .exceptions import NameChangeError, TooManyRequestsError
 
 log = logging.getLogger(__name__)
 
@@ -84,6 +91,12 @@ class MinecraftProfile:
     skins: list[dict[str, str]]
     capes: list[dict[str, str]]
 
+    rate_limit_end: datetime | None
+    na_rate_limit_end: datetime | None
+    """
+    Rate limit specific to /minecraft/profile/{name}/available
+    """
+
     def __init__(
         self, profile_info: dict, mc_token: MinecraftToken | None = None
     ):
@@ -110,6 +123,8 @@ class MinecraftProfile:
 
         self.current_cape = None
         self._check_current_skin()
+        self.rate_limit_end = None
+        self.na_rate_limit_end = None
 
     def _check_current_skin(self):
         self.current_skin = self._default_skin_inf
@@ -220,6 +235,10 @@ class MinecraftProfile:
     @token.setter
     def token(self, token: MinecraftToken):
         self._token = token
+
+    @property
+    def _req_header(self):
+        return {"Authorization": f"Bearer {self.token}"}
 
     def refresh_profile_info(self):
         if not self._token:
@@ -364,3 +383,142 @@ class MinecraftProfile:
             check_redownload_skin(p, url, sha)
             return p
         return None
+
+    def is_rl_active(self):
+        if not self.rate_limit_end:
+            return False
+        return (self.rate_limit_end - datetime.now()).total_seconds() > 0
+
+    def is_na_rl_active(self):
+        if not self.na_rate_limit_end:
+            return False
+        return (self.na_rate_limit_end - datetime.now()).total_seconds() > 0
+
+    def check_name_available(
+        self, name: str
+    ) -> tuple[Literal[True], None] | tuple[Literal[False], str]:
+        allowed_chars = "".join([*ascii_letters, *digits, "_"])
+        # check the name itself first so we don't spam useless requests for
+        # absolutely zero reason
+        if len(name) > 16:
+            raise ValueError(
+                "Name too long. Max length: 16; requested name length: "
+                f"{len(name)}"
+            )
+        elif not all(c in allowed_chars for c in name):
+            raise ValueError(
+                "Name must only consist of letters, numbers, and underscores."
+            )
+        elif self.is_rl_active() or self.is_na_rl_active():
+            raise TooManyRequestsError(
+                self.rate_limit_end or self.na_rate_limit_end,  # type: ignore
+                continuation=True,
+            )
+        try:
+            resp = session.get(
+                USERNAME_CHECK_URL % name, headers=self._req_header
+            )
+            resp.raise_for_status()
+        except requests.HTTPError as err:
+            match err.response.status_code:
+                case 429:
+                    self.na_rate_limit_end = datetime.now() + timedelta(
+                        minutes=5
+                    )
+                    log.error(
+                        "Name availability endpoint returned 429, setting RL "
+                        "end to +5 mins. Full text (if any): %s",
+                        err.response.text,
+                    )
+                    raise TooManyRequestsError(self.na_rate_limit_end) from err
+                case _:
+                    raise err
+        else:
+            self.na_rate_limit_end = datetime.now() + timedelta(seconds=15)
+            resp_json: dict[str, str] = resp.json()
+            status = resp_json.get("status")
+            match status:
+                case "DUPLICATE":
+                    return False, "This username is already taken."
+                case "AVAILABLE":
+                    return True, None
+                case "NOT_ALLOWED":
+                    return False, "This username doesn't meet the requirements."
+                case None:
+                    err = RuntimeError("API returned no name status!")
+                    err.add_note(f"Original response:\n{indent(resp.text)}")
+                    raise err
+                case _:
+                    err = RuntimeError("Unexpected response from API!")
+                    err.add_note(f"API response:\n{indent(resp.text)}")
+                    raise err
+
+    def check_can_change_name(self) -> tuple[bool, datetime | None]:
+        if self.is_rl_active():
+            assert self.rate_limit_end
+            raise TooManyRequestsError(self.rate_limit_end, continuation=True)
+        try:
+            resp = session.get(NAME_CHANGE_INFO_URL, headers=self._req_header)
+            resp.raise_for_status()
+        except requests.HTTPError as err:
+            code = err.response.status_code
+            match code:
+                case 429:
+                    log.error(
+                        "Error 429 from Mojang API, cooling off before next "
+                        "request"
+                    )
+                    _api_timeout_expiration = datetime.now() + timedelta(
+                        minutes=1
+                    )
+                    raise TooManyRequestsError(_api_timeout_expiration) from err
+                case _:
+                    raise err
+
+        info = resp.json()
+
+        last_change = info.get("changedAt", info.get("createdAt"))
+        if last_change:
+            last_change = datetime.fromisoformat(last_change)
+        can_change = info.get("nameChangeAllowed", False)
+        return can_change, last_change
+
+    def change_username(self, new_name: str):
+        if self.is_rl_active():
+            assert self.rate_limit_end
+            raise TooManyRequestsError(self.rate_limit_end, continuation=True)
+        log.info("Changing player name from '%s' to '%s'", self.name, new_name)
+
+        try:
+            resp = session.put(
+                USERNAME_CHANGE_URL % new_name, headers=self._req_header
+            )
+            resp.raise_for_status()
+        except requests.HTTPError as err:
+            code = err.response.status_code
+            match code:
+                case 400 | 403:
+                    raise NameChangeError(err.response.text) from err
+                case 429:
+                    log.error(
+                        "Error 429 from Mojang API, cooling off before next "
+                        "request"
+                    )
+                    self.rate_limit_end = datetime.now() + timedelta(minutes=5)
+                    raise TooManyRequestsError(self.rate_limit_end) from err
+                case _:
+                    raise err
+        else:
+            log.info("Name changed successfully.")
+            prof_json: dict = resp.json()
+            if set(prof_json.keys()) == {"id", "name", "skins", "capes"}:
+                log.debug("Using profile data included in request")
+                self.uuid = prof_json.get("id", "UNKNOWN")
+                self.name = prof_json.get("name", "Steve")
+                self.skins = prof_json.get("skins", [])
+                self.capes = prof_json.get("capes", [])
+            else:
+                log.debug("No profile info included, getting our own")
+                log.debug("Original response:\n%s", indent(resp.text))
+                self.refresh_profile_info()
+            return new_name

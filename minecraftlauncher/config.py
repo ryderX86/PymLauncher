@@ -60,6 +60,7 @@ jump_list_items: list[str] = []  # profiles
 dialog_answers: dict[int, bool] = {}
 show_animation_on_skin_dialog: bool = False
 show_logs_on_home: bool = False
+allow_audio: bool = True
 
 # konami code, just does comic sans. possibly resource intense.
 want_easter_eggs: IgnoreMe | bool = IgnoreMe(False)

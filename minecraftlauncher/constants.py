@@ -73,6 +73,17 @@ LAUNCH_ENTITLEMENTS_URL = (
 MOJ_PROF_URL = "https://api.minecraftservices.com/minecraft/profile"
 SKIN_CHANGE_URL = "https://api.minecraftservices.com/minecraft/profile/skins"
 CAPE_URL = "https://api.minecraftservices.com/minecraft/profile/capes/active"
+NAME_CHANGE_INFO_URL = (
+    "https://api.minecraftservices.com/minecraft/profile/namechange"
+)
+USERNAME_CHECK_URL = (
+    "https://api.minecraftservices.com/minecraft/profile/name/%s/available"
+)
+"""`%s`"""
+USERNAME_CHANGE_URL = (
+    "https://api.minecraftservices.com/minecraft/profile/name/%s"
+)
+"""`%s`"""
 
 # Game assets URLs
 VERSION_MANIFEST_URL = (

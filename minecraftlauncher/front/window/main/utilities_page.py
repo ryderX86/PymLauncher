@@ -15,7 +15,9 @@ from minecraftlauncher.front.window.modloaders import (
     FabricInstallWindow,
     NeoForgeInstallWindow,
 )
+from minecraftlauncher.front.qt.widgets import Section
 from minecraftlauncher.back import account_manager
+from minecraftlauncher.functions import beep
 from minecraftlauncher import constants
 from . import HRow
 
@@ -58,16 +60,19 @@ class UtilitiesPage(QWidget):
         layout.addWidget(fabric_row)
 
         if constants.DEV:
-            debug_row = HRow(self)
-            debug_row.setAlignment(
+            debug_section = Section("Debug")
+            debug_section.setAlignment(
                 Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
             )
-            d_label = QLabel("Debug utilities:")
             dump_accs_btn = QPushButton("See accounts.bin")
             dump_accs_btn.clicked.connect(self._dump_accs)
-            debug_row.addWidget(d_label)
-            debug_row.addWidget(dump_accs_btn)
-            layout.addWidget(debug_row)
+            debug_section.addWidget(dump_accs_btn)
+
+            test_beep = QPushButton("Test OS beep")
+            test_beep.clicked.connect(beep)
+            debug_section.addWidget(test_beep)
+
+            layout.addWidget(debug_section)
 
         # nf_row = HRow(self)
         # nf_row.setAlignment(

@@ -85,6 +85,13 @@ class SettingsPage(QWidget):
         )
         behavior.addWidget(copy_code_for_login)
 
+        allow_audio = QCheckBox("Allow warning/error sounds")
+        allow_audio.setChecked(config.allow_audio)
+        allow_audio.checkStateChanged.connect(
+            lambda c: config.set_("allow_audio", c == Qt.CheckState.Checked)
+        )
+        behavior.addWidget(allow_audio)
+
         # Downloads
         downloads = Section("Downloads")
         downloads.setProperty("section", True)
