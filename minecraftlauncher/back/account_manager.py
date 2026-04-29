@@ -121,20 +121,34 @@ def load_accounts() -> tuple[list[LauncherAccount], str | None]:
     found_active = False
     for raw_acc in raw_accounts:
         acc = LauncherAccount.from_json(raw_acc)
-        if not acc.token_valid or not acc.msa_valid:
+        if acc.gamertag == active_account and (
+            not acc.token_valid or not acc.msa_valid
+        ):
             success = acc.refresh()
             if success:
                 refreshed_account = True
+            else:
+                active_account = None
         accounts.append(acc)
         if acc.xuid == active_account:
             found_active = True
     if len(accounts) > 0 and not active_account or not found_active:
-        active_account = accounts[0].xuid
-        log.warning(
-            "No active account set in cache file, setting to '%s'.",
-            accounts[0].gamertag,
-        )
-        refreshed_account = True  # lol
+        for account in accounts:
+            active_account = account.xuid
+            log.warning(
+                "No active account set in cache file, setting to '%s'.",
+                account.gamertag,
+            )
+            if account.token_valid or account.msa_valid:
+                break
+            if account.refresh():
+                refreshed_account = True  # lol
+                break
+            log.warning(
+                "Couldn't refresh tokens for '%s', trying again",
+                account.gamertag,
+            )
+            active_account = None
         save_accounts()
     elif refreshed_account:
         save_accounts()
