@@ -6,7 +6,7 @@ import uuid
 import re
 import os
 
-from minecraftlauncher.back import version_manager, game_launcher
+from minecraftlauncher.back import version_manager
 from minecraftlauncher.exceptions.datatypes import InvalidVersionIdError
 from .game_version import GameVersionStub
 
@@ -108,7 +108,7 @@ class GameProfile:
         default_args = DEFAULT_ARGS_LIST
         if self.version_id not in ("latest-release", "latest-snapshot"):
             v = version_manager.fetch_version_json(self.version_id)
-            default_args = [game_launcher.default_user_jvm_args_factory(v)]
+            default_args = [version_manager.default_user_jvm_args_factory(v)]
         if self.jvm_args and self.jvm_args in default_args:
             return False
         elif not self.jvm_args:

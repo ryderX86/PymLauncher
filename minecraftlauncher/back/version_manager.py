@@ -14,10 +14,12 @@ import re
 from minecraftlauncher.constants import (
     VERSION_MANIFEST_URL,
     MINECRAFT_DIR,
+    DEFAULT_JVM_ARGS,
 )
 from minecraftlauncher.datatypes.game_version import GameVersionStub
 from minecraftlauncher.config import redownload_option
 from minecraftlauncher import session
+from .library_manager import _evaluate_rules
 from .download_helpers import download
 
 log = logging.getLogger(__name__)
@@ -32,6 +34,8 @@ FABRIC_VER_RE = re.compile(
 _version_list_cache: list[GameVersionStub] = []
 
 _inheritence_cache: dict[str, dict] = {}
+
+_args_cache: dict[str, str] = {}
 
 
 def _get_manifest_cache_ids():
@@ -193,10 +197,8 @@ def get_version_list(
     for ver in mf_versions:
         id_ = ver.get("id")
         if not id_:
-            log.warning(
-                "Skipping unknown version (no ID) in\
-                        get_version_list()."
-            )
+            log.warning("Skipping unknown version (no ID) in\
+                        get_version_list().")
             continue
         url = ver.get("url")
         if not url:
@@ -447,7 +449,8 @@ def download_client_jar(
     elif jar_path.exists() and jar_path.is_file() and not redownload_option:
         log.info(
             "Skipping download for '%s.jar' since it exists and option is"
-            "to not redownload"
+            "to not redownload",
+            ver_id,
         )
         return jar_path
 
@@ -553,3 +556,39 @@ def check_fabric_mod_arg_support(version_id: str):
         if i >= 12:
             return True
     return False
+
+
+def default_user_jvm_args_factory(version_json: dict) -> str:
+    if version_json["id"] in _args_cache:
+        return _args_cache[version_json["id"]]
+    args = version_json.get("arguments", {})
+    if args.get("default-user-jvm", []):
+        jvm_args = []
+        for arg in args["default-user-jvm"]:
+            if arg.get("rules", []):
+                if not _evaluate_rules(arg["rules"]):
+                    continue
+            match arg["value"]:
+                case str():
+                    jvm_args.append(arg["value"])
+                case list():
+                    for text in arg["value"]:
+                        if text.startswith("-Xms"):
+                            continue
+                        elif text.startswith("-Xmx"):
+                            continue
+                        else:
+                            jvm_args.append(text)
+                case _:
+                    raise TypeError(
+                        "Expected list or str, "
+                        f"got {type(arg["value"].__name__)}"
+                    )
+        # mojang is very interesting at making decisions regarding their
+        # manifest files
+        # if "-XX:UseZGC" in jvm_args and "-XX:UseG1GC" in jvm_args:
+        #     i = jvm_args.index("-XX:UseG1GC")
+        #     del jvm_args[i]
+        _args_cache[version_json["id"]] = " ".join(jvm_args)
+        return " ".join(jvm_args)
+    return DEFAULT_JVM_ARGS

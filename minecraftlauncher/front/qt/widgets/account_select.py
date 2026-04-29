@@ -7,6 +7,7 @@ QComboBox drop-down menu for switching between and adding new accounts.
 import logging
 
 from PySide6.QtCore import Signal
+from PySide6.QtGui import QKeyEvent
 from PySide6.QtWidgets import QComboBox
 
 from minecraftlauncher.back import account_manager
@@ -68,6 +69,9 @@ class AccountSelect(QComboBox):
         if 0 <= self._previous_index < self.count():
             self.setCurrentIndex(self._previous_index)
         self.blockSignals(False)
+
+    def keyPressEvent(self, e: QKeyEvent) -> None:
+        return None
 
     def _on_index_changed(self, index: int):
         if index < 0:

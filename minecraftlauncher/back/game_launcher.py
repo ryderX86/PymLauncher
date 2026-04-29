@@ -5,27 +5,44 @@ Builds the launch command for Minecraft, performs argument-template
 substitution, and starts the game process.
 """
 
+from collections.abc import Callable
 from string import Template
 from pathlib import Path
 import logging
 import os
 import subprocess
 
+from PySide6.QtCore import QThread, Signal
+import requests
+
 from minecraftlauncher.constants import (
     LAUNCHER_NAME,
     LAUNCHER_VERSION,
     MINECRAFT_DIR,
     OS,
-    DEFAULT_JVM_ARGS,
     DEV,
+    offline_mode,
 )
+from minecraftlauncher.front.window import (
+    WarningDialog,
+    WarningType,
+    ButtonConfig,
+)
+from minecraftlauncher.datatypes import GameProfile
 from minecraftlauncher.back.library_manager import _evaluate_rules
+from minecraftlauncher.auth import LauncherAccount
+from minecraftlauncher import config
 from .library_manager import build_classpath, filter_libraries
 from .java_manager import find_java_exc
+from . import (
+    version_manager,
+    asset_manager,
+    library_manager,
+    java_manager,
+    account_manager,
+)
 
 log = logging.getLogger(__name__)
-
-_args_cache: dict[str, str] = {}
 
 
 def _substitute(template: str, values: dict[str, str]):
@@ -174,42 +191,6 @@ def _build_legacy_args(
     ]
 
     return default_jvm_args, game_args
-
-
-def default_user_jvm_args_factory(version_json: dict) -> str:
-    if version_json["id"] in _args_cache:
-        return _args_cache[version_json["id"]]
-    args = version_json.get("arguments", {})
-    if args.get("default-user-jvm", []):
-        jvm_args = []
-        for arg in args["default-user-jvm"]:
-            if arg.get("rules", []):
-                if not _evaluate_rules(arg["rules"]):
-                    continue
-            match arg["value"]:
-                case str():
-                    jvm_args.append(arg["value"])
-                case list():
-                    for text in arg["value"]:
-                        if text.startswith("-Xms"):
-                            continue
-                        elif text.startswith("-Xmx"):
-                            continue
-                        else:
-                            jvm_args.append(text)
-                case _:
-                    raise TypeError(
-                        "Expected list or str, "
-                        f"got {type(arg["value"].__name__)}"
-                    )
-        # mojang is very interesting at making decisions regarding their
-        # manifest files
-        # if "-XX:UseZGC" in jvm_args and "-XX:UseG1GC" in jvm_args:
-        #     i = jvm_args.index("-XX:UseG1GC")
-        #     del jvm_args[i]
-        _args_cache[version_json["id"]] = " ".join(jvm_args)
-        return " ".join(jvm_args)
-    return DEFAULT_JVM_ARGS
 
 
 def build_launch_command(
@@ -376,3 +357,295 @@ def launch_game(command: list[str], cwd: str | Path | None):
     )
     log.info("Minecraft started; PID: %d", process.pid)
     return process
+
+
+class LaunchWorker(QThread):
+    """Background worker for downloading game files and launching."""
+
+    progress = Signal(
+        str, float, float, bool
+    )  # step label, current, total, is mb
+    finished = Signal(bool, str)  # successful, message
+    status = Signal(str)  # status text
+    game_closed = Signal(str, str)
+    game_log = Signal(str)
+    """
+    `[0]` (`int`) - Exit code<br>
+    `[1]` (`str`) - stdout<br>
+    `[2]` (`str`) - stderr
+    """
+
+    log = log.getChild("LaunchWorker")
+
+    def __init__(
+        self,
+        version_id: str,
+        profile_data: GameProfile,
+        auth_info: LauncherAccount,
+        emit_logs: bool = True,
+        log_hook: Callable[[str], None] | None = None,
+        parent=None,
+    ):
+        super().__init__(parent)
+        self.version_id = version_id
+        self.profile_data = profile_data
+        self.auth_info = auth_info
+        self._hook = log_hook
+        self.emit_logs = emit_logs
+        self._p: subprocess.Popen
+
+    def run(self):
+        if offline_mode:
+            allow_run = WarningDialog.warn(
+                self,
+                "Offline mode is experimental. Do you want to continue?",
+                WarningType.OFFLINE_MODE_LAUNCH,
+                "Launch in offline mode?",
+                button_config=ButtonConfig.YES_NO,
+            )
+            if not allow_run:
+                self.finished.emit(False, "User aborted launch")
+                return
+        match self.version_id:
+            case "latest-release":
+                self.version_id = version_manager.get_latest_release()
+            case "latest-snapshot":
+                self.version_id = version_manager.get_latest_snapshot()
+
+        self.status.emit("Fetching version info...")
+        version_json = version_manager.fetch_version_json(self.version_id)
+        version_json = version_manager.resolve_inheritence(version_json)
+
+        self.status.emit("Downloading client JAR...")
+        jar_path = version_manager.download_client_jar(
+            version_json,
+            progress_callback=lambda c, t: self.progress.emit(
+                f"{self.version_id}.jar", c / 1_000_000, t / 1_000_000, True
+            ),
+        )
+
+        # self.status.emit("Checking for assets...")
+        # asset_index = asset_manager.filter_assets_downloads(
+        #     asset_manager.fetch_asset_index(version_json),
+        #     progress_callback=lambda c, t: self.progress.emit(
+        #         "Checking assets", c, t
+        #     )
+        # )
+        self.status.emit("Downloading assets...")
+        asset_manager.download_assets_threaded(
+            asset_manager.fetch_asset_index(version_json),
+            progress_callback=lambda c, t: self.progress.emit(
+                "Downloading assets", c, t, False
+            ),
+        )
+
+        self.status.emit("Checking log4j config file...")
+        log4j_config = asset_manager.check_or_download_logging_config(
+            version_json
+        )
+
+        self.status.emit("Downloading libraries...")
+        libs = library_manager.filter_libraries(version_json)
+        library_manager.download_libraries_threaded(
+            libs,
+            progress_callback=lambda c, t: self.progress.emit(
+                "Downloading libraries", c, t, False
+            ),
+        )
+        library_manager.download_natives(libs)
+        natives_dir = MINECRAFT_DIR / "bin" / self.version_id
+        natives_dir = library_manager.extract_natives(libs, natives_dir)
+
+        self.status.emit("Checking for Java install...")
+        profile_jre = self.profile_data.java_path
+        if profile_jre:
+            try:
+                subprocess.run(
+                    [profile_jre.replace("javaw", "java"), "-version"],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    check=True,
+                )
+            except subprocess.CalledProcessError as err:
+                self.log.error(
+                    "Java exited with code %d:\n%s",
+                    err.returncode,
+                    str(err.output),
+                )
+                self.log.info(
+                    "Aborting launch, and notifying user of invalid "
+                    "JRE location."
+                )
+                self.finished.emit(False, str(err.output))
+                return
+            else:
+                java_exc = Path(profile_jre)
+        else:
+            jre_name = version_json.get("javaVersion", {}).get("component", "")
+            jre_manifest = java_manager.get_jvm_version_manifest(jre_name)
+            if not offline_mode:
+                self.status.emit("Downloading Java...")
+                java_exc = java_manager.install_java_version_threaded(
+                    jre_name,
+                    jre_manifest,
+                    progress_callback=lambda c, t: self.progress.emit(
+                        "Downloading Java", c, t, False
+                    ),
+                )
+            else:
+                self.log.warning(
+                    "Offline mode active, JRE executable may be broken!"
+                )
+                try:
+                    java_exc = java_manager.find_java_exc(jre_name)
+                except RuntimeError as err:
+                    self.log.error(
+                        "Failed to find JRE installation!", exc_info=err
+                    )
+                    self.finished.emit(False, str(err))
+                    return
+
+        match OS:
+            case "windows":
+                pass
+            case _:
+                java_manager.mark_executable(java_exc)
+
+        classpath = library_manager.build_classpath(libs, jar_path)
+
+        if self.auth_info.token_valid:
+            reauth = False
+        else:
+            self.log.warning(
+                "User account doesn't have a valid token, "
+                "trying to refresh..."
+            )
+            self.status.emit("Reauthenticating...")
+            try:
+                self.auth_info.minecraft_auth()
+            except RuntimeError as err:
+                self.log.error(
+                    "Failed to authenticate account, aborting launch.",
+                    exc_info=err,
+                )
+                if getattr(err, "__notes__", None):
+                    self.finished.emit(False, str(err.__notes__))
+                else:
+                    self.finished.emit(False, str(err))
+                return
+            except requests.RequestException as err:
+                self.log.error(
+                    "Failed to authenticate account (are we offline?):",
+                    exc_info=err,
+                )
+                self.finished.emit(False, str(err))
+                return
+            reauth = True
+        assert self.auth_info.token
+        if self.auth_info.profile:
+            reauth = max(reauth, False)
+        else:
+            log.warning(
+                "Account doesn't have associated profile info, trying "
+                "to fetch it..."
+            )
+            try:
+                self.auth_info.get_profile_info()
+            except Exception as err:
+                self.log.error(
+                    "Failed to fetch profile info (are we offline?)",
+                    exc_info=err,
+                )
+                self.finished.emit(False, str(err))
+                return
+            else:
+                log.info("Got profile info for '%s'", self.auth_info.gamertag)
+                assert self.auth_info.profile
+                reauth = True
+
+        if reauth:
+            account_manager.save_or_replace_account(self.auth_info)
+
+        self.status.emit("Launching Minecraft...")
+        cmd = build_launch_command(
+            version_json,
+            self.auth_info.profile.name,
+            self.auth_info.profile.uuid,
+            self.auth_info.token.access_token,
+            self.auth_info.player_type,
+            self.auth_info.demo_mode,
+            self.auth_info.xuid,
+            str(java_exc),
+            log4j_config,
+            classpath,
+            self.profile_data.game_dir,
+            self.profile_data.jvm_args,
+            self.profile_data.memory_min,
+            self.profile_data.memory_max,
+            self.profile_data.resolution_width,
+            self.profile_data.resolution_height,
+            self.profile_data.mods_folder,
+            self.profile_data.mods_folder_mode,
+        )
+        logged_cmd = " ".join(cmd).replace(
+            self.auth_info.token.access_token, "TOKEN"
+        )
+        self.log.info("Launch command: '%s'", logged_cmd)
+
+        sub_logger = logging.getLogger(Path(cmd[0]).name)
+        self._p = launch_game(cmd, cwd=self.profile_data.game_dir)
+        if self._p.poll() is None:
+            self.finished.emit(True, "Minecraft launched successfully.")
+        else:
+            self.log.warning("Game hasn't given a return code, did it launch?")
+            self.finished.emit(True, "Unknown status")
+
+        if DEV and config.post_launch_option < 1:
+            game_log_func = sub_logger.debug
+        else:
+
+            def game_log_func(msg: object, *args): ...
+
+        # reverse this when reading:
+        stdout_cache: list[str] = []
+
+        if self.emit_logs and not self._hook:
+            self._hook = self.game_log.emit
+
+        if self._hook:
+
+            def loop(self):
+                nonlocal stdout_cache
+                if self._p.stdout:
+                    for line in iter(self._p.stdout.readline, ""):
+                        stdout_cache.insert(0, line[:-1])
+                        self._hook(line[:-1])
+
+                        self._p.stdout.flush()
+                        stdout_cache = stdout_cache[:255]
+                self._p.wait()
+
+        else:
+
+            def loop(self):
+                nonlocal stdout_cache
+                if self._p.stdout:
+                    for line in iter(self._p.stdout.readline, ""):
+                        game_log_func(line[:-1])  # skip newline
+                        stdout_cache.insert(0, line[:-1])
+
+                        # memory usage
+                        self._p.stdout.flush()
+                        stdout_cache = stdout_cache[:255]  # 256 lines
+                self._p.wait()
+
+        loop(self)
+
+        stdout_cache.reverse()
+        stdout = "\n".join(stdout_cache)
+
+        self.log.debug("Returned with code %d", self._p.returncode)
+        if self._p.returncode == 0:
+            if config.redownload_option > 1:
+                config.redownload_option = 0
+        self.game_closed.emit(str(self._p.returncode), stdout)
