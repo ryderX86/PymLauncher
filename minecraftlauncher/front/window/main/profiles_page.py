@@ -416,15 +416,24 @@ class ProfilesPage(QWidget):
         min_label = QLabel("Minimum:")
         memory_row.addWidget(min_label, 0)
         self.mem_min_input = QLineEdit("512M")
+        self.mem_min_input.setMaxLength(6)
+        self.mem_min_input.setMaximumWidth(
+            max(styles.FONT_INF.pixelSize(), 1) * 6
+        )
         self.mem_min_input.textChanged.connect(self._dirty_check)
-        memory_row.addWidget(self.mem_min_input, 1)
+        memory_row.addWidget(self.mem_min_input, 0)
         self.mapper.addMapping(self.mem_min_input, MapIndex.MIN_RAM)
 
         max_label = QLabel("Maximum:")
-        memory_row.addWidget(max_label, 2)
+        memory_row.addWidget(max_label, 0)
         self.mem_max_input = QLineEdit("4G")
+        self.mem_max_input.setMaxLength(6)
+        self.mem_max_input.setMaximumWidth(
+            max(styles.FONT_INF.pixelSize(), 1) * 6
+        )
         self.mem_max_input.textChanged.connect(self._dirty_check)
-        memory_row.addWidget(self.mem_max_input, 3)
+        memory_row.addWidget(self.mem_max_input, 0)
+        memory_row.addStretch(2)
         self.mapper.addMapping(self.mem_max_input, MapIndex.MAX_RAM)
 
         self.form.addRow("RAM", memory_row)

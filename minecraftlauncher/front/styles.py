@@ -632,14 +632,17 @@ STYLESHEET = regen_styles()
 FONT = QFont()
 FONT.setFamilies(["Segoe UI", "sans-serif"])
 FONT.setPointSize(10)
+FONT_INF = QFontInfo(FONT)
 
 TERMINAL_FONT = QFont()
 TERMINAL_FONT.setFamilies(["consolas", "hack", "monospace"])
 TERMINAL_FONT.setStyleHint(QFont.StyleHint.Monospace)
+TERMINAL_FONT_INF = QFontInfo(TERMINAL_FONT)
 
 CSANS = QFont("Comic Sans MS")
 CSANS.setPointSize(9)
-CSANS_AVAILABLE = QFontInfo(CSANS).exactMatch()
+CSANS_INF = QFontInfo(CSANS)
+CSANS_AVAILABLE = CSANS_INF.exactMatch()
 
 
 uses_dark_mode = True
