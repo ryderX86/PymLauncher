@@ -27,3 +27,7 @@ literally anything to do with downloads/`requests`
 ---
 - Change `requests.X` to `minecraftlauncher.session.X`
     - obviously excluding `requests.exceptions` objects
+
+---
+### General
+- Implement Packaging package: https://packaging.pypa.io/en/latest/version.html#packaging.version.Version
