@@ -6,7 +6,7 @@ Stub settings page
 
 import logging
 
-from PySide6.QtCore import Qt, QUrl, Signal
+from PySide6.QtCore import Qt, QUrl, Signal, QFile
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
     QLabel,
@@ -20,6 +20,7 @@ from PySide6.QtWidgets import (
 
 from minecraftlauncher import config, constants
 from minecraftlauncher.front.qt.widgets import TooltipHint, Section
+from minecraftlauncher.front.window import TextPopup
 
 log = logging.getLogger(__name__)
 
@@ -163,8 +164,13 @@ class SettingsPage(QWidget):
 
         buttons_w = QWidget()
         buttons_lo = QHBoxLayout(buttons_w)
-        buttons_lo.addStretch()
         buttons_lo.setContentsMargins(0, 0, 0, 0)
+
+        acknowledgements = QPushButton("Acknowledgements")
+        acknowledgements.clicked.connect(self._open_acknowledgements)
+        buttons_lo.addWidget(acknowledgements)
+
+        buttons_lo.addStretch()
 
         open_dir_btn = QPushButton("Open Data Folder")
         open_dir_btn.clicked.connect(self._open_data_folder)
@@ -236,3 +242,14 @@ class SettingsPage(QWidget):
     def _on_redownload_option_change(self, i: int):
         data: int = self.redownload_option.itemData(i)
         config.redownload_option = config.JarRedownloadBehavior(data)
+
+    def _open_acknowledgements(self):
+        file = QFile(":/acknowledgements.txt")
+        if not file.open(QFile.OpenModeFlag.ReadOnly):
+            log.warning("Device not open!")
+        ba = file.readAll().data()
+        if isinstance(ba, memoryview):
+            ba = ba.tobytes()
+        txt = ba.decode("utf-8")
+
+        TextPopup(txt, "Acknowledgements", "Acknowledgements", self)
