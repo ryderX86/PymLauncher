@@ -1,12 +1,12 @@
 from argparse import ArgumentParser, ArgumentError
 from pathlib import Path
 
-
 _parser = ArgumentParser()
 
-_work_dir = _parser.add_argument("-wd", "--workDir", type=Path, dest="work_dir")
+_work_dir = _parser.add_argument(
+    "-wd", "--workDir", "--work_dir", "--work-dir", type=Path, dest="work_dir"
+)
 _parser.add_argument(
-    "-1",
     "--resourceDebug",
     action="store_true",
     default=False,
