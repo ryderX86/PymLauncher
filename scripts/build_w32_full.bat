@@ -105,7 +105,7 @@ python -m nuitka ^
     --noinclude-dlls=qt6quick3dhelpersimpl.dll ^
     --noinclude-dlls=qt6quick3dspatialaudio.dll ^
     --noinclude-dlls=qt*particle*.dll ^
-    --windows-icon-from-ico=.\resources\_dist\icon.ico ^
+    --windows-icon-from-ico=.\resources\dist\icon.ico ^
     --output-filename=launcher.exe ^
     --product-version=0.0.0.3 ^
     --product-name=ryderX86.minecraftlauncher-python ^
