@@ -52,7 +52,6 @@ from minecraftlauncher.back.profile_manager import (
 from minecraftlauncher.back import (
     version_manager,
     profile_manager,
-    game_launcher,
 )
 from minecraftlauncher.front import styles, resources
 from minecraftlauncher.front.qt.models import (
@@ -191,7 +190,7 @@ class VersionJsonBackgroundDownloader(QThread):
             self.done.emit("INVALID")
             return
         version_json = version_manager.resolve_inheritence(version.get_json())
-        args = game_launcher.default_user_jvm_args_factory(version_json)
+        args = version_manager.default_user_jvm_args_factory(version_json)
         self.done.emit(args)
         self.destroyed.connect(lambda: _running_threads.remove(self))
 
@@ -674,7 +673,7 @@ class ProfilesPage(QWidget):
             idx, self.icon_picker.text(), Qt.ItemDataRole.UserRole
         )
         self.mapper.submit()
-        if config.want_jump_lists and config.jump_list_items:
+        if constants.FLAG_ENABLE_JUMP_LISTS and config.jump_list_items:
             set_jump_list()  # refresh in case icons of jump-list profs changed
 
     def _reset(self):
@@ -1013,7 +1012,7 @@ class ProfilesPage(QWidget):
             save_icon.setDisabled(True)
         menu.addAction(save_icon)
 
-        if config.want_jump_lists:
+        if constants.FLAG_ENABLE_JUMP_LISTS:
             if prof.uuid not in config.jump_list_items:
                 add_jump_list = QAction(menu)
                 add_jump_list.setText("Add to jump-list")
