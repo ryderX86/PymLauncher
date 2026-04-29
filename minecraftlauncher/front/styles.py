@@ -5,7 +5,7 @@ QSS stylesheet
 from colorsys import rgb_to_hsv, hsv_to_rgb
 import sys
 
-from PySide6.QtGui import QFont
+from PySide6.QtGui import QFont, QFontInfo
 
 from minecraftlauncher.front.rgb import hex_to_rgb, rgb_to_hex
 
@@ -622,7 +622,9 @@ match sys.platform:
 
 
 def regen_styles():
-    return template.format(**globals())
+    global STYLESHEET
+    STYLESHEET = template.format(**globals())
+    return STYLESHEET
 
 
 STYLESHEET = regen_styles()
@@ -634,5 +636,10 @@ FONT.setPointSize(10)
 TERMINAL_FONT = QFont()
 TERMINAL_FONT.setFamilies(["consolas", "hack", "monospace"])
 TERMINAL_FONT.setStyleHint(QFont.StyleHint.Monospace)
+
+CSANS = QFont("Comic Sans MS")
+CSANS.setPointSize(9)
+CSANS_AVAILABLE = QFontInfo(CSANS).exactMatch()
+
 
 uses_dark_mode = True

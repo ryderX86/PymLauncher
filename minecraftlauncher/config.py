@@ -1,10 +1,15 @@
-from typing import Any, Literal
+"""
+Config module. Badly written, should change to a class and load in
+minecraftlauncher.__init__ instead of having this mess.
+"""
+
+from typing import Any
 from types import NoneType
 from enum import IntEnum
 import json
 import logging
 
-from .constants import LAUNCHER_DATA_DIR, LAUNCHER_CONFIG_FILE, OS, OS_VER
+from .constants import LAUNCHER_DATA_DIR, LAUNCHER_CONFIG_FILE
 from .functions import reswrite
 from . import DEV
 
@@ -25,8 +30,11 @@ class JarRedownloadBehavior(IntEnum):
 
 
 class IgnoreMe:
-    def __bool__(self) -> Literal[False]:
-        return False
+    def __init__(self, value: bool = False):
+        self._bool = bool(value)
+
+    def __bool__(self) -> bool:
+        return self._bool
 
     def __eq__(self, a):
         if isinstance(a, type(self)) or isinstance(self, type(a)):
@@ -48,11 +56,13 @@ redownload_option: JarRedownloadBehavior = JarRedownloadBehavior.REDOWNLOAD
 maximized: bool = False
 tooltip_icons_enabled: bool = True
 ignored_messages: list[int] = []
+jump_list_items: list[str] = []  # profiles
 dialog_answers: dict[int, bool] = {}
 show_animation_on_skin_dialog: bool = False
 show_logs_on_home: bool = False
-jump_list_items: list[str] = []  # profiles
-want_jump_lists: bool = OS == "windows" and float(OS_VER[:5].rstrip(".")) >= 6.1
+
+# konami code, just does comic sans. possibly resource intense.
+want_easter_eggs: IgnoreMe | bool = IgnoreMe(False)
 
 
 def set_(val_name: str, new_val: Any):
@@ -103,7 +113,9 @@ def load(config: dict | None = None):
             _log.warning("Ignoring unknown key in config.json: '%s'", key)
             continue
         default = globals()[key]
-        if not isinstance(default, type(val)):
+        if isinstance(default, IgnoreMe) and isinstance(val, bool):
+            pass
+        elif not isinstance(default, type(val)):
             _log.warning("Value in '%s' has conflicting type, ignoring", key)
             continue
         if DEV and val != default:

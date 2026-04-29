@@ -234,3 +234,6 @@ CHECKMARK_DELAY = 1500  # milliseconds
 
 # feature flags
 FLAG_ENABLE_EXPORTING = DEV  # not ready for prod
+FLAG_ENABLE_JUMP_LISTS: bool = (
+    OS == "windows" and float(OS_VER[:5].rstrip(".")) >= 6.1
+)
