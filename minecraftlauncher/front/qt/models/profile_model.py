@@ -9,6 +9,7 @@ from PySide6.QtCore import (
     QPersistentModelIndex,
     Qt,
     QAbstractTableModel,
+    QSize,
 )
 
 from minecraftlauncher.datatypes.launch_profile import GameProfile
@@ -211,6 +212,8 @@ class ProfileModel(QAbstractTableModel):
             return resources.profile_icon(profile.icon)
         elif role == Qt.ItemDataRole.UserRole:
             return profile
+        elif role == Qt.ItemDataRole.SizeHintRole:
+            return QSize(0, 56)
         return None
 
     def _split_resolution(self, res: str) -> tuple[int, int]:

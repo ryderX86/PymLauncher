@@ -14,7 +14,7 @@ from PySide6.QtWidgets import QApplication, QStyleFactory
 
 from . import constants, FORMATTER, DEV, MEMORY_HANDLER, config, QAPP, args
 from .functions.error_box import error_box
-from .front.styles import STYLESHEET, FONT
+from .front.styles import STYLESHEET, FONT, PALETTE
 from .front.window.loading_blocker import LoadingBlockerWindow
 from .front.window.main.main_window import MainWindow
 from .front.window.login import LoginWindow
@@ -98,6 +98,7 @@ class App:
                 self.qapp.setStyle(QStyleFactory.create("Windows"))
         self.qapp.setStyleSheet(STYLESHEET)
         self.qapp.setFont(FONT)
+        self.qapp.setPalette(PALETTE)
         if QFile(":/icon.ico").exists():
             self.qapp.setWindowIcon(QIcon(":/icon.ico"))
         else:
@@ -297,7 +298,7 @@ class App:
         self.main_window.account_page.set_account_info(active_account)
 
     def _close_event(self):
-        exit(0)
+        QAPP.exit(0)
 
 
 def exit_():

@@ -6,17 +6,18 @@ Main application window.
 
 import logging
 
-from PySide6.QtCore import Signal
+from PySide6.QtCore import Signal, QSize
 from PySide6.QtWidgets import (
     QHBoxLayout,
     QMainWindow,
-    QPushButton,
     QStackedWidget,
     QVBoxLayout,
     QWidget,
     QLabel,
     QStatusBar,
     QFrame,
+    QListWidget,
+    QListWidgetItem,
 )
 
 from minecraftlauncher import config
@@ -63,7 +64,7 @@ class MainWindow(QMainWindow):
             y = geo.height() // 2 - height // 2
             self.setGeometry(x, y, *config.window_size)
 
-        self._nav_buttons: dict[str, QPushButton] = {}
+        self._nav_buttons: dict[str, QListWidgetItem] = {}
         self._build_ui()
         if config.want_easter_eggs and styles.CSANS_AVAILABLE:
             handler = KonamiCode(self)
@@ -159,23 +160,24 @@ class MainWindow(QMainWindow):
         body_layout.setSpacing(0)
 
         # sidebar
-        sidebar = QWidget()
-        sidebar.setFixedWidth(200)
-        sidebar.setProperty("sidebar", True)
-        sidebar_layout = QVBoxLayout(sidebar)
-        sidebar_layout.setContentsMargins(0, 8, 0, 8)
-        sidebar_layout.setSpacing(0)
+        self.sidebar = QListWidget()
+        self.sidebar.setDragEnabled(False)
+        self.sidebar.setSelectionMode(QListWidget.SelectionMode.SingleSelection)
+        self.sidebar.setFixedWidth(180)
+        # self.sidebar.setProperty("sidebar", True)
+        # self.sidebar.setIconSize(QSize(32, 32))
+        self.sidebar.setUniformItemSizes(True)
+        self.sidebar.setFrameShape(QFrame.Shape.NoFrame)
+
+        self.sidebar.currentRowChanged.connect(self._nav_button_group)
 
         for label, key in self.NAV_ITEMS:
-            button = QPushButton(label)
-            button.setProperty("nav", True)
-            button.clicked.connect(lambda checked, k=key: self._navigate(k))
-            sidebar_layout.addWidget(button)
+            button = QListWidgetItem(label)
+            button.setSizeHint(QSize(0, 48))
+            self.sidebar.addItem(button)
             self._nav_buttons[key] = button
 
-        sidebar_layout.addStretch()
-
-        body_layout.addWidget(sidebar)
+        body_layout.addWidget(self.sidebar)
 
         vsep = QFrame()
         vsep.setFrameShape(QFrame.Shape.VLine)
@@ -226,20 +228,10 @@ class MainWindow(QMainWindow):
         ver_label.setProperty("secondary", True)
         self.status.addPermanentWidget(ver_label, 0)
 
-        self._navigate("home")
+        self.sidebar.setCurrentRow(0)
 
-    def _navigate(self, key: str):
-        pages = [*self._nav_buttons.keys()]
-        index = pages.index(key)
-        self.pages.setCurrentIndex(index)
-
-        for k, button in self._nav_buttons.items():
-            button.setProperty("active", k == key)
-            button.setDisabled(k == key)
-            b_style = button.style()
-            if b_style:
-                b_style.unpolish(button)
-                b_style.polish(button)
+    def _nav_button_group(self, idx: int):
+        self.pages.setCurrentIndex(idx)
 
     def set_status(self, message: str):
         self.status.showMessage(message)

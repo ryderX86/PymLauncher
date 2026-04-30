@@ -18,9 +18,9 @@ from PySide6.QtWidgets import (
     QCheckBox,
 )
 
-from minecraftlauncher import config, constants
 from minecraftlauncher.front.qt.widgets import TooltipHint, Section
 from minecraftlauncher.front.window import TextPopup
+from minecraftlauncher import config, constants
 
 log = logging.getLogger(__name__)
 
@@ -164,6 +164,17 @@ class SettingsPage(QWidget):
         # dev options
         # if constants.DEV:
         #     dev = Section("DEV")
+
+        #     def _toggle_style_sheet(c: Qt.CheckState):
+        #         match c:
+        #             case Qt.CheckState.Unchecked:
+        #                 QAPP.setStyleSheet("")
+        #             case _:
+        #                 QAPP.setStyleSheet(STYLESHEET)
+
+        #     qss_toggle = QCheckBox("Use QSS styles")
+        #     qss_toggle.checkStateChanged.connect(_toggle_style_sheet)
+        #     dev.addWidget(qss_toggle)
 
         #     layout.addWidget(dev)
 

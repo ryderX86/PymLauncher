@@ -5,16 +5,27 @@ QSS stylesheet
 from colorsys import rgb_to_hsv, hsv_to_rgb
 import sys
 
-from PySide6.QtGui import QFont, QFontInfo
+from PySide6.QtGui import QFont, QFontInfo, QPalette, QColor
 
-from minecraftlauncher.front.rgb import hex_to_rgb, rgb_to_hex
+from minecraftlauncher.front.rgb import hex_to_rgb, rgb_to_hex, hex_to_rgbi
+from minecraftlauncher import QAPP
+
+CRole = QPalette.ColorRole
+
+
+def hex_to_qrgb(hex_: str):
+    return QColor(*hex_to_rgbi(hex_))
+
+
+PALETTE = QAPP.palette()
+
 
 # Colors
 BG_DARKEST = "#111111"
 BG_DARK = "#181818"
 BG_SURFACE = "#1e1e1e"
-BG_SURFACE_LIGHT = "#252525"
 BG_INPUT = "#202020"
+BG_SURFACE_LIGHT = "#252525"
 
 ACCENT_LIGHTER = "#90C481"
 ACCENT_LIGHT = "#69B452"
@@ -32,6 +43,22 @@ BORDER_LIGHT = "#3a3a3a"
 
 DANGER = "#e74c3c"
 DANGER_HOVER = "#c0392b"
+
+PALETTE.setColor(CRole.WindowText, hex_to_qrgb(TEXT_PRIMARY))
+PALETTE.setColor(CRole.ButtonText, hex_to_qrgb(TEXT_PRIMARY))
+PALETTE.setColor(CRole.ToolTipText, hex_to_qrgb(TEXT_PRIMARY))
+PALETTE.setColor(CRole.Window, hex_to_qrgb(BG_DARK))
+PALETTE.setColor(CRole.Base, hex_to_qrgb(BG_DARK))
+PALETTE.setColor(CRole.AlternateBase, hex_to_qrgb(BG_SURFACE))
+PALETTE.setColor(CRole.Button, hex_to_qrgb(BG_SURFACE))
+PALETTE.setColor(CRole.ToolTipBase, hex_to_qrgb(BG_SURFACE))
+PALETTE.setColor(CRole.PlaceholderText, hex_to_qrgb(TEXT_MUTED))
+PALETTE.setColor(CRole.Text, hex_to_qrgb(TEXT_PRIMARY))
+PALETTE.setColor(CRole.Light, hex_to_qrgb(BG_INPUT))
+PALETTE.setColor(CRole.Midlight, hex_to_qrgb(BG_SURFACE_LIGHT))
+PALETTE.setColor(CRole.Mid, hex_to_qrgb(BG_DARKEST))
+
+PALETTE.setColor(QPalette.ColorRole.Accent, hex_to_qrgb(ACCENT))
 
 
 def mk_accent_hover(r: float, g: float, b: float):
@@ -137,13 +164,6 @@ def compile_colors(**kwargs):
 
 template = """
 /* Main */
-QWidget {{
-    background-color: {BG_DARKEST};
-    color: {TEXT_PRIMARY};
-}}
-QWidget[sidebar="true"] {{
-    background-color: {BG_SURFACE};
-}}
 QWidget[surface="true"],
 QWidget[surface="true"] QWidget,
 QWidget[surface="true"] QLabel {{
@@ -240,19 +260,15 @@ QPushButton[accent="true"]:disabled {{
 }}
 
 QPushButton[play="true"] {{
-    background-color: {ACCENT};
+    /* background-color: {ACCENT_PRESS}; */
     color: {TEXT_PRIMARY};
-    border: none;
-    font-size: 18px;
-    font-weight: 700;
-    border-radius: 8px;
     padding: 12px 32px;
 }}
 QPushButton[play="true"]:hover {{
-    background-color: {ACCENT_HOVER};
+    /* background-color: {ACCENT}; */
 }}
 QPushButton[play="true"]:pressed {{
-    background-color: {ACCENT_PRESS};
+    /* background-color: {ACCENT_DIM}; */
 }}
 
 QPushButton[danger="true"] {{
@@ -293,17 +309,11 @@ QPushButton[nav="true"]:pressed {{
     background: {BG_DARK};
     color: {TEXT_PRIMARY};
 }}
-QPushButton[nav="true"][active="true"] {{
+QPushButton[nav="true"][active="true"],
+QPushButton[nav="true"]:checked {{
     background: {BG_SURFACE_LIGHT};
     color: {ACCENT};
     border-left: 3px solid {ACCENT};
-}}
-
-QRadioButton::indicator::unchecked {{
-    image: url(:/icon/symbol/circle.svg);
-}}
-QRadioButton::indicator::checked {{
-    image: url(:/icon/symbol/circle-fill.svg);
 }}
 
 QMenu {{
@@ -318,6 +328,9 @@ QMenu::item {{
     padding: 4px 6px;
     border-radius: 4px;
 }}
+QMenu::item[danger="true"] {{
+    background-color: {DANGER};
+}}
 QMenu::icon {{
     top: 1px;
     left: 4px;
@@ -329,22 +342,7 @@ QMenu::item:disabled {{
     color: {TEXT_MUTED};
 }}
 
-QCheckBox::indicator {{
-    width: 1em;
-    height: 1em;
-}}
-QCheckBox::indicator::unchecked {{
-    image: url(:/icon/symbol/square.svg);
-}}
-QCheckBox::indicator:checked {{
-    image: url(:/icon/symbol/checkbox-checked.svg);
-}}
-QCheckBox::indicator:pressed {{
-    image: url(:/icon/symbol/square-filled.svg);
-}}
-QCheckBox::indicator:indeterminate {{
-    image: url(:/icon/symbol/square-half.svg);
-}}
+QMenu::icon:checked {{}}
 
 /* Input */
 QLineEdit, QTextEdit, QPlainTextEdit {{
@@ -440,7 +438,7 @@ QSpinBox {{
     padding: 4px 8px;
 }}
 
-/* Progress bar */
+/* Progress bar 
 QProgressBar {{
     background-color: {BG_DARK};
     border: 1px solid {BORDER};
@@ -456,6 +454,7 @@ QProgressBar::chunk {{
     );
     border-radius: 5px;
 }}
+*/
 
 /* Scrollbar */
 QScrollBar:vertical {{
@@ -643,6 +642,5 @@ CSANS = QFont("Comic Sans MS")
 CSANS.setPointSize(9)
 CSANS_INF = QFontInfo(CSANS)
 CSANS_AVAILABLE = CSANS_INF.exactMatch()
-
 
 uses_dark_mode = True

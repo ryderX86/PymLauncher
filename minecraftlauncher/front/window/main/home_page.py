@@ -8,7 +8,7 @@ from pathlib import Path
 import logging
 
 from PySide6.QtCore import Qt, Signal, QUrl, QItemSelection, QSize
-from PySide6.QtGui import QDesktopServices, QIcon
+from PySide6.QtGui import QDesktopServices, QIcon, QPalette
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -30,7 +30,7 @@ from minecraftlauncher.back import (
 from minecraftlauncher.exceptions.datatypes import InvalidVersionIdError
 from minecraftlauncher.constants import MINECRAFT_DIR, offline_mode
 from minecraftlauncher.auth import LauncherAccount
-from minecraftlauncher.front import styles, resources
+from minecraftlauncher.front import resources
 from minecraftlauncher.front.qt.models import ProfileSelectionModel
 from minecraftlauncher.front.styles import TERMINAL_FONT
 from minecraftlauncher import config
@@ -95,9 +95,14 @@ class HomePage(QWidget):
         info_sub_layout.setContentsMargins(10, 4, 10, 0)
 
         self.profile_dropdown = QComboBox()
-        # lv = QListView(self.profile_dropdown)
-        # lv.setUniformItemSizes(True)
-        # self.profile_dropdown.setView(lv)
+        self.profile_dropdown.setStyleSheet(
+            " ".join(
+                [
+                    self.profile_dropdown.styleSheet(),
+                    "::item {min-height: 48px;}",
+                ]
+            )
+        )
         self.profile_dropdown.activated.connect(self._on_dropdown_select)
         self.selection_model.currentChanged.connect(self._on_global_profile)
         profile_manager.add_profile_refresh_handler(self._refresh_profiles)
@@ -171,10 +176,7 @@ class HomePage(QWidget):
             plainText="*taps mic* This thing on?",
             centerOnScroll=False,
         )
-        self.game_logs.setStyleSheet(
-            self.game_logs.styleSheet()
-            + f"; background-color: {styles.BG_DARK};"
-        )
+        self.game_logs.setBackgroundRole(QPalette.ColorRole.Dark)
         self.game_logs.setFont(TERMINAL_FONT)
         self.game_logs.setMaximumBlockCount(5000)  # change if needed
 
@@ -196,7 +198,9 @@ class HomePage(QWidget):
         progress_layout.setContentsMargins(0, 0, 0, 0)
 
         self.progress_label = QLabel("")
-        self.progress_label.setStyleSheet(f"color: {styles.TEXT_SECONDARY};")
+        self.progress_label.setForegroundRole(
+            QPalette.ColorRole.PlaceholderText
+        )
         progress_layout.addWidget(self.progress_label)
 
         self.progress_bar = QProgressBar()
@@ -214,6 +218,7 @@ class HomePage(QWidget):
         self.play_button.setMinimumWidth(280)
         self.play_button.clicked.connect(self._on_play)
         self.play_button.setDisabled(True)
+        self.play_button.setBackgroundRole(QPalette.ColorRole.Accent)
 
         play_layout = QHBoxLayout()
         play_layout.setProperty("surface", True)

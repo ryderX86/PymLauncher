@@ -257,7 +257,6 @@ class ProfilesPage(QWidget):
         # Profile list
         left = QWidget()
         left.setFixedWidth(250)
-        left.setStyleSheet(f"background-color: {styles.BG_DARK};")
         left_layout = QVBoxLayout(left)
         left_layout.setContentsMargins(12, 16, 12, 16)
 
@@ -322,7 +321,6 @@ class ProfilesPage(QWidget):
         sep = QFrame()
         sep.setFrameShape(QFrame.Shape.VLine)
         sep.setFixedWidth(1)
-        sep.setStyleSheet(f"background-color: {styles.BORDER};")
         layout.addWidget(sep)
 
         # editor
@@ -1022,22 +1020,21 @@ class ProfilesPage(QWidget):
         menu.addAction(save_icon)
 
         if constants.FLAG_ENABLE_JUMP_LISTS:
-            if prof.uuid not in config.jump_list_items:
-                add_jump_list = QAction(menu)
-                add_jump_list.setText("Add to jump-list")
-                add_jump_list.setIcon(resources.symbol("add"))
-                add_jump_list.triggered.connect(
-                    lambda c: self._add_jump_list_item(prof)
-                )
-                menu.addAction(add_jump_list)
-            else:
-                rm_jump_list = QAction(menu)
-                rm_jump_list.setText("Remove from jump-list")
-                rm_jump_list.setIcon(resources.symbol("remove"))
-                rm_jump_list.triggered.connect(
-                    lambda c: self._rm_jump_list_item(prof)
-                )
-                menu.addAction(rm_jump_list)
+            add_jump_list = QAction(
+                menu,
+                checkable=True,
+                checked=prof.uuid in config.jump_list_items,
+                text="Show in jump-list",
+                icon=(
+                    resources.symbol("checkbox-checked")
+                    if prof.uuid in config.jump_list_items
+                    else resources.symbol("square")
+                ),
+            )
+            add_jump_list.toggled.connect(
+                lambda c: self._add_jump_list_item(c, prof)
+            )
+            menu.addAction(add_jump_list)
 
         clone_prof = QAction(menu)
         clone_prof.setIcon(resources.symbol("copy"))
@@ -1078,9 +1075,12 @@ class ProfilesPage(QWidget):
 
         menu.exec(e.globalPos())
 
-    @staticmethod
-    def _add_jump_list_item(profile: GameProfile):
-        config.jump_list_items.append(profile.uuid)
+    @classmethod
+    def _add_jump_list_item(cls, checked: bool, profile: GameProfile):
+        if not checked:
+            return cls._rm_jump_list_item(profile)
+        if profile not in config.jump_list_items:
+            config.jump_list_items.append(profile.uuid)
         set_jump_list()
 
     @staticmethod

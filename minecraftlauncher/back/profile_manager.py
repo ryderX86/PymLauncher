@@ -22,6 +22,7 @@ from PySide6.QtCore import Signal, QObject
 from minecraftlauncher.constants import MINECRAFT_DIR
 from minecraftlauncher.datatypes import GameProfile
 from minecraftlauncher.functions import reswrite
+from minecraftlauncher import QAPP
 
 log = logging.getLogger(__name__)
 
@@ -135,6 +136,17 @@ def _refresh_profiles():
     get_row_from_profile.cache_clear()
     for func in _profile_refresh_handlers:
         func()
+
+
+@QAPP.aboutToQuit.connect
+def _clear_profile_refresh_handlers():
+    """
+    Truthfully I have no idea whether or not using a `Signal`'s connect
+    method as a decorator is good or bad practice but it works I guess?
+    """
+    global _profile_refresh_handlers
+    _profile_refresh_handlers = []
+    return
 
 
 def add_profile_refresh_handler(func: Callable):
