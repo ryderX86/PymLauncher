@@ -64,6 +64,7 @@ class SkinChange(QDialog):
         self.current_cape_path = profile.cape_path()
         self.variant = "classic"
         self.current_cape: str | None = None
+        self.current_cape_cloud_idx: int
         self.current_cape_cloud: str | None = None
         if profile.profile:
             if profile.profile.current_cape:
@@ -116,31 +117,36 @@ class SkinChange(QDialog):
         self.cape_list.setMovement(QListWidget.Movement.Static)
         if self.profile.profile:
             not_found_cape = True
-            for cape in self.profile.profile.get_all_cape_thumbs():
-                if (
-                    "alias" not in cape
-                    or "thumb" not in cape
-                    or "id" not in cape
+            if self.profile.profile.capes:
+                for i, cape in enumerate(
+                    self.profile.profile.get_all_cape_thumbs()
                 ):
-                    log.warning("Skipping cape with invalid data")
-                    continue
-                alias: str = cape["alias"]  # type: ignore
-                thumb: QPixmap = cape["thumb"]  # type: ignore
-                id_: str = cape["id"]  # type: ignore
-                p: Path = cape["path"]  # type: ignore
-                item = QListWidgetItem()
-                item.setToolTip(alias)
-                item.setData(256, id_)
-                item.setData(257, p)
-                item.setIcon(thumb)
-                item.setSizeHint(QSize(54, 80))
-                self.cape_list.addItem(item)
+                    if (
+                        "alias" not in cape
+                        or "thumb" not in cape
+                        or "id" not in cape
+                    ):
+                        log.warning("Skipping cape with invalid data")
+                        continue
+                    alias: str = cape["alias"]  # type: ignore
+                    thumb: QPixmap = cape["thumb"]  # type: ignore
+                    id_: str = cape["id"]  # type: ignore
+                    p: Path = cape["path"]  # type: ignore
+                    item = QListWidgetItem()
+                    item.setToolTip(alias)
+                    item.setData(256, id_)
+                    item.setData(257, p)
+                    item.setIcon(thumb)
+                    item.setSizeHint(QSize(54, 80))
+                    self.cape_list.addItem(item)
+                    if not_found_cape:
+                        if cape.get("state", "INACTIVE") == "ACTIVE":
+                            not_found_cape = False
+                            self.cape_list.setCurrentItem(item)
+                            self.current_cape_cloud_idx = i
                 if not_found_cape:
-                    if cape.get("state", "INACTIVE") == "ACTIVE":
-                        not_found_cape = False
-                        self.cape_list.setCurrentItem(item)
-            if not_found_cape:
-                self.cape_list.setCurrentRow(0)
+                    self.cape_list.setCurrentRow(0)
+                    self.current_cape_cloud_idx = 0
         self.cape_list.setMaximumHeight(94)
         self.cape_list.setMinimumHeight(94)
         self.cape_list.setAutoScroll(False)
@@ -259,6 +265,7 @@ class SkinChange(QDialog):
             self.current_cape_path = c
             self.player_model.setProperty("skin", QUrl.fromLocalFile(p))
             self.player_model.setProperty("cape", QUrl.fromLocalFile(c))
+            self.cape_list.setCurrentRow(self.current_cape_cloud_idx)
         else:
             log.warning("No player model instance!")
 
