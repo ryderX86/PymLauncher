@@ -176,7 +176,7 @@ class HomePage(QWidget):
             + f"; background-color: {styles.BG_DARK};"
         )
         self.game_logs.setFont(TERMINAL_FONT)
-        self.game_logs.setMaximumBlockCount(2000)  # change if needed
+        self.game_logs.setMaximumBlockCount(5000)  # change if needed
 
         info_layout.addWidget(self.game_logs)
 
