@@ -32,6 +32,7 @@ from minecraftlauncher.constants import MINECRAFT_DIR, offline_mode
 from minecraftlauncher.auth import LauncherAccount
 from minecraftlauncher.front import resources
 from minecraftlauncher.front.qt.models import ProfileSelectionModel
+from minecraftlauncher.front.qt.widgets import Header1, SecondaryLabel
 from minecraftlauncher.front.styles import TERMINAL_FONT
 from minecraftlauncher import config
 
@@ -72,20 +73,21 @@ class HomePage(QWidget):
         layout.setContentsMargins(40, 40, 40, 40)
         layout.setSpacing(16)
 
-        title = QLabel("Home")
-        title.setProperty("heading", True)
+        title = Header1("Home")
+        # title.setProperty("heading", True)
         layout.addWidget(title)
 
         # profile info stuff
         info_frame = QFrame()
-        info_frame.setProperty("surface", True)
+        info_frame.setFrameShape(QFrame.Shape.StyledPanel)
+        info_frame.setFrameShadow(QFrame.Shadow.Plain)
+        info_frame.setLineWidth(1)
         # info_frame.setStyleSheet(
         #     f"background-color: {styles.BG_SURFACE}; "
         #     f"border: 1px solid {styles.BORDER}; "
         #     "border-radius: 10px; padding 20px;"
         # )
         info_layout = QVBoxLayout(info_frame)
-        info_frame.setContentsMargins(0, 0, 0, 2)
 
         info_sub_frame = QFrame()
         info_sub_layout = QHBoxLayout(info_sub_frame)
@@ -162,8 +164,7 @@ class HomePage(QWidget):
 
         profile_action_row.addStretch()
 
-        self.version_label = QLabel("Version: [unknown]")
-        self.version_label.setProperty("secondary", True)
+        self.version_label = SecondaryLabel("Version: [unknown]")
         self.version_label.setContentsMargins(10, 0, 10, 0)
         self.version_label.setOpenExternalLinks(True)
         info_layout.addWidget(self.version_label)
@@ -218,10 +219,8 @@ class HomePage(QWidget):
         self.play_button.setMinimumWidth(280)
         self.play_button.clicked.connect(self._on_play)
         self.play_button.setDisabled(True)
-        self.play_button.setBackgroundRole(QPalette.ColorRole.Accent)
 
         play_layout = QHBoxLayout()
-        play_layout.setProperty("surface", True)
         play_layout.addWidget(self.play_button, 0, Qt.AlignmentFlag.AlignCenter)
         layout.addLayout(play_layout)
 

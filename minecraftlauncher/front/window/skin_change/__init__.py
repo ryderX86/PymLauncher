@@ -85,9 +85,10 @@ class SkinChange(QDialog):
         self._root_lo.addWidget(bottom_w)
 
         reset_ico = resources.symbol("circle-counter-clockwise")
-        self.reset_button = QPushButton()
-        self.reset_button.setIcon(reset_ico)
+        self.reset_button = QPushButton(reset_ico, "")
         self.reset_button.setDisabled(True)
+        self.reset_button.setProperty("large", True)
+        self.reset_button.setFixedHeight(33)
         self.reset_button.clicked.connect(self.set_skin_initial)
 
         self.file_input = QLineEdit()
@@ -96,6 +97,7 @@ class SkinChange(QDialog):
         self.file_input.textChanged.connect(self._change_preview)
 
         browse_button = QPushButton(resources.symbol("folder-plus"), "Browse")
+        browse_button.setProperty("large", True)
         browse_button.clicked.connect(self._open_file_picker)
 
         top.addWidget(self.reset_button)
@@ -118,9 +120,7 @@ class SkinChange(QDialog):
         if self.profile.profile:
             not_found_cape = True
             if self.profile.profile.capes:
-                for i, cape in enumerate(
-                    self.profile.profile.get_all_cape_thumbs()
-                ):
+                for cape in self.profile.profile.get_all_cape_thumbs():
                     if (
                         "alias" not in cape
                         or "thumb" not in cape
@@ -143,7 +143,9 @@ class SkinChange(QDialog):
                         if cape.get("state", "INACTIVE") == "ACTIVE":
                             not_found_cape = False
                             self.cape_list.setCurrentItem(item)
-                            self.current_cape_cloud_idx = i
+                            self.current_cape_cloud_idx = (
+                                self.cape_list.currentRow()
+                            )
                 if not_found_cape:
                     self.cape_list.setCurrentRow(0)
                     self.current_cape_cloud_idx = 0

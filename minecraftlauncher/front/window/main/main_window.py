@@ -132,7 +132,9 @@ class MainWindow(QMainWindow):
         # top bar (account dropdown)
         top_bar = QWidget()
         top_bar.setFixedHeight(48)
-        top_bar.setStyleSheet(f"background-color: {styles.BG_DARK};")
+        # top_bar.setStyleSheet(f"background-color: {styles.BG_DARK};")
+        top_bar.setBackgroundRole(styles.CRole.Base)
+        top_bar.setAutoFillBackground(True)
         top_bar_layout = QHBoxLayout(top_bar)
         top_bar_layout.setContentsMargins(16, 0, 16, 0)
 
@@ -172,7 +174,7 @@ class MainWindow(QMainWindow):
         self.sidebar.currentRowChanged.connect(self._nav_button_group)
 
         for label, key in self.NAV_ITEMS:
-            button = QListWidgetItem(label)
+            button = QListWidgetItem("".join([" " * 2, label]))
             button.setSizeHint(QSize(0, 48))
             self.sidebar.addItem(button)
             self._nav_buttons[key] = button

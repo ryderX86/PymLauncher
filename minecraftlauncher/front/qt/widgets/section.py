@@ -1,7 +1,9 @@
 from typing import overload
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QWidget, QLabel, QVBoxLayout, QHBoxLayout, QLayout
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLayout
+
+from .label_types import SectionLabel
 
 
 class Section(QWidget):
@@ -16,8 +18,7 @@ class Section(QWidget):
         self._meta_layout = QVBoxLayout(self)
         self._meta_layout.setContentsMargins(5, 0, 0, 0)
         self._meta_layout.setSpacing(8)
-        self._label = QLabel(text)
-        self._label.setProperty("section", True)
+        self._label = SectionLabel(text)
         self._meta_layout.addWidget(self._label)
         w = QWidget()
         self._layout = layout(w)

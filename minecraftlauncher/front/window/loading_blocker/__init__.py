@@ -55,8 +55,8 @@ class LoadingBlockerWindow(QDialog):
         QAPP.processEvents()
 
     def open(self) -> None:
-        QAPP.processEvents()
         super().open()
+        QAPP.processEvents()
 
     def hide(self):
         self.set_text()

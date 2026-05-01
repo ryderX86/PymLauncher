@@ -39,7 +39,6 @@ from PySide6.QtWidgets import (
     QListView,
     QCheckBox,
     QMenu,
-    QWidgetAction,
 )
 
 from minecraftlauncher import DEV
@@ -259,6 +258,8 @@ class ProfilesPage(QWidget):
         left.setFixedWidth(250)
         left_layout = QVBoxLayout(left)
         left_layout.setContentsMargins(12, 16, 12, 16)
+        left.setBackgroundRole(styles.CRole.Light)
+        left.setAutoFillBackground(True)
 
         label = QLabel("Profiles")
         label.setProperty("heading", True)
@@ -269,14 +270,17 @@ class ProfilesPage(QWidget):
         button_row.setContentsMargins(0, 0, 0, 0)
         new_icon = resources.symbol("journal-plus")
         button_new = QPushButton(new_icon, "New Profile")
+        button_new.setProperty("large", True)
         button_new.clicked.connect(self._new_profile)
         button_row.addWidget(button_new, 1)
         button_export = QPushButton()
+        button_export.setProperty("large", True)
         button_export.setIcon(resources.symbol("share"))
         button_export.setMaximumWidth(36)
         button_export.setToolTip("Export Current Profile")
         # button_row.addWidget(button_export)
         button_import = QPushButton()
+        button_import.setProperty("large", True)
         button_import.setIcon(resources.symbol("import"))
         button_import.setMaximumWidth(36)
         button_import.setToolTip("Import Profile")
@@ -327,6 +331,8 @@ class ProfilesPage(QWidget):
         right = QWidget()
         right_layout = QVBoxLayout(right)
         right_layout.setContentsMargins(12, 16, 12, 16)
+        right.setBackgroundRole(styles.CRole.Base)
+        right.setAutoFillBackground(True)
 
         edit_label = QLabel("Edit Profile")
         edit_label.setProperty("heading", True)
@@ -334,24 +340,19 @@ class ProfilesPage(QWidget):
 
         self.form = QFormLayout()
         self.form.setSpacing(12)
-        self.form.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
+        self.form.setLabelAlignment(
+            Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignRight
+        )
 
-        name_icon_area = QHBoxLayout()
+        self.icon_picker = IconPickerButton()
+        self.icon_picker.icon_changed.connect(self._dirty_check)
+        self.form.addRow("Icon:", self.icon_picker)
+
         self.name_input = QLineEdit()
         self.mapper.addMapping(self.name_input, MapIndex.NAME)
         self.name_input.textChanged.connect(self._dirty_check)
 
-        icon_label = QLabel("Icon:")
-
-        self.icon_picker = IconPickerButton()
-        self.icon_picker.icon_changed.connect(self._dirty_check)
-        # self.icon_menu_2.icon_changed.connect(self._icon_change)
-
-        name_icon_area.addWidget(self.name_input, 1)
-        name_icon_area.addWidget(icon_label)
-        name_icon_area.addWidget(self.icon_picker)
-
-        self.form.addRow("Name:", name_icon_area)
+        self.form.addRow("Name:", self.name_input)
 
         self.version_combo = QComboBox()
         self.version_combo.addItems(["latest-release", "latest-snapshot"])
@@ -367,9 +368,10 @@ class ProfilesPage(QWidget):
             self.version_combo, MapIndex.VERSION, b"currentText"
         )
         refresh_versions_button = QPushButton()
+        refresh_versions_button.setProperty("large", True)
         refresh_versions_button.setIcon(resources.symbol("refresh"))
         refresh_versions_button.clicked.connect(self.refresh_version_combo)
-        refresh_versions_button.setFixedWidth(40)
+        refresh_versions_button.setFixedWidth(32)
         version_row = QHBoxLayout()
         version_row.addWidget(self.version_combo, 1)
         version_row.addWidget(refresh_versions_button)
@@ -384,6 +386,7 @@ class ProfilesPage(QWidget):
         self.game_dir_browse_button = QPushButton(
             resources.symbol("folder-symlink"), "Browse"
         )
+        self.game_dir_browse_button.setProperty("large", True)
         self.game_dir_browse_button.setFixedWidth(100)
         self.game_dir_browse_button.clicked.connect(self._browse_game_dir)
         game_dir_row.addWidget(self.game_dir_browse_button)
@@ -398,6 +401,7 @@ class ProfilesPage(QWidget):
         self.java_browse_button = QPushButton(
             resources.symbol("folder-symlink"), "Browse"
         )
+        self.java_browse_button.setProperty("large", True)
         self.java_browse_button.setFixedWidth(100)
         self.java_browse_button.clicked.connect(self._browse_java)
         java_row.addWidget(self.java_browse_button)
@@ -412,6 +416,9 @@ class ProfilesPage(QWidget):
         memory_row = QHBoxLayout()
 
         min_label = QLabel("Minimum:")
+
+        # workaround for the dumb stupid label alignment
+        min_label.setContentsMargins(0, 0, 0, 4)
         memory_row.addWidget(min_label, 0)
         self.mem_min_input = QLineEdit("512M")
         self.mem_min_input.setMaxLength(6)
@@ -423,6 +430,7 @@ class ProfilesPage(QWidget):
         self.mapper.addMapping(self.mem_min_input, MapIndex.MIN_RAM)
 
         max_label = QLabel("Maximum:")
+        max_label.setContentsMargins(0, 0, 0, 4)
         memory_row.addWidget(max_label, 0)
         self.mem_max_input = QLineEdit("4G")
         self.mem_max_input.setMaxLength(6)
@@ -466,6 +474,7 @@ class ProfilesPage(QWidget):
         self.mods_folder_browse = QPushButton(
             resources.symbol("folder-symlink"), "Browse"
         )
+        self.mods_folder_browse.setProperty("large", True)
         self.mods_folder_browse.clicked.connect(self._browse_mods_folder)
         self.mods_folder_browse.setDisabled(True)
         self.mods_folder_row.addWidget(self.mods_folder_browse)
@@ -482,18 +491,19 @@ class ProfilesPage(QWidget):
         self.save_button = QPushButton("Save")
         self.save_button.setProperty("accent", True)
         self.save_button.setDisabled(True)
-        # self.save_button.clicked.connect(self._save_current)
         self.save_button.clicked.connect(self._save)
+        self.save_button.setProperty("large", True)
         buttons_row_layout.addWidget(self.save_button)
 
         self.reset_button = QPushButton("Reset")
-        # use_button.clicked.connect(self._set_current)
         self.reset_button.setDisabled(True)
         self.reset_button.clicked.connect(self._reset)
+        self.reset_button.setProperty("large", True)
         buttons_row_layout.addWidget(self.reset_button)
 
         self.delete_button = QPushButton("Delete")
         self.delete_button.setProperty("danger", True)
+        self.delete_button.setProperty("large", True)
         self.delete_button.clicked.connect(self._delete_profile)
         buttons_row_layout.addWidget(self.delete_button)
 
@@ -1061,7 +1071,9 @@ class ProfilesPage(QWidget):
             copy_id.triggered.connect(lambda c: copy_to_clipboard(prof.uuid))
             menu.addAction(copy_id)
 
-        delete_profile = QWidgetAction(menu)
+        delete_profile = QAction(menu)
+        delete_profile.setObjectName("delete")
+        delete_profile.setData("delete")
         delete_profile.setIcon(resources.symbol("trash"))
         delete_profile.setText("Delete profile")
         delete_profile.setProperty("danger", True)
@@ -1073,7 +1085,7 @@ class ProfilesPage(QWidget):
             )
         menu.addAction(delete_profile)
 
-        menu.exec(e.globalPos())
+        menu.popup(e.globalPos())
 
     @classmethod
     def _add_jump_list_item(cls, checked: bool, profile: GameProfile):

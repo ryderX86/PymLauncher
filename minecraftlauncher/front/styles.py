@@ -164,15 +164,11 @@ def compile_colors(**kwargs):
 
 template = """
 /* Main */
-QWidget[surface="true"],
-QWidget[surface="true"] QWidget,
-QWidget[surface="true"] QLabel {{
+QWidget[surface="true"] {{
     background-color: {BG_SURFACE};
-    border-radius: 5px;
 }}
 QWidget[border="true"] {{
     border: 1px solid {BORDER};
-    border-radius: 6px;
 }}
 
 :focus {{
@@ -185,31 +181,26 @@ QMainWindow {{
 }}
 
 /* Labels */
-QLabel {{
-    background: transparent;
-    color: {TEXT_PRIMARY};
-    border: none;
-}}
-QLabel[secondary="true"] {{
+QLabel[secondary="true"], SecondaryLabel {{
     color: {TEXT_SECONDARY};
 }}
-QLabel[heading="true"] {{
+QLabel[heading="true"], h1, Header1 {{
     font-size: 20px;
     font-weight: 700;
-    color: {ACCENT};
+    color: palette(accent);
     margin-bottom: 4px;
 }}
-QLabel[h2="true"] {{
+QLabel[h2="true"], h2, Header2 {{
     font-size: 16px;
     font-weight: 700;
-    color: {ACCENT};
+    color: palette(accent);
     margin-left: 4px;
 }}
-QLabel[subheading="true"] {{
+QLabel[subheading="true"], Subheading {{
     font-size: 14px;
     color: {TEXT_SECONDARY};
 }}
-QLabel[section="true"] {{
+QLabel[section="true"], SectionLabel {{
     font-size: 14px;
     font-weight: 700;
 }}
@@ -220,65 +211,61 @@ QPushButton {{
     color: {TEXT_PRIMARY};
     border: 1px solid {BORDER};
     border-radius: 6px;
-    padding: 8px 18px;
+    padding: 4px 9px;
     font-weight: 600;
-    min-height: 22px;
 }}
 QPushButton:hover {{
     background-color: {BG_SURFACE_LIGHT};
-    border-color: {ACCENT};
+    border-color: {BORDER_LIGHT};
 }}
 QPushButton:pressed {{
     background-color: {BG_DARK};
-    color: {TEXT_MUTED};
-    border-color: {BORDER};
+    color: {TEXT_SECONDARY};
 }}
 QPushButton:disabled {{
     background-color: {BG_DARK};
     color: {TEXT_MUTED};
-    border-color: {BORDER};
 }}
 
-QPushButton[mini="true"] {{
+QPushButton[large="true"], LargeButton {{
+    padding: 7px 18px;
+}}
+
+QPushButton[mini="true"], SmallButton {{
     padding: 4px 9px;
     font-weight: 400;
 }}
 
-QPushButton[accent="true"] {{
+QPushButton[accent="true"], AccentButton {{
     background-color: {ACCENT};
     color: #111111;
-    border: none;
+    border-color: {BORDER};
 }}
-QPushButton[accent="true"]:hover {{
+QPushButton[accent="true"]:hover,
+AccentButton:hover {{
     background-color: {ACCENT_HOVER};
 }}
-QPushButton[accent="true"]:pressed {{
+QPushButton[accent="true"]:pressed,
+AccentButton:pressed {{
     background-color: {ACCENT_PRESS};
 }}
-QPushButton[accent="true"]:disabled {{
+QPushButton[accent="true"]:disabled,
+AccentButton:disabled {{
     background-color: {ACCENT_DIM};
 }}
 
-QPushButton[play="true"] {{
-    /* background-color: {ACCENT_PRESS}; */
+QPushButton[play="true"], PlayButton {{
+    border-color: {ACCENT};
     color: {TEXT_PRIMARY};
     padding: 12px 32px;
 }}
-QPushButton[play="true"]:hover {{
-    /* background-color: {ACCENT}; */
+QPushButton[play="true"]:hover,
+PlayButton:hover {{
+    border-color: {ACCENT_HOVER};
 }}
-QPushButton[play="true"]:pressed {{
-    /* background-color: {ACCENT_DIM}; */
-}}
-
-QPushButton[danger="true"] {{
-    background-color: transparent;
-    color: {DANGER};
-    border: 1px solid {DANGER};
-}}
-QPushButton[danger="true"]:hover {{
-    background-color: {DANGER};
-    color: white;
+QPushButton[play="true"]:pressed,
+PlayButton:pressed {{
+    border-color: {ACCENT_DIM};
 }}
 
 QPushButton[danger="true"] {{
@@ -287,34 +274,10 @@ QPushButton[danger="true"] {{
     border: 1px solid {DANGER};
 }}
 QPushButton[danger="true"]:hover {{
-    background-color: {DANGER};
+    background-color: {DANGER_HOVER};
     color: white;
 }}
 
-QPushButton[nav="true"] {{
-    background: none;
-    color: {TEXT_SECONDARY};
-    border: none;
-    border-radius: 0;
-    padding: 14px 20px;
-    text-align: left;
-    font-size: 14px;
-    font-weight: 500;
-}}
-QPushButton[nav="true"]:hover {{
-    background: {BG_SURFACE_LIGHT};
-    color: {TEXT_PRIMARY};
-}}
-QPushButton[nav="true"]:pressed {{
-    background: {BG_DARK};
-    color: {TEXT_PRIMARY};
-}}
-QPushButton[nav="true"][active="true"],
-QPushButton[nav="true"]:checked {{
-    background: {BG_SURFACE_LIGHT};
-    color: {ACCENT};
-    border-left: 3px solid {ACCENT};
-}}
 
 QMenu {{
     icon-size: 16px;
@@ -322,14 +285,15 @@ QMenu {{
     background-color: {BG_SURFACE};
     background-clip: border;
     border: 1px solid {BORDER};
+    border-radius: 1px;
 }}
 QMenu::item {{
-    background-color: transparent;
     padding: 4px 6px;
     border-radius: 4px;
 }}
-QMenu::item[danger="true"] {{
-    background-color: {DANGER};
+QMenu::item[delete="true"], QMenu::item#danger, QMenu::item[text="Delete"] {{
+    background-color: {DANGER_HOVER};
+    padding: 8px 6px;
 }}
 QMenu::icon {{
     top: 1px;
@@ -346,16 +310,20 @@ QMenu::icon:checked {{}}
 
 /* Input */
 QLineEdit, QTextEdit, QPlainTextEdit {{
-    background-color: {BG_INPUT};
+    background-color: {BG_SURFACE};
     color: {TEXT_PRIMARY};
     border: 1px solid {BORDER};
     border-radius: 6px;
-    padding: 8px 12px;
+    padding: 6px;
     selection-background-color: {ACCENT_DIM};
-    min-height: 22px;
+}}
+QLineEdit:hover, QTextEdit:hover, QPlainTextEdit:hover {{
+    border-color: {BORDER_LIGHT};
+    background-color: {BG_SURFACE_LIGHT}
 }}
 QLineEdit:focus, QTextEdit:focus, QPlainTextEdit:focus {{
-    border-color: {ACCENT};
+    border-color: {BORDER_LIGHT};
+    background-color: {BG_INPUT};
 }}
 
 /* Combo box */
@@ -364,11 +332,11 @@ QComboBox {{
     color: {TEXT_PRIMARY};
     border: 1px solid {BORDER};
     border-radius: 6px;
-    padding: 8px 12px;
-    min-height: 22px;
+    padding: 6px;
 }}
 QComboBox:hover {{
-    border-color: {ACCENT};
+    border-color: {BORDER_LIGHT};
+    background-color: {BG_SURFACE_LIGHT};
 }}
 QComboBox::drop-down {{
     border: none;
@@ -394,7 +362,6 @@ QComboBox QAbstractItemView {{
 }}
 
 QComboBox ::item:selected {{
-    background-color: {ACCENT_DIM};
     color: {TEXT_PRIMARY};
 }}
 
@@ -418,7 +385,6 @@ QComboBox[bigIcons="true"] ::item {{
     padding: 0 12px;
 }}
 QComboBox[bigIcons="true"] ::item:selected {{
-    background-color: {ACCENT_DIM};
     color: {TEXT_PRIMARY};
 }}
 QComboBox[bigIcons="true"] QAbstractItemView {{
@@ -456,7 +422,7 @@ QProgressBar::chunk {{
 }}
 */
 
-/* Scrollbar */
+/* Scrollbar 
 QScrollBar:vertical {{
     background: {BG_DARK};
     width: 10px;
@@ -494,37 +460,8 @@ QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {{
 QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal {{
     background: none;
 }}
+*/
 
-/* Lists */
-QListView[profiles="true"] {{
-    background-color: {BG_SURFACE};
-    border: 1px solid {BORDER};
-    border-radius: 6px;
-    outline: none;
-    padding: 4px;
-}}
-QListView[profiles="true"]::item {{
-    padding: 0 12px;
-    height: 3em;
-    border-radius: 4px;
-    margin: 2px 0;
-}}
-QListView[profiles="true"]::item:selected {{
-    background-color: {ACCENT};
-}}
-QListView[profiles="true"]::item:hover {{
-    background-color: {BG_SURFACE_LIGHT};
-}}
-QListView[profiles="true"]::item:hover:selected {{
-    background-color: {ACCENT_PRESS};
-}}
-QListView[profiles="true"]::item:disabled {{
-    background-color: {BG_SURFACE_LIGHT};
-    color: {TEXT_MUTED};
-}}
-QListView[profiles="true"]::item:hover:disabled {{
-    background-color: {ACCENT_PRESS};
-}}
 
 QListWidget[icons="true"]::item, QListView[icons="true"]::item {{
     padding: 2px 2px;
@@ -572,7 +509,7 @@ QGroupBox::title {{
     color: {ACCENT};
 }}
 
-/* Tooltips */
+/* Tooltips
 QToolTip {{
     background-color: {BG_SURFACE};
     color: {TEXT_PRIMARY};
@@ -580,6 +517,7 @@ QToolTip {{
     border-radius: 4px;
     padding: 4px 8px;
 }}
+*/
 
 /* Status Bar */
 QStatusBar {{
@@ -599,16 +537,42 @@ QFrame[frameShape="5"] {{
     max-width: 1px;
     border: none;
 }}
-
-/* Dialog */
-QDialog {{
-    background-color: {BG_DARKEST};
-}}
 """
 
 match sys.platform:
     case "win32":
-        pass
+        mixin = """
+            QMenu {{
+                border-radius: 1px;
+                icon-size: 16px;
+                padding: 4px;
+                background-color: {BG_SURFACE};
+                background-clip: border;
+                border: 1px solid {BORDER};
+                font-size: 10pt;
+            }}
+            QMenu::item {{
+                background-color: transparent;
+                padding: 4px 6px;
+                border-radius: 4px;
+            }}
+            QMenu::item[danger="true"] {{
+                background-color: {DANGER};
+            }}
+            QMenu::icon {{
+                top: 1px;
+                left: 4px;
+            }}
+            QMenu::item:selected {{
+                background-color: {BG_SURFACE_LIGHT};
+            }}
+            QMenu::item:disabled {{
+                color: {TEXT_MUTED};
+            }}
+
+            QMenu::icon:checked {{}}
+        """
+        # template = "\n".join([template, mixin])
     case "darwin":
         pass
     case _:

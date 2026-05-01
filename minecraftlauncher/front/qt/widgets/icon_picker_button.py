@@ -16,6 +16,7 @@ class IconPickerButton(QPushButton):
 
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.setProperty("large", True)
         self.dropdown = IconPicker(self)
         self.dropdown.change_icon.connect(self._on_change_icon)
         self.dropdown.icon_chosen.connect(self._on_change_icon)
