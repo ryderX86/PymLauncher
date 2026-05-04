@@ -1,5 +1,5 @@
 """
-Config module. Badly written, should change to a class and load in
+Config module. Badly written, should change to a class and initialize in
 minecraftlauncher.__init__ instead of having this mess.
 """
 
@@ -12,7 +12,7 @@ from .constants import (
     LAUNCHER_DATA_DIR,
     LAUNCHER_CONFIG_FILE,
 )
-from .functions import reswrite
+from .functions import reswrite, error_box
 from . import DEV
 
 _log = logging.getLogger(__name__)
@@ -93,7 +93,7 @@ def set_(val_name: str, new_val: Any):
     current = globals().get(val_name)
     if val_name.startswith("_") or val_name.endswith("_"):
         raise IndexError("Can't override private var")
-    if not isinstance(current, new_val):
+    if not isinstance(new_val, type(current)):
         _log.warning(
             "Type of '%s' changed: '%s' -> '%s'",
             val_name,
@@ -152,4 +152,9 @@ def save():
     _log.debug("Saved config.json.")
 
 
-load()
+try:
+    load()
+except Exception as err:
+    error_box(
+        "Failed to initialize config! Please report this.", err, fatal=True
+    )

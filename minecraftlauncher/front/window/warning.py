@@ -130,7 +130,8 @@ class WarningDialog(QDialog):
     def exec(self):
         if self._warning_type in config.ignored_messages:
             log.debug(
-                "Not showing ignored warning '%s'", self._warning_type.value
+                "Not showing ignored warning '%s'",
+                self._warning_type.value,  # type: ignore
             )
             if str(self._warning_type) in config.dialog_answers:
                 if config.dialog_answers[str(self._warning_type)] is True:
@@ -150,7 +151,8 @@ class WarningDialog(QDialog):
         """
         if self._warning_type in config.ignored_messages:
             log.debug(
-                "Not showing ignored warning '%s'", self._warning_type.value
+                "Not showing ignored warning '%s'",
+                self._warning_type.value,  # type: ignore
             )
             if str(self._warning_type) in config.dialog_answers:
                 if config.dialog_answers[str(self._warning_type)]:
