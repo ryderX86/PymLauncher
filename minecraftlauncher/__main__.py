@@ -2,7 +2,7 @@
 # nuitka-project-if: sys.platform == "win32":
 #   nuitka-project: --windows-console-mode=disable
 from logging.handlers import RotatingFileHandler
-from time import sleep, time
+from time import sleep
 import logging
 import atexit
 import sys
@@ -58,7 +58,6 @@ flags = [
 ]
 if flags:
     log.info("Flags: %s", ", ".join(flags))
-ls_stop = time()
 
 
 class App:
@@ -70,8 +69,6 @@ class App:
     log = log.getChild("App")
 
     def __init__(self):
-        setup_start = time()
-        self.log.debug("Setting up...")
         QAPP.setApplicationName("Minecraft Launcher")
         match constants.OS:
             case "windows":
@@ -110,8 +107,6 @@ class App:
             if args.debug_splash_screen:
                 self.lb_window.set_text("Waiting 5s for splash debugging")
                 sleep(5)
-        setup_stop = time()
-        log.debug("Setup time: %f", setup_stop - setup_start)
 
     def _set_clean_exit(self):
         global clean_exit
