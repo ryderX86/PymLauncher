@@ -163,36 +163,11 @@ class SettingsPage(QWidget):
             show_logs_check,
             saver=lambda c: config.set_("show_logs_on_home", c),
         )
-
-        # show_logs_check.setChecked(config.show_logs_on_home)
-        # def show_logs_changed(check_state: Qt.CheckState):
-        #     nonlocal self
-        #     checked = check_state == Qt.CheckState.Checked
-        #     config.set_("show_logs_on_home", checked)
-        #     self.settings_changed.emit()
-
-        # show_logs_check.checkStateChanged.connect(show_logs_changed)
+        show_logs_check.setChecked(config.show_logs_on_home)
         show_logs_lo.addWidget(show_logs_check)
         show_logs_lo.addWidget(show_logs_tt)
 
         visual.addWidget(show_logs_w)
-
-        # dev options
-        # if constants.DEV:
-        #     dev = Section("DEV")
-
-        #     def _toggle_style_sheet(c: Qt.CheckState):
-        #         match c:
-        #             case Qt.CheckState.Unchecked:
-        #                 QAPP.setStyleSheet("")
-        #             case _:
-        #                 QAPP.setStyleSheet(STYLESHEET)
-
-        #     qss_toggle = QCheckBox("Use QSS styles")
-        #     qss_toggle.checkStateChanged.connect(_toggle_style_sheet)
-        #     dev.addWidget(qss_toggle)
-
-        #     layout.addWidget(dev)
 
         compat = Section("Compatibility")
 
