@@ -527,7 +527,7 @@ def save_launcher_profiles(
         output, indent=2, sort_keys=True, separators=separators
     )
     reswrite(PROFILES_PATH, json_out)
-    log.debug(
+    log.info(
         "Saved %s profiles to 'launcher_profiles.json'", len(profiles_json)
     )
     _refresh_profiles()

@@ -250,14 +250,14 @@ def download_libraries(
         if sha1 and sha1 in processed_libs:
             log.warning(
                 "Duplicate libary %s; continuing.",
-                lib.get("name", "--Unknown Library--"),
+                lib.get("name", "<unidentified>"),
             )
             continue
 
         if (not url) and (not path):
             log.warning(
                 "Manually retrieving URL and path for %s",
-                lib.get("name", "--Unknown Library--"),
+                lib.get("name", "<unidentified>"),
             )
             path_, url_, sha1_ = _get_lib_filepath(lib)
             if (not path_) or (not url_) or (not sha1_):
@@ -274,7 +274,7 @@ def download_libraries(
                 downloaded += 1
                 log.info(
                     "Downloaded library %s to '%s'",
-                    lib.get("name", "--Unknown Library"),
+                    lib.get("name", "<unidentified>"),
                     str(destination),
                 )
 
@@ -342,14 +342,14 @@ def download_libraries_threaded(
         if sha1 and sha1 in download_list:
             log.warning(
                 "Duplicate libary %s; continuing.",
-                lib.get("name", "--Unknown Library--"),
+                lib.get("name", "<unidentified>"),
             )
             continue
 
         if (not url) and (not path):
             log.warning(
                 "Manually retrieving URL and path for %s",
-                lib.get("name", "--Unknown Library--"),
+                lib.get("name", "<unidentified>"),
             )
             path_, url_, sha1_ = _get_lib_filepath(lib)
             if (not path_) or (not url_) or (not sha1_):
@@ -388,7 +388,7 @@ def download_libraries_threaded(
     elif mgr.check_for_failures():
         raise mgr.exceptions[0]
 
-    log.debug(
+    log.info(
         "Finished downloading libraries: %d new / %d total", downloaded, total
     )
     return downloaded

@@ -676,6 +676,9 @@ class LaunchWorker(QThread):
 
         if self.auth_info.token_valid:
             reauth = False
+        elif offline_mode:
+            log.debug("User has no valid token, not refreshing (offline mode)")
+            reauth = False
         else:
             self.log.warning(
                 "User account doesn't have a valid token, "
@@ -703,9 +706,7 @@ class LaunchWorker(QThread):
                 return
             reauth = True
         assert self.auth_info.token
-        if self.auth_info.profile:
-            reauth = max(reauth, False)
-        else:
+        if not self.auth_info.profile:
             log.warning(
                 "Account doesn't have associated profile info, trying "
                 "to fetch it..."
@@ -717,7 +718,9 @@ class LaunchWorker(QThread):
                     "Failed to fetch profile info (are we offline?)",
                     exc_info=err,
                 )
-                self.finished.emit(False, str(err))
+                self.finished.emit(
+                    False, "Failed to fetch profile info (are we offline?)"
+                )
                 return
             else:
                 log.info("Got profile info for '%s'", self.auth_info.gamertag)

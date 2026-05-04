@@ -140,7 +140,7 @@ def save():
     if not LAUNCHER_DATA_DIR.exists():
         LAUNCHER_DATA_DIR.mkdir(parents=True, exist_ok=True)
     reswrite(LAUNCHER_CONFIG_FILE, json_out)
-    _log.debug("Saved config.json.")
+    _log.info("Saved config.json.")
 
 
 try:
