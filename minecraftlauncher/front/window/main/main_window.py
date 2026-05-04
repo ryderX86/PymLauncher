@@ -30,7 +30,6 @@ from minecraftlauncher.back import profile_manager
 from minecraftlauncher.constants import LAUNCHER_VERSION
 from minecraftlauncher.functions.error_box import error_box
 from minecraftlauncher.front.qt.widgets import AccountSelect
-from minecraftlauncher.front.ees import KonamiCode
 from .home_page import HomePage
 from .profiles_page import ProfilesPage
 from .settings_page import SettingsPage
@@ -71,9 +70,6 @@ class MainWindow(QMainWindow):
 
         self._nav_buttons: dict[str, QListWidgetItem] = {}
         self._build_ui()
-        if config.want_easter_eggs and styles.CSANS_AVAILABLE:
-            handler = KonamiCode(self)
-            self.installEventFilter(handler)
 
     def check_for_launch_arg(self):
         if launch_profile:

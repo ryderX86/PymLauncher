@@ -66,9 +66,6 @@ allow_audio: bool = True
 enforce_json_spec: bool = False
 # icon_pack: str = ICON_PACK_BOOTSTRAP
 
-# konami code, just does comic sans. possibly resource intense.
-want_easter_eggs: bool = False
-
 __config__ = {
     "window_size",
     "open_browser_for_login",
