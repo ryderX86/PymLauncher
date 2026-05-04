@@ -4,7 +4,10 @@ minecraftlauncher.front.window.main.main_window
 Main application window.
 """
 
+__lazy_imports__ = ["minecraftlauncher.front.ees.KonamiCode"]  # py3.15
+
 import logging
+import sys
 
 from PySide6.QtCore import Signal, QSize
 from PySide6.QtWidgets import (
@@ -54,14 +57,16 @@ class MainWindow(QMainWindow):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Minecraft Launcher")
-        self.setMinimumSize(960, 600)
+        self.setMinimumSize(960, 620)
         width = config.window_size[0]
         height = config.window_size[1]
         self.resize(*config.window_size)
         geo = self.screen().geometry()
-        if geo.width() <= 1280:  # fix for small/scaled displays
-            x = geo.width() // 2 - width // 2
-            y = geo.height() // 2 - height // 2
+        sw = geo.width()
+        sh = geo.height()
+        if sw <= 1280:  # fix for small/scaled displays
+            x = sw // 2 - width // 2
+            y = sh // 2 - height // 2
             self.setGeometry(x, y, *config.window_size)
 
         self._nav_buttons: dict[str, QListWidgetItem] = {}
@@ -116,7 +121,7 @@ class MainWindow(QMainWindow):
             case config.PostLaunchBehavior.CLOSE_WHEN_DONE:
                 if int(exit_code) == 0:
                     self.close()
-                    exit()
+                    sys.exit()
                 else:
                     self.show()
 
@@ -131,13 +136,12 @@ class MainWindow(QMainWindow):
 
         # top bar (account dropdown)
         top_bar = QWidget()
-        top_bar.setFixedHeight(48)
+        # top_bar.setFixedHeight(48)
         # top_bar.setStyleSheet(f"background-color: {styles.BG_DARK};")
         top_bar.setBackgroundRole(styles.CRole.Base)
         top_bar.setAutoFillBackground(True)
         top_bar_layout = QHBoxLayout(top_bar)
-        top_bar_layout.setContentsMargins(16, 0, 16, 0)
-
+        top_bar_layout.setContentsMargins(2, 2, 2, 2)
         top_bar_layout.addStretch(2)
 
         self.account_dropdown = AccountSelect()
@@ -163,6 +167,7 @@ class MainWindow(QMainWindow):
 
         # sidebar
         self.sidebar = QListWidget()
+        self.sidebar.setBackgroundRole(styles.CRole.Mid)
         self.sidebar.setDragEnabled(False)
         self.sidebar.setSelectionMode(QListWidget.SelectionMode.SingleSelection)
         self.sidebar.setFixedWidth(180)

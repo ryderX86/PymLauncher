@@ -36,7 +36,7 @@ LIBRARIES_BASE = MINECRAFT_DIR / "libraries"
 # Rule evaluation stuff
 
 
-def _evaluate_rules(rules: list[dict]) -> bool:
+def evaluate_rules(rules: list[dict]) -> bool:
     """
     Evaluate a list of library rules.
 
@@ -117,7 +117,7 @@ def filter_libraries(version_json: dict) -> list[dict]:
     by rules.
     """
     libraries = version_json.get("libraries", [])
-    return [lib for lib in libraries if _evaluate_rules(lib.get("rules", []))]
+    return [lib for lib in libraries if evaluate_rules(lib.get("rules", []))]
 
 
 def _download_file(

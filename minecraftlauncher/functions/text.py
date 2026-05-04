@@ -2,7 +2,9 @@
 Helper functions for text stuff
 """
 
+import platform
 import json
+import re
 
 
 def indent(text: str | dict | list, amount: int = 2):
@@ -25,3 +27,24 @@ def indent(text: str | dict | list, amount: int = 2):
         lines[i] = line  # type: ignore
 
     return "\n".join(lines)
+
+
+_WIN = (
+    r"(([A-Za-z]:\\)|(%[a-zA-Z0-9]+%\\?))(((?!(\.\.)|(CON)|(PRN)|(AUX)|(NUL)|("
+    r"COM[0-9¹²³])|(LPT[0-9¹²³])|([^\\]+\.[\\\.])|([<>:\"/?*\x00-\x1f\\]))[^<>"
+    r":\"/?*\x00-\x1f\\]*)\\?)+"
+)
+_POSIX = r"((~/|/)((?![^/]+\.)[^\x00\n\r\/]+/?)+)|~"
+
+match platform.system():
+    case "Windows":
+        _FP_REGEX = _WIN
+    case _:
+        _FP_REGEX = _POSIX
+
+
+def is_path_valid(fp: str):
+    m = re.match(_FP_REGEX, fp)
+    if not m:
+        return False
+    return m.string == fp

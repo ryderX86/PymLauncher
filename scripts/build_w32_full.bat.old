@@ -110,7 +110,10 @@ python -m nuitka ^
     --product-version=0.0.0.3 ^
     --product-name=ryderX86.minecraftlauncher-python ^
     --file-description="Minecraft Launcher written in Python" ^
-    minecraftlauncher
+    --user-package-configuration-file=w32.nuitka.yaml ^
+    launcher
+
+if %errorlevel% neq 0 exit /b %errorlevel%
 
 echo PySide6 deploy done, NSIS:
 cd .\scripts

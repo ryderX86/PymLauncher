@@ -1,6 +1,7 @@
 from enum import IntEnum
 import logging
 
+from PySide6.QtCore import Qt
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import (
     QApplication,
@@ -31,6 +32,8 @@ class UserReturn(IntEnum):
 class WarningType(IntEnum):
     OFFLINE_MODE_LAUNCH = 0
     ACCOUNTS_BIN_ENCRYPTION = 1
+    DELETE_PROFILE = 2
+    MODLOADER_VERSION_CONFLICT = 3
 
 
 class WarningDialog(QDialog):
@@ -56,6 +59,7 @@ class WarningDialog(QDialog):
 
     def _build_ui(self):
         root = QVBoxLayout(self)
+        root.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         msg = QLabel(self._text)
         if self._ico:
@@ -67,6 +71,8 @@ class WarningDialog(QDialog):
         checkbox_row = QHBoxLayout(checkbox_row_w)
 
         self.checkbox = QCheckBox("Do not show this message again")
+        if self._button_config == ButtonConfig.YES_NO:
+            self.checkbox.setText("Remember my choice next time")
         self.checkbox.setChecked(False)
         checkbox_row.addWidget(self.checkbox)
         if self._warning_type:
@@ -79,9 +85,11 @@ class WarningDialog(QDialog):
         match self._button_config:
             case ButtonConfig.OK:
                 self.main_button = QPushButton("OK")
+                button_row.addWidget(self.main_button)
                 self.no_button = None
             case ButtonConfig.YES_NO:
                 self.main_button = QPushButton("Yes")
+                button_row.addWidget(self.main_button)
                 self.no_button = QPushButton("No")
                 self.no_button.clicked.connect(self._no)
                 button_row.addWidget(self.no_button)
@@ -89,7 +97,6 @@ class WarningDialog(QDialog):
                 raise ValueError(f"Bad button config: {self._button_config}")
 
         self.main_button.clicked.connect(self._ok_yes)
-        button_row.addWidget(self.main_button)
 
         root.addWidget(button_row_w)
 
@@ -108,9 +115,9 @@ class WarningDialog(QDialog):
             if self._button_config == ButtonConfig.YES_NO:
                 match self.status:
                     case UserReturn.OK_YES:
-                        config.dialog_answers[self._warning_type] = True
+                        config.dialog_answers[str(self._warning_type)] = True
                     case _:
-                        config.dialog_answers[self._warning_type] = False
+                        config.dialog_answers[str(self._warning_type)] = False
 
     def _ok_yes(self):
         self.status = UserReturn.OK_YES
@@ -121,18 +128,19 @@ class WarningDialog(QDialog):
         self.accept()
 
     def exec(self):
-        QApplication.beep()
         if self._warning_type in config.ignored_messages:
             log.debug(
                 "Not showing ignored warning '%s'", self._warning_type.value
             )
-            if self._warning_type in config.dialog_answers:
-                if config.dialog_answers[self._warning_type]:
+            if str(self._warning_type) in config.dialog_answers:
+                if config.dialog_answers[str(self._warning_type)] is True:
                     self.status = UserReturn.OK_YES
                 else:
                     self.status = UserReturn.NO
             return 0
         self._build_ui()
+        if config.allow_audio:
+            QApplication.beep()
         return super().exec()
 
     def show(self):
@@ -144,8 +152,8 @@ class WarningDialog(QDialog):
             log.debug(
                 "Not showing ignored warning '%s'", self._warning_type.value
             )
-            if self._warning_type in config.dialog_answers:
-                if config.dialog_answers[self._warning_type]:
+            if str(self._warning_type) in config.dialog_answers:
+                if config.dialog_answers[str(self._warning_type)]:
                     self.status = UserReturn.OK_YES
                 else:
                     self.status = UserReturn.NO
@@ -173,9 +181,9 @@ class WarningDialog(QDialog):
     def warn(
         cls,
         parent=None,
+        title: str | None = None,
         text: str = "<oops>",
         type_: WarningType | None = None,
-        title: str | None = None,
         *,
         show_once: bool = False,
         button_config: ButtonConfig = ButtonConfig.OK,
@@ -184,7 +192,7 @@ class WarningDialog(QDialog):
         dialog = cls(
             text,
             type_,
-            title,
+            title or "Warning",
             icon=ico,
             button_config=button_config,
             parent=parent,

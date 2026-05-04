@@ -47,7 +47,7 @@ class IconPicker(QWidget):
         self.setWindowFlags(self._WIN_TYPE)
         self.hide()
         self._ico_size: int | None = None
-        self._size_hint = QSize(self.iconsize, self.iconsize)
+        self._size_hint = QSize(self.iconsize + 8, self.iconsize + 8)
         self._icon_indexes = []
         self._build_ui()
         self.loaded = False
@@ -59,11 +59,18 @@ class IconPicker(QWidget):
         self.view.setIconSize(
             QSize(self._DEFAULT_ICO_SIZE, self._DEFAULT_ICO_SIZE)
         )
-        self.view.setUniformItemSizes(True)
+        self.view.setGridSize(
+            QSize(self._DEFAULT_ICO_SIZE + 8, self._DEFAULT_ICO_SIZE + 8)
+        )
+        # self.view.setUniformItemSizes(True)
         cols = self._DEFAULT_COLUMNS
         rows = self._DEFAULT_ROWS
-        self.setFixedWidth(((self._DEFAULT_ICO_SIZE + 2) * 8) + (cols * 3))
-        self.setFixedHeight(((self._DEFAULT_ICO_SIZE + 2) * 6) - (rows // 2))
+        self.view.setStyleSheet("::icon {top: 3px;}")
+        self.setFixedWidth(((self._DEFAULT_ICO_SIZE + 8) * cols) + 39)
+        self.setFixedHeight(
+            ((self._DEFAULT_ICO_SIZE + 8) * 6) + 2 - (rows // 2)
+        )
+        self.view.setVerticalScrollMode(self.view.ScrollMode.ScrollPerPixel)
 
     def _set_automated(self, auto: bool):
         self._automated_status = auto
@@ -93,8 +100,8 @@ class IconPicker(QWidget):
     @property
     def iconsize(self):
         if self._ico_size:
-            return self._ico_size
-        return self._DEFAULT_ICO_SIZE
+            return self._ico_size + 8
+        return self._DEFAULT_ICO_SIZE + 8
 
     @property
     def sizehint(self):
@@ -103,8 +110,8 @@ class IconPicker(QWidget):
     @iconsize.setter
     def iconsize(self, new_val: int | None):
         self._ico_size = new_val
-        self._size_hint.setHeight(self.iconsize)
-        self._size_hint.setWidth(self.iconsize)
+        self._size_hint.setHeight(self.iconsize + 8)
+        self._size_hint.setWidth(self.iconsize + 8)
 
     def focusOutEvent(self, event: QFocusEvent):
         self.lost_focus.emit()

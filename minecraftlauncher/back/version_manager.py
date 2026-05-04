@@ -1,6 +1,9 @@
 """
 Handles fetching & downloading version manifest JSON files, resolving version
 inheritence, and downloading the client JAR file.
+
+`OS_PATH_DELIM` from `minecraftlauncher.constants` is imported as `D` for use
+in `os.path` strings as a forward or back slash for OS independant behavior.
 """
 
 from datetime import datetime, timedelta
@@ -15,11 +18,12 @@ from minecraftlauncher.constants import (
     VERSION_MANIFEST_URL,
     MINECRAFT_DIR,
     DEFAULT_JVM_ARGS,
+    OS_PATH_DELIM as D,
 )
 from minecraftlauncher.datatypes.game_version import GameVersionStub
 from minecraftlauncher.config import redownload_option
 from minecraftlauncher import session
-from .library_manager import _evaluate_rules
+from .library_manager import evaluate_rules
 from .download_helpers import download
 
 log = logging.getLogger(__name__)
@@ -80,26 +84,33 @@ def fetch_version_manifest(force_refresh: bool = False):
     ```
     """
     global manifest_cache
-    if manifest_cache.get("versions", []) and not force_refresh:
+    if manifest_cache["versions"] and not force_refresh:
         return manifest_cache
 
     log.info("Looking for existing version manifest")
-    mf_path = MINECRAFT_DIR / "versions" / "version_manifest_v2.json"
-    if mf_path.exists():
+    mf_path = f"{MINECRAFT_DIR}{D}versions{D}version_manifest_v2.json"
+    if os.path.isfile(mf_path):
         log.info("Found it! Checking age...")
-        max_age = (datetime.now() - timedelta(hours=1)).timestamp()
-        if mf_path.stat().st_mtime > max_age:
-            mf_text = mf_path.read_text()
+        max_age = (datetime.now() - timedelta(hours=4)).timestamp()
+        if os.lstat(mf_path).st_mtime > max_age:
+            with open(mf_path, "r") as f:
+                mf_text = f.read()
             try:
                 mf = json.loads(mf_text)
             except json.JSONDecodeError as err:
                 log.error("JSON decoding failed:", exc_info=err)
                 log.info("Failed to read version manifest! Re-downloading...")
-                mf_path.unlink()
+                os.remove(mf_path)
             else:
-                log.info("Using existing versions cache.")
-                manifest_cache = mf
-                return manifest_cache
+                if (
+                    "snapshot" not in mf["latest"]
+                    or "release" not in mf["latest"]
+                ):
+                    log.warning("Tampered manifest cache! Re-downloading")
+                else:
+                    log.info("Using existing versions cache.")
+                    manifest_cache = mf
+                    return manifest_cache
         else:
             log.info("Existing manifest is too old, getting a new one.")
 
@@ -111,8 +122,12 @@ def fetch_version_manifest(force_refresh: bool = False):
         log.error("Failed to get version manifest!")
         return manifest_cache
     manifest_cache = resp.json()
-    mf_path.touch()
-    mf_path.write_text(json.dumps(manifest_cache))
+    if "versions" not in manifest_cache:
+        manifest_cache["versions"] = []
+    elif "latest" not in manifest_cache:
+        manifest_cache["latest"] = {}
+    with open(mf_path, "w") as f:
+        f.write(resp.text)
     return manifest_cache
 
 
@@ -124,13 +139,14 @@ def _build_local_version_list(exclude: list[GameVersionStub] | None = None):
     for folder in os.scandir(versions_dir):
         if not folder.is_dir():
             continue
-        jar_path = versions_dir / folder.name / f"{folder.name}.jar"
-        json_path = versions_dir / folder.name / f"{folder.name}.json"
-        if not json_path.exists():
+        jar_path = f"{versions_dir}{D}{folder.name}{D}{folder.name}.jar"
+        json_path = f"{versions_dir}{D}{folder.name}{D}{folder.name}.json"
+        if not os.path.isfile(json_path):
             log.warning("Version %s doesn't have a JSON file!", folder.name)
             continue
         try:
-            ver_json_text = json_path.read_text()
+            with open(json_path, "r") as f:
+                ver_json_text = f.read()
         except Exception as err:
             log.warning(
                 "Failed to read file at '%s' for version %s",
@@ -149,7 +165,7 @@ def _build_local_version_list(exclude: list[GameVersionStub] | None = None):
         if (
             "downloads" not in ver_json
             and "inheritsFrom" not in ver_json
-            and not jar_path.exists()
+            and not os.path.isfile(jar_path)
         ):
             log.warning(
                 "Version '%s' has no jar file and doesn't inherit from "
@@ -207,17 +223,18 @@ def get_version_list(
             )
             continue
         type_ = ver.get("type", "release")
-        match type_:
-            case "snapshot":
-                if not include_snapshots:
-                    continue
-            case "old_alpha" | "old_beta":
-                if not include_old:
-                    continue
-            case "release":
-                pass
-            case _:
-                log.debug("Unexpected release type: '%s'", type_)
+        if not include_snapshots or not include_old:
+            match type_:
+                case "snapshot":
+                    if not include_snapshots:
+                        continue
+                case "old_alpha" | "old_beta":
+                    if not include_old:
+                        continue
+                case "release":
+                    pass
+                case _:
+                    log.debug("Unexpected release type: '%s'", type_)
         timestamp = ver.get("releaseTime", ver.get("time"))
         build_ts = ver.get("time", ver.get("releaseTime"))
         new_ver = GameVersionStub(id_, type_, url, False, timestamp, build_ts)
@@ -235,17 +252,17 @@ def get_version_list(
 def get_latest_release() -> str:
     """Returns the latest version ID, if possible."""
     fetch_version_manifest()
-    if not manifest_cache.get("latest"):
+    if not manifest_cache["latest"]:
         return ""
-    return manifest_cache["latest"].get("release")
+    return manifest_cache["latest"]["release"]
 
 
 def get_latest_snapshot() -> str:
     """Returns the latest snapshot ID, if possible."""
     fetch_version_manifest()
-    if not manifest_cache.get("latest"):
+    if not manifest_cache["latest"]:
         return ""
-    return manifest_cache["latest"].get("snapshot")
+    return manifest_cache["latest"]["snapshot"]
 
 
 def _get_manifest_entry(version_id: str) -> dict[str, Any] | None:
@@ -273,17 +290,18 @@ def fetch_version_json(version_id: str) -> dict[str, Any]:
     a `ValueError`.
     """
     fetch_version_manifest()
-    ver_dir = VERSION_DIR / version_id
-    local_path = ver_dir / f"{version_id}.json"
+    ver_dir = f"{VERSION_DIR}{D}{version_id}"
+    local_path = f"{ver_dir}{D}{version_id}.json"
 
     mf_entry = _get_manifest_entry(version_id)
 
     # check local files
-    if local_path.exists():
-        local_bytes = local_path.read_bytes()
+    if os.path.isdir(ver_dir):
+        with open(local_path, "rb") as f:
+            local_bytes = f.read()
+            local_text = local_bytes.decode("utf-8")
         local_sha1 = hashlib.sha1(local_bytes).hexdigest()
         if (mf_entry and mf_entry["sha1"] == local_sha1) or (not mf_entry):
-            local_text = local_path.read_text("utf-8")
             try:
                 return json.loads(local_text)
             except json.JSONDecodeError as err:
@@ -317,10 +335,10 @@ def fetch_version_json(version_id: str) -> dict[str, Any]:
         )
         raise
 
-    if not ver_dir.exists():
-        ver_dir.mkdir(parents=True, exist_ok=True)
-    local_path.touch()
-    local_path.write_text(resp.text)
+    if not os.path.isdir(ver_dir):
+        os.makedirs(ver_dir)
+    with open(local_path, "r") as f:
+        f.write(resp.text)
     return resp.json()
 
 
@@ -566,7 +584,7 @@ def default_user_jvm_args_factory(version_json: dict) -> str:
         jvm_args = []
         for arg in args["default-user-jvm"]:
             if arg.get("rules", []):
-                if not _evaluate_rules(arg["rules"]):
+                if not evaluate_rules(arg["rules"]):
                     continue
             match arg["value"]:
                 case str():

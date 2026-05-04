@@ -29,7 +29,7 @@ from minecraftlauncher.front.window import (
     ButtonConfig,
 )
 from minecraftlauncher.datatypes import GameProfile
-from minecraftlauncher.back.library_manager import _evaluate_rules
+from minecraftlauncher.back.library_manager import evaluate_rules
 from minecraftlauncher.auth import LauncherAccount
 from minecraftlauncher import config
 from .library_manager import build_classpath, filter_libraries
@@ -67,7 +67,7 @@ def _process_jvm_arg_entry(entry, values: dict[str, str]) -> list[str]:
         return [_substitute(entry, values)]
     elif isinstance(entry, dict):
         rules = entry.get("rules", [])
-        if not _evaluate_rules(rules):
+        if not evaluate_rules(rules):
             return []
         value = entry.get("value", [])
         if isinstance(value, str):
@@ -398,9 +398,9 @@ class LaunchWorker(QThread):
         if offline_mode:
             allow_run = WarningDialog.warn(
                 self,
+                "Launch in offline mode?",
                 "Offline mode is experimental. Do you want to continue?",
                 WarningType.OFFLINE_MODE_LAUNCH,
-                "Launch in offline mode?",
                 button_config=ButtonConfig.YES_NO,
             )
             if not allow_run:

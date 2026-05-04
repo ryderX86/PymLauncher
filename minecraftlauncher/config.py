@@ -4,12 +4,14 @@ minecraftlauncher.__init__ instead of having this mess.
 """
 
 from typing import Any
-from types import NoneType
 from enum import IntEnum
 import json
 import logging
 
-from .constants import LAUNCHER_DATA_DIR, LAUNCHER_CONFIG_FILE
+from .constants import (
+    LAUNCHER_DATA_DIR,
+    LAUNCHER_CONFIG_FILE,
+)
 from .functions import reswrite
 from . import DEV
 
@@ -57,26 +59,41 @@ maximized: bool = False
 tooltip_icons_enabled: bool = True
 ignored_messages: list[int] = []
 jump_list_items: list[str] = []  # profiles
-dialog_answers: dict[int, bool] = {}
+dialog_answers: dict[str, bool] = {}
 show_animation_on_skin_dialog: bool = False
 show_logs_on_home: bool = False
 allow_audio: bool = True
+enforce_json_spec: bool = False
+# icon_pack: str = ICON_PACK_BOOTSTRAP
 
 # konami code, just does comic sans. possibly resource intense.
-want_easter_eggs: IgnoreMe | bool = IgnoreMe(False)
+want_easter_eggs: bool = False
+
+__config__ = {
+    "window_size",
+    "open_browser_for_login",
+    "copy_code_for_login",
+    "post_launch_option",
+    "redownload_option",
+    "maximized",
+    "tooltip_icons_enabled",
+    "ignored_messages",
+    "jump_list_items",
+    "dialog_answers",
+    "show_animation_on_skin_dialog",
+    "show_logs_on_home",
+    "allow_audio",
+    "enforce_json_spec",
+}
 
 
 def set_(val_name: str, new_val: Any):
-    current = globals().get(val_name)
-    if val_name not in globals():
+    if val_name not in __config__:
         raise IndexError(f"'{val_name}' not found in conifg")
+    current = globals().get(val_name)
     if val_name.startswith("_") or val_name.endswith("_"):
         raise IndexError("Can't override private var")
-    if isinstance(current, type(new_val)):
-        pass
-    elif callable(current):
-        raise TypeError("Can't override callable")
-    else:
+    if not isinstance(current, new_val):
         _log.warning(
             "Type of '%s' changed: '%s' -> '%s'",
             val_name,
@@ -89,7 +106,7 @@ def set_(val_name: str, new_val: Any):
 
 
 def load(config: dict | None = None):
-    if not config:
+    if config is None:
         config = {}
         if LAUNCHER_CONFIG_FILE.exists():
             try:
@@ -100,23 +117,12 @@ def load(config: dict | None = None):
         else:
             save()
             config = {}
-    assert not isinstance(config, NoneType)
-    for key, val in config.items():
-        if key[0] == key[0].upper():
-            continue
-        elif not isinstance(val, (str, int, list, dict, bool, NoneType)):
-            continue
-        elif key.startswith("_") or key.endswith("_"):
-            continue
-        elif key.upper() == key:
-            continue
-        elif isinstance(globals().get(key), NoneType):
+    for key, val in config.items():  # type: ignore
+        if key not in __config__:
             _log.warning("Ignoring unknown key in config.json: '%s'", key)
             continue
         default = globals()[key]
-        if isinstance(default, IgnoreMe) and isinstance(val, bool):
-            pass
-        elif not isinstance(default, type(val)):
+        if not isinstance(default, type(val)):
             _log.warning("Value in '%s' has conflicting type, ignoring", key)
             continue
         if DEV and val != default:
@@ -126,8 +132,9 @@ def load(config: dict | None = None):
 
 def save():
     obj_out = {}
-    for key, val in globals().items():
-        if not isinstance(val, (str, int, list, dict, bool, NoneType)):
+    for key in __config__:
+        val = globals()[key]
+        if val is None:
             continue
         elif isinstance(val, (list, dict)) and not val:
             continue  # skip bloat

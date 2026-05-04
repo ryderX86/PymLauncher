@@ -24,15 +24,15 @@ should be operating offline or not.
 """
 
 if DEV:
+    LAUNCHER_VERSION = "dev"
     DEBUG_LOGGING = True
 else:
+    from .__version__ import VERSION
+
+    LAUNCHER_VERSION = VERSION
     DEBUG_LOGGING = _debug_logging
 
 LAUNCHER_NAME = "minecraftlauncher-python"
-if DEV:
-    LAUNCHER_VERSION = "dev"
-else:
-    LAUNCHER_VERSION = "build-4"
 AUTHOR_USR = "ryderX86"
 EMAIL = "ryder@r86.me"
 
@@ -230,6 +230,10 @@ LOG4J_FIX_TIME = "2023-06-07T10:50:16+00:00"
 LOG4J_116_5_FIX_MAX_TIME = "2021-06-08T11:00:39+00:00"
 LOG4J_17_112_FIX_MAX_TIME = "2017-06-02T13:50:27+00:00"
 LOG4J_VULN_MIN_TIME = "2013-09-26T15:11:19+00:00"
+
+LATEST_VERSION_TEXT = "latest-release"
+LATEST_SNAPSHOT_TEXT = "latest-snapshot"
+LATEST_VERSIONS_SET = {LATEST_VERSION_TEXT, LATEST_SNAPSHOT_TEXT}
 
 # uuids
 PROFILE_MHF_STEVE = "c06f89064c8a49119c29ea1dbd1aab82"

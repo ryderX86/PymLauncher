@@ -16,7 +16,6 @@ from PySide6.QtCore import (
     QEvent,
 )
 from PySide6.QtGui import (
-    QValidator,
     QAction,
     QContextMenuEvent,
     QMouseEvent,
@@ -57,9 +56,25 @@ from minecraftlauncher.front.qt.models import (
     ProfileSelectionModel,
     ProfileModel,
 )
-from minecraftlauncher.front.qt.widgets import IconPickerButton
+from minecraftlauncher.front.qt.widgets import (
+    IconPickerButton,
+    Header1,
+    Header2,
+)
+from minecraftlauncher.front.qt.validator import (
+    ProfileRAMValidator,
+    VersionTextValidator,
+    ProfileResolutionTextValidator,
+    FilePathValidator,
+    QValidatorWithStoredResults,
+)
 from minecraftlauncher.front.window.profile_exporting.export_profile import (
     ExportProfileDialog,
+)
+from minecraftlauncher.front.window import (
+    WarningDialog,
+    WarningType,
+    ButtonConfig,
 )
 from minecraftlauncher.functions import copy_to_clipboard
 from minecraftlauncher.ostools import set_jump_list
@@ -83,32 +98,6 @@ MapIndex = ProfileModel.MapIndex
 _running_threads = []
 
 
-class VersionTextValidator(QValidator):
-    log = log.getChild("VersionTextValidator")
-
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.ver_list = []
-
-    def load(self):
-        self.ver_list = version_manager.get_version_list()
-
-    def validate(self, a0: str, a1: int) -> tuple[QValidator.State, str, int]:
-        ver_ids = [v.id for v in self.ver_list]
-        if not ver_ids:
-            return self.State.Intermediate, a0, a1
-        if not a0:
-            return self.State.Intermediate, ver_ids[0], 0
-        if a0 in ["latest-release", "latest-snapshot"]:
-            return self.State.Acceptable, a0, a1
-        for id_ in ver_ids:
-            if id_ == a0:
-                return self.State.Acceptable, a0, a1
-            if id_.startswith(a0):
-                return self.State.Intermediate, a0, a1
-        return self.State.Invalid, ver_ids[0], 0
-
-
 def _right_click_decorator(func):
     _func = func
 
@@ -120,41 +109,6 @@ def _right_click_decorator(func):
         return _func(e)
 
     return decorated_func
-
-
-class ProfileResolutionTextValidator(QValidator):
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.resolutions = []
-
-    def set_resolutions(self, resolution_list: list[str]):
-        self.resolutions = resolution_list
-
-    def validate(
-        self, a0: str | None, a1: int
-    ) -> tuple[QValidator.State, str, int]:
-        if not a0:
-            return self.State.Intermediate, self.resolutions[0], 0
-        if a0 == "Auto":
-            return self.State.Acceptable, a0, a1
-        a0 = a0.replace("*", "x").replace(".", "x").replace(":", "x")
-        a0 = a0.replace(" ", "")
-        sel_res = a0.split("x")
-        if (
-            (len(sel_res) < 2 and sel_res[0].isdigit())
-            or sel_res[0].isdigit()
-            and not sel_res[1]
-        ):
-            return self.State.Intermediate, a0, a1
-        elif sel_res[0].isdigit() and sel_res[1].isdigit():
-            w = int(sel_res[0])
-            h = int(sel_res[1])
-            if w > 10000 or h > 10000:
-                return self.State.Invalid, a0, a1
-            elif w < 100 or h < 100:
-                return self.State.Intermediate, a0, a1
-            return self.State.Acceptable, a0, a1
-        return self.State.Invalid, self.resolutions[0], 0
 
 
 class VersionJsonBackgroundDownloader(QThread):
@@ -212,6 +166,8 @@ class ProfilesPage(QWidget):
         self.mapper.currentIndexChanged.connect(self._dirty_check)
         self._dirty = False
         self._loaded = False
+        self._validity_state = True
+        self._fp_validator = FilePathValidator(self)
         self._build_ui()
         if constants.OS != "osx":
             key_seq = QKeySequence(
@@ -258,11 +214,10 @@ class ProfilesPage(QWidget):
         left.setFixedWidth(250)
         left_layout = QVBoxLayout(left)
         left_layout.setContentsMargins(12, 16, 12, 16)
-        left.setBackgroundRole(styles.CRole.Light)
+        left.setBackgroundRole(styles.CRole.Mid)
         left.setAutoFillBackground(True)
 
-        label = QLabel("Profiles")
-        label.setProperty("heading", True)
+        label = Header1("Profiles")
         left_layout.addWidget(label)
 
         button_row_w = QWidget()
@@ -289,6 +244,9 @@ class ProfilesPage(QWidget):
         left_layout.addWidget(button_row_w)
 
         self.profile_list = QListView()
+        self.profile_list.setVerticalScrollMode(
+            QListView.ScrollMode.ScrollPerPixel
+        )
         # stinky funky workaround
         self.profile_list.mousePressEvent = _right_click_decorator(
             self.profile_list.mousePressEvent
@@ -314,7 +272,6 @@ class ProfilesPage(QWidget):
         self.profile_list.setSelectionBehavior(
             self.profile_list.SelectionBehavior.SelectRows
         )
-        self.profile_list.setAutoScroll(False)
         self.profile_list.setDragEnabled(True)
         self.profile_list.setDragDropMode(QListView.DragDropMode.DragDrop)
         left_layout.addWidget(self.profile_list, 1)
@@ -334,8 +291,7 @@ class ProfilesPage(QWidget):
         right.setBackgroundRole(styles.CRole.Base)
         right.setAutoFillBackground(True)
 
-        edit_label = QLabel("Edit Profile")
-        edit_label.setProperty("heading", True)
+        edit_label = Header2("Edit Profile")
         right_layout.addWidget(edit_label)
 
         self.form = QFormLayout()
@@ -344,9 +300,14 @@ class ProfilesPage(QWidget):
             Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignRight
         )
 
+        icon_row_w = QWidget()
+        icon_row = QHBoxLayout(icon_row_w)
+        icon_row.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        icon_row.setContentsMargins(0, 0, 0, 0)
         self.icon_picker = IconPickerButton()
         self.icon_picker.icon_changed.connect(self._dirty_check)
-        self.form.addRow("Icon:", self.icon_picker)
+        icon_row.addWidget(self.icon_picker)
+        right_layout.addWidget(icon_row_w)
 
         self.name_input = QLineEdit()
         self.mapper.addMapping(self.name_input, MapIndex.NAME)
@@ -354,16 +315,18 @@ class ProfilesPage(QWidget):
 
         self.form.addRow("Name:", self.name_input)
 
-        self.version_combo = QComboBox()
-        self.version_combo.addItems(["latest-release", "latest-snapshot"])
-        self.version_combo.setEditable(True)
+        self.version_combo = QComboBox(
+            insertPolicy=QComboBox.InsertPolicy.NoInsert, editable=True
+        )
+        self.version_combo.addItems(
+            [constants.LATEST_VERSION_TEXT, constants.LATEST_SNAPSHOT_TEXT]
+        )
         version_view = self.version_combo.view()
         assert version_view
-        version_view.setAutoScroll(False)
         self._version_id_validator = VersionTextValidator()
         self.version_combo.setValidator(self._version_id_validator)
-        self.version_combo.currentIndexChanged.connect(self._dirty_check)
-        self.version_combo.currentIndexChanged.connect(self._args_changer)
+        self.version_combo.editTextChanged.connect(self._dirty_check)
+        self.version_combo.editTextChanged.connect(self._args_changer)
         self.mapper.addMapping(
             self.version_combo, MapIndex.VERSION, b"currentText"
         )
@@ -379,8 +342,11 @@ class ProfilesPage(QWidget):
 
         game_dir_row = QHBoxLayout()
         self.game_dir_input = QLineEdit()
-        self.game_dir_input.setPlaceholderText(".../.minecraft")
+        self.game_dir_input.setPlaceholderText(
+            f"...{constants.OS_PATH_DELIM}.minecraft"
+        )
         self.game_dir_input.textChanged.connect(self._dirty_check)
+        self.game_dir_input.setValidator(self._fp_validator)
         self.mapper.addMapping(self.game_dir_input, MapIndex.GAME_DIR)
         game_dir_row.addWidget(self.game_dir_input, 1)
         self.game_dir_browse_button = QPushButton(
@@ -396,6 +362,7 @@ class ProfilesPage(QWidget):
         self.java_input = QLineEdit()
         self.java_input.setPlaceholderText("Built-in Java")
         self.java_input.textChanged.connect(self._dirty_check)
+        self.java_input.setValidator(self._fp_validator)
         self.mapper.addMapping(self.java_input, MapIndex.JAVA_PATH)
         java_row.addWidget(self.java_input, 1)
         self.java_browse_button = QPushButton(
@@ -418,6 +385,7 @@ class ProfilesPage(QWidget):
         min_label = QLabel("Minimum:")
 
         # workaround for the dumb stupid label alignment
+        self._ram_validator = ProfileRAMValidator()
         min_label.setContentsMargins(0, 0, 0, 4)
         memory_row.addWidget(min_label, 0)
         self.mem_min_input = QLineEdit("512M")
@@ -426,6 +394,7 @@ class ProfilesPage(QWidget):
             max(styles.FONT_INF.pixelSize(), 1) * 6
         )
         self.mem_min_input.textChanged.connect(self._dirty_check)
+        self.mem_min_input.setValidator(self._ram_validator)
         memory_row.addWidget(self.mem_min_input, 0)
         self.mapper.addMapping(self.mem_min_input, MapIndex.MIN_RAM)
 
@@ -438,6 +407,7 @@ class ProfilesPage(QWidget):
             max(styles.FONT_INF.pixelSize(), 1) * 6
         )
         self.mem_max_input.textChanged.connect(self._dirty_check)
+        self.mem_max_input.setValidator(self._ram_validator)
         memory_row.addWidget(self.mem_max_input, 0)
         memory_row.addStretch(2)
         self.mapper.addMapping(self.mem_max_input, MapIndex.MAX_RAM)
@@ -447,7 +417,8 @@ class ProfilesPage(QWidget):
         self.res_combo_box = QComboBox()
         self.res_combo_box.setEditable(True)
         self.res_combo_box.setValidator(ProfileResolutionTextValidator())
-        self.res_combo_box.currentTextChanged.connect(self._dirty_check)
+        self.res_combo_box.setMask("Nnnn0A900000")
+        self.res_combo_box.editTextChanged.connect(self._dirty_check)
         self.mapper.addMapping(
             self.res_combo_box, MapIndex.RESOLUTION, b"currentText"
         )
@@ -466,8 +437,11 @@ class ProfilesPage(QWidget):
         )
         self.mods_folder_row.addWidget(self.use_mods_folder_input)
         self.mods_folder_input = QLineEdit()
-        self.mods_folder_input.setPlaceholderText(".../mods")
+        self.mods_folder_input.setPlaceholderText(
+            f"...{constants.OS_PATH_DELIM}mods"
+        )
         self.mods_folder_input.setDisabled(True)
+        self.mods_folder_input.setValidator(self._fp_validator)
         self.mods_folder_input.textChanged.connect(self._dirty_check)
         self.mapper.addMapping(self.mods_folder_input, 9)
         self.mods_folder_row.addWidget(self.mods_folder_input)
@@ -479,7 +453,6 @@ class ProfilesPage(QWidget):
         self.mods_folder_browse.setDisabled(True)
         self.mods_folder_row.addWidget(self.mods_folder_browse)
         self.form.addRow("Mods folder:", self.mods_folder_row)
-        self.form.setRowVisible(self.mods_folder_row, False)
 
         right_layout.addLayout(self.form)
         right_layout.addStretch()
@@ -515,6 +488,7 @@ class ProfilesPage(QWidget):
 
         layout.addWidget(right, 1)
         self.select.begin_change.connect(self._hook)
+        self.form.setRowVisible(self.mods_folder_row, False)
 
     def _populate_resolution_combo(self):
         self.res_combo_box.clear()
@@ -523,7 +497,7 @@ class ProfilesPage(QWidget):
         geo = screen.geometry()
         if screen:
             sw, sh = geo.width(), geo.height()
-            for frac in [1.0, 0.8, 0.75, 0.6, 0.5, 0.25]:
+            for frac in [1.0, 0.8, 0.75, 0.6]:
                 w = int(sw * frac)
                 h = int(sh * frac)
                 res = f"{w}x{h}"
@@ -531,13 +505,10 @@ class ProfilesPage(QWidget):
                     self.log.debug("Adding resolution %s to list", res)
                     resolution_list.append(res)
             new_res_list = []
-            for res in resolution_list:
-                xy = res.split("x")
-                x = int(xy[0])
-                y = int(xy[1])
-                if x > geo.width() or y > geo.height():
+            for x, y in COMMON_RESOLUTIONS:
+                if x > sw or y > sh:
                     continue
-                new_res_list.append(res)
+                new_res_list.append(f"{x}x{y}")
             resolution_list = new_res_list
 
         def sort(resolution: str):
@@ -631,12 +602,16 @@ class ProfilesPage(QWidget):
         if not self._loaded:
             return False
         profile = profile_manager.get_current_profile()
+
+        # we assume clean/valid until proven otherwise
         is_dirty = False
+        self._validity_state = True
         for i in range(10):
             if i == 8:
                 continue
             widget = self.mapper.mappedWidgetAt(i)
             if widget is None:
+                log.warning("No widget at form idx %d", i)
                 continue
             if getattr(widget, "currentText", None):
                 val = widget.currentText()  # type: ignore
@@ -656,15 +631,38 @@ class ProfilesPage(QWidget):
                 continue
             if val != profile[i]:
                 is_dirty = True
+                # check validity/warn user of nonvalidity
+                if getattr(widget, "validator", None):
+                    validator = widget.validator()  # type: ignore
+                    if isinstance(validator, QValidatorWithStoredResults):
+                        widget_is_valid: bool = validator.isValid()
+                    else:
+                        widget_is_valid = True
+                else:
+                    widget_is_valid: bool = True
+                if self._validity_state is True and not widget_is_valid:
+                    self._validity_state = False
+                    widget.setProperty("invalid", True)
+                    widget.setToolTip("Invalid value")
+                    widget.style().unpolish(widget)
+                    widget.style().polish(widget)
+                elif widget_is_valid:
+                    widget.setProperty("invalid", None)
+                    widget.setToolTip("")
+                    widget.style().unpolish(widget)
+                    widget.style().polish(widget)
                 continue
+            else:
+                widget.setProperty("invalid", None)
+                widget.setToolTip("")
+                widget.style().unpolish(widget)
+                widget.style().polish(widget)
         # This entire section here for the icon check is stupid and I'm not proud
         # of it, but it damn works at least.
         if self.icon_picker.text() == "<CUSTOM>" and profile.has_custom_icon():
             # <CUSTOM> is always a loaded icon, means there's no change
             pass
         elif not profile.icon and not self.icon_picker.text():
-            pass
-        elif self.icon_picker.text() == "" and not profile.icon:
             pass
         elif (
             self.icon_picker.text().startswith("data:image/")
@@ -674,14 +672,19 @@ class ProfilesPage(QWidget):
             is_dirty = True
         if is_dirty:
             self._set_dirty()
-            return True
         else:
             self._set_undirty()
-            return False
+        self._handle_validity()
+        return is_dirty
+
+    def _handle_validity(self):
+        if self._dirty and not self._validity_state:
+            self.save_button.setDisabled(True)
+            self.save_button.setToolTip("Invalid input present; cannot save")
+        else:
+            self.save_button.setToolTip("")
 
     def _save(self):
-        if not self.form.isRowVisible(self.mods_folder_row):
-            self.use_mods_folder_input.setChecked(False)
         self._set_undirty()
         row = self.select.currentIndex().row()
         idx = self.model.index(row, 8)
@@ -691,7 +694,12 @@ class ProfilesPage(QWidget):
         )
         self.mapper.submit()
         if constants.FLAG_ENABLE_JUMP_LISTS and config.jump_list_items:
-            set_jump_list()  # refresh in case icons of jump-list profs changed
+            profile = profile_manager.get_current_profile()
+            if (self.icon_picker.text() or None) not in {
+                "<CUSTOM>",
+                profile.icon,
+            }:
+                set_jump_list()
 
     def _reset(self):
         self._set_mods_folder_row_visibility()
@@ -788,7 +796,9 @@ class ProfilesPage(QWidget):
         current_selected_ver = self.version_combo.currentText()
         self.version_combo.blockSignals(True)
         self.version_combo.clear()
-        self.version_combo.addItems(["latest-release", "latest-snapshot"])
+        self.version_combo.addItems(
+            [constants.LATEST_VERSION_TEXT, constants.LATEST_SNAPSHOT_TEXT]
+        )
         game_versions = version_manager.get_version_list(override=True)
         self._version_id_validator.load()
         for ver in game_versions:
@@ -810,7 +820,7 @@ class ProfilesPage(QWidget):
                 case _:
                     self.version_combo.addItem(id_, ver.local)
         prof = profile_manager.get_current_profile()
-        if current_selected_ver in ["latest-release", "latest-snapshot"]:
+        if current_selected_ver in constants.LATEST_VERSIONS_SET:
             self.version_combo.setCurrentText(current_selected_ver)
         elif version_manager.version_exists(current_selected_ver):
             self.version_combo.setCurrentText(current_selected_ver)
@@ -824,7 +834,7 @@ class ProfilesPage(QWidget):
                 and version_manager.version_exists(prof.version_id)
             ):
                 self.version_combo.setCurrentText(prof.version_id)
-            self.version_combo.setCurrentText("latest-release")
+            self.version_combo.setCurrentText(constants.LATEST_VERSION_TEXT)
         self.version_combo.blockSignals(False)
         self._dirty_check()
 
@@ -940,13 +950,14 @@ class ProfilesPage(QWidget):
             profile = profile_manager.get_current_profile()
         if not self._selected_uuid:
             return
-        confirmation = QMessageBox.question(
+        confirmation = WarningDialog.warn(
             self,
             "Delete Profile?",
             f'Are you sure you want to delete the profile "{profile.name}"?',
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            WarningType.DELETE_PROFILE,
+            button_config=ButtonConfig.YES_NO,
         )
-        if confirmation == QMessageBox.StandardButton.Yes:
+        if confirmation:
             log.info(
                 "Deleting profile '%s' (ID: %s)", profile.name, profile.uuid
             )

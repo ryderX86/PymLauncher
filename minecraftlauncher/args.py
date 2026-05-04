@@ -31,7 +31,6 @@ _parser.add_argument(
     "--debug", action="store_true", default=False, dest="debug_logging"
 )
 _parser.add_argument("--launch-profile", type=str, dest="launch_profile")
-
 _parsed_args = _parser.parse_args()
 
 if _parsed_args and (

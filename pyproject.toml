@@ -1,5 +1,6 @@
-[build-system]
-requires = ["nuitka"]
+[project]
+name = "MinecraftLauncher-py"
+version = "1.0.0.6"
 
 [tool.black]
 line-length = 80
@@ -7,3 +8,6 @@ extend-exclude = "^/*.*"
 
 [tool.pyright]
 pythonPlatform = "All"
+
+[tool.nuitka]
+mode = "standalone"

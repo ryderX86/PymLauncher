@@ -9,6 +9,7 @@ Supports reading the official Minecraft launcher's
 """
 
 from collections.abc import Callable, Iterable
+from typing import Any
 from datetime import datetime
 from typing import Literal
 from types import FunctionType
@@ -16,9 +17,11 @@ from functools import lru_cache
 import json
 import logging
 import uuid
+import os
 
 from PySide6.QtCore import Signal, QObject
 
+from minecraftlauncher.config import enforce_json_spec
 from minecraftlauncher.constants import MINECRAFT_DIR
 from minecraftlauncher.datatypes import GameProfile
 from minecraftlauncher.functions import reswrite
@@ -28,7 +31,7 @@ log = logging.getLogger(__name__)
 
 PROFILES_PATH = MINECRAFT_DIR / "launcher_profiles.json"
 PROFILES_META = MINECRAFT_DIR / "launcher_profiles_meta.json"
-_DEFAULT_SETTINGS_JSON = {
+_DEFAULT_SETTINGS_JSON: dict[str, Any] = {
     "crashAssistance": False,
     "enableAdvanced": True,
     "enableAnalytics": False,
@@ -48,6 +51,8 @@ profiles: dict[str, GameProfile] = {}
 _current_profile: GameProfile | None = None
 _profile_switch_handlers: list[Callable[[GameProfile], None]] = []
 _profile_refresh_handlers: list[Callable] = []
+
+_launcher_settings = {**_DEFAULT_SETTINGS_JSON}
 
 
 @lru_cache(maxsize=32)
@@ -360,7 +365,7 @@ def load_launcher_profiles():
     """
     global profiles, _current_profile
     profile_order = get_profile_sorting()
-    if PROFILES_PATH.exists() and PROFILES_PATH.is_file():
+    if os.path.isfile(PROFILES_PATH):
         lp_text = PROFILES_PATH.read_text()
         try:
             lp_json = json.loads(lp_text)
@@ -372,6 +377,24 @@ def load_launcher_profiles():
             profs: dict[str, GameProfile] = {}
             has_latest_profile = False
             has_snapshot_profile = False
+            for k, v in lp_json.get("settings", {}).items():
+                if k not in _DEFAULT_SETTINGS_JSON:
+                    log.warning(
+                        'Unknown key in launcher_profiles.json["settings"]: '
+                        "'%s'",
+                        k,
+                    )
+                    continue
+                elif not isinstance(v, type(_launcher_settings[k])):
+                    log.warning(
+                        'Type mismatch for launcher_profiles.json["%s"]; '
+                        "expected '%s', got '%s'",
+                        k,
+                        type(_launcher_settings[k]),
+                        type(v),
+                    )
+                    continue
+                _launcher_settings[k] = v
             if profile_order:
                 new_order = []
                 keys_leftover = [*profs_raw.keys()]
@@ -460,7 +483,7 @@ def load_launcher_profiles():
 
 def save_launcher_profiles(
     profiles_: dict[str, GameProfile] | None = None,
-    settings: dict[str, bool | str] | None = None,
+    settings: dict[str, bool | str | int] | None = None,
 ):
     """
     Saves profiles to `launcher_profiles.json`.
@@ -485,13 +508,23 @@ def save_launcher_profiles(
     if not profiles:
         log.warning("No profiles are present! Saving default list...")
         profiles = _default_profs_factory()
-    if not settings:
-        settings = {**_DEFAULT_SETTINGS_JSON}
+    if _launcher_settings != _DEFAULT_SETTINGS_JSON and not settings:
+        settings = _launcher_settings
+    elif settings:
+        log.warning(
+            'Overriding launcher_profiles["settings"] with defined value'
+        )
+    else:
+        settings = _DEFAULT_SETTINGS_JSON
     profiles_json = {k: v.to_dict_compat() for k, v in profiles.items()}
     output = {"profiles": profiles_json, "settings": settings, "version": 6}
     _save_sorting_order(profiles_json.keys())
+    if enforce_json_spec:
+        separators = None
+    else:
+        separators = (", ", " : ")
     json_out = json.dumps(
-        output, indent=2, sort_keys=True, separators=(", ", " : ")
+        output, indent=2, sort_keys=True, separators=separators
     )
     reswrite(PROFILES_PATH, json_out)
     log.debug(

@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta
 from string import ascii_letters, digits
+from functools import lru_cache
 from typing import Literal
 from pathlib import Path
 from enum import StrEnum
@@ -64,12 +65,13 @@ class SkinModel(StrEnum):
     """Alias for `SLIM`"""
 
 
+@lru_cache(maxsize=48)
 def check_redownload_skin(
     p: Path, url: str, sha: str | None = None, name: str | None = None
 ):
     if not sha:
         sha = url.split("/")[-1]
-    name = name or sha[:10]
+    name = name or "".join([sha[:10], "..."])
     if p.exists():
         file_sha = hashlib.sha256(p.read_bytes()).hexdigest()
         if file_sha == sha:

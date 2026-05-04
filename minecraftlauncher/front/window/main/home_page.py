@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
     QWidget,
     QComboBox,
     QPlainTextEdit,
+    QListView,
 )
 
 from minecraftlauncher.functions.error_box import error_box
@@ -105,6 +106,9 @@ class HomePage(QWidget):
                 ]
             )
         )
+        self.profile_dropdown.view().setVerticalScrollMode(
+            QListView.ScrollMode.ScrollPerPixel
+        )
         self.profile_dropdown.activated.connect(self._on_dropdown_select)
         self.selection_model.currentChanged.connect(self._on_global_profile)
         profile_manager.add_profile_refresh_handler(self._refresh_profiles)
@@ -126,36 +130,36 @@ class HomePage(QWidget):
         action_label.setMargin(1)
         profile_action_row.addWidget(action_label)
 
-        open_folder_button = QPushButton("Game")
+        open_folder_button = QPushButton("&Game")
         open_folder_button.setProperty("mini", True)
         open_folder_button.clicked.connect(self._open_prof_folder)
         profile_action_row.addWidget(open_folder_button, 0)
 
-        open_rp_button = QPushButton("Resource Packs")
+        open_rp_button = QPushButton("Resource &Packs")
         open_rp_button.setProperty("mini", True)
         open_rp_button.clicked.connect(lambda: self._open_prof_folder("rp"))
         profile_action_row.addWidget(open_rp_button, 0)
 
-        open_save_button = QPushButton("Worlds")
+        open_save_button = QPushButton("&Worlds")
         open_save_button.clicked.connect(
             lambda: self._open_prof_folder("world")
         )
         open_save_button.setProperty("mini", True)
         profile_action_row.addWidget(open_save_button, 0)
 
-        open_mods_button = QPushButton("Mods")
+        open_mods_button = QPushButton("Mo&ds")
         open_mods_button.clicked.connect(lambda: self._open_prof_folder("mods"))
         open_mods_button.setProperty("mini", True)
         profile_action_row.addWidget(open_mods_button, 0)
 
-        open_screenshots_button = QPushButton("Screenshots")
+        open_screenshots_button = QPushButton("&Screenshots")
         open_screenshots_button.clicked.connect(
             lambda: self._open_prof_folder("screenshots")
         )
         open_screenshots_button.setProperty("mini", True)
         profile_action_row.addWidget(open_screenshots_button, 0)
 
-        open_versions_button = QPushButton("Versions")
+        open_versions_button = QPushButton("&Versions")
         open_versions_button.clicked.connect(
             lambda: self._open_prof_folder("versions")
         )

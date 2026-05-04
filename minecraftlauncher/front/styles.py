@@ -2,12 +2,11 @@
 QSS stylesheet
 """
 
-from colorsys import rgb_to_hsv, hsv_to_rgb
 import sys
 
 from PySide6.QtGui import QFont, QFontInfo, QPalette, QColor
 
-from minecraftlauncher.front.rgb import hex_to_rgb, rgb_to_hex, hex_to_rgbi
+from minecraftlauncher.front.rgb import hex_to_rgbi
 from minecraftlauncher import QAPP
 
 CRole = QPalette.ColorRole
@@ -61,108 +60,7 @@ PALETTE.setColor(CRole.Mid, hex_to_qrgb(BG_DARKEST))
 PALETTE.setColor(QPalette.ColorRole.Accent, hex_to_qrgb(ACCENT))
 
 
-def mk_accent_hover(r: float, g: float, b: float):
-    h, s, v = rgb_to_hsv(r, g, b)
-    s = max(s * 0.95, 0)
-    v = min(v * 1.1, 1)
-    nr, ng, nb = hsv_to_rgb(h, s, v)
-    return rgb_to_hex(nr, ng, nb)
-
-
-def mk_accent_light(r: float, g: float, b: float):
-    h, s, v = rgb_to_hsv(r, g, b)
-    s = max(s * 0.9, 0)
-    v = min(v * 1.15, 1)
-    nr, ng, nb = hsv_to_rgb(h, s, v)
-    return rgb_to_hex(nr, ng, nb)
-
-
-def mk_accent_lighter(r: float, g: float, b: float):
-    h, s, v = rgb_to_hsv(r, g, b)
-    s = max(s * 0.8, 0)
-    v = min(v * 1.25, 1)
-    nr, ng, nb = hsv_to_rgb(h, s, v)
-    return rgb_to_hex(nr, ng, nb)
-
-
-def mk_accent_press(r: float, g: float, b: float):
-    h, s, v = rgb_to_hsv(r, g, b)
-    s = min(v * 1.25, 1)
-    v = max(s * 0.75, 0)
-    nr, ng, nb = hsv_to_rgb(h, s, v)
-    return rgb_to_hex(nr, ng, nb)
-
-
-def mk_accent_dim(r: float, g: float, b: float):
-    h, s, v = rgb_to_hsv(r, g, b)
-    s = min(v * 1.33, 1)
-    v = max(s * 0.77, 0)
-    nr, ng, nb = hsv_to_rgb(h, s, v)
-    return rgb_to_hex(nr, ng, nb)
-
-
-def compile_colors(**kwargs):
-    bg_darkest = kwargs.get("bg_darkest", BG_DARKEST).strip("#")
-    bg_dark = kwargs.get("bg_dark", BG_DARK).strip("#")
-    bg_surface = kwargs.get("bg_surface", BG_SURFACE).strip("#")
-    bg_surface_light = kwargs.get("bg_surface_light", BG_SURFACE_LIGHT).strip(
-        "#"
-    )
-    bg_input = kwargs.get("bg_input", BG_INPUT).strip("#")
-
-    accent = kwargs.get("accent", ACCENT).strip("#")
-    if accent != ACCENT:
-        r, g, b = hex_to_rgb(accent)
-        accent_lighter = mk_accent_lighter(r, g, b)
-        print(accent_lighter)
-        accent_light = mk_accent_light(r, g, b)
-        print(accent_light)
-        accent_hover = mk_accent_hover(r, g, b)
-        print(accent_hover)
-        accent_press = mk_accent_press(r, g, b)
-        print(accent_press)
-        accent_dim = mk_accent_dim(r, g, b)
-        print(accent_dim)
-    else:
-        accent_lighter = ACCENT_LIGHTER.strip("#")
-        accent_light = ACCENT_LIGHT.strip("#")
-        accent_hover = ACCENT_HOVER.strip("#")
-        accent_press = ACCENT_PRESS.strip("#")
-        accent_dim = ACCENT_DIM.strip("#")
-
-    text_primary = kwargs.get("text_primary", TEXT_PRIMARY).strip("#")
-    text_secondary = kwargs.get("text_secondary", TEXT_SECONDARY).strip("#")
-    text_muted = kwargs.get("text_muted", TEXT_MUTED).strip("#")
-
-    border = kwargs.get("border", BORDER).strip("#")
-    border_light = kwargs.get("border_light", BORDER_LIGHT).strip("#")
-
-    danger = kwargs.get("danger", DANGER).strip("#")
-    danger_hover = kwargs.get("danger_hover", DANGER_HOVER).strip("#")
-
-    return {
-        "BG_DARKEST": "#" + bg_darkest,
-        "BG_DARK": "#" + bg_dark,
-        "BG_SURFACE": "#" + bg_surface,
-        "BG_SURFACE_LIGHT": "#" + bg_surface_light,
-        "BG_INPUT": "#" + bg_input,
-        "ACCENT": "#" + accent,
-        "ACCENT_LIGHTER": "#" + accent_lighter,
-        "ACCENT_LIGHT": "#" + accent_light,
-        "ACCENT_HOVER": "#" + accent_hover,
-        "ACCENT_PRESS": "#" + accent_press,
-        "ACCENT_DIM": "#" + accent_dim,
-        "TEXT_PRIMARY": "#" + text_primary,
-        "TEXT_SECONDARY": "#" + text_secondary,
-        "TEXT_MUTED": "#" + text_muted,
-        "BORDER": "#" + border,
-        "BORDER_LIGHT": "#" + border_light,
-        "DANGER": "#" + danger,
-        "DANGER_HOVER": "#" + danger_hover,
-    }
-
-
-template = """
+STYLESHEET = f"""
 /* Main */
 QWidget[surface="true"] {{
     background-color: {BG_SURFACE};
@@ -207,7 +105,7 @@ QLabel[section="true"], SectionLabel {{
 
 /* Interactive */
 QPushButton {{
-    background-color: {BG_SURFACE};
+    background-color: {BG_INPUT};
     color: {TEXT_PRIMARY};
     border: 1px solid {BORDER};
     border-radius: 6px;
@@ -325,18 +223,33 @@ QLineEdit:focus, QTextEdit:focus, QPlainTextEdit:focus {{
     border-color: {BORDER_LIGHT};
     background-color: {BG_INPUT};
 }}
+QLineEdit[invalid="true"] {{
+    border-color: {DANGER_HOVER};
+}}
 
 /* Combo box */
 QComboBox {{
     background-color: {BG_INPUT};
     color: {TEXT_PRIMARY};
-    border: 1px solid {BORDER};
+    border: 1px solid;
+    border-color: {BORDER};
     border-radius: 6px;
     padding: 6px;
+}}
+QComboBox:separator {{
+    border: 1px solid {BORDER};
+    margin: 0 8px;
 }}
 QComboBox:hover {{
     border-color: {BORDER_LIGHT};
     background-color: {BG_SURFACE_LIGHT};
+}}
+QComboBox[invalid="true"] {{
+    border-color: {DANGER_HOVER};
+}}
+QComboBox:open {{
+    border-color: {BORDER};
+    background-color: {BG_INPUT};
 }}
 QComboBox::drop-down {{
     border: none;
@@ -526,6 +439,10 @@ QStatusBar {{
     border-top: 1px solid {BORDER};
 }}
 
+QMenuSeparator, QToolSeparator, QSplitter, QSeparator {{
+    border: 1px {BORDER};
+}}
+
 /* Separator/frame */
 QFrame[frameShape="4"] {{
     background-color: {BORDER};
@@ -541,7 +458,7 @@ QFrame[frameShape="5"] {{
 
 match sys.platform:
     case "win32":
-        mixin = """
+        mixin = f"""
             QMenu {{
                 border-radius: 1px;
                 icon-size: 16px;
@@ -581,16 +498,16 @@ match sys.platform:
                 min-height: 2em;
             }}
         """
-        template = "\n".join([template, mixin])
+        STYLESHEET = "\n".join([STYLESHEET, mixin])
 
 
-def regen_styles():
-    global STYLESHEET
-    STYLESHEET = template.format(**globals())
-    return STYLESHEET
+# def regen_styles():
+#     global STYLESHEET
+#     STYLESHEET = template.format(**globals())
+#     return STYLESHEET
 
 
-STYLESHEET = regen_styles()
+# STYLESHEET = regen_styles()
 
 FONT = QFont()
 FONT.setFamilies(["Segoe UI", "sans-serif"])

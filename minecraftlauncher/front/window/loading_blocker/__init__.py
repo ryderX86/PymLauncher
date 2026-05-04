@@ -1,8 +1,6 @@
 import logging
-import time
-import json
 
-from PySide6.QtCore import Qt, QCoreApplication
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QDialog,
     QLabel,
@@ -23,14 +21,13 @@ log = logging.getLogger(__name__)
 
 class LoadingBlockerWindow(QDialog):
     def __init__(self, parent=None, flags=_FLAGS):
+        log.debug("Making loading blocker window")
         super().__init__(parent, flags)
         self.setMinimumSize(500, 360)
         self.setMaximumSize(500, 360)
         self.resize(500, 360)
         self.setProperty("border", True)
         self._build_layout()
-        if QCoreApplication.instance():
-            QCoreApplication.instance().processEvents()  # type: ignore
 
     def _build_layout(self):
         _layout = QVBoxLayout(self)

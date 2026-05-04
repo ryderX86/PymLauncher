@@ -1,6 +1,7 @@
 import logging
 
 from PySide6.QtCore import Qt, Signal, QSize, QThread
+from PySide6.QtGui import QCloseEvent
 from PySide6.QtWidgets import (
     QDialog,
     QLabel,
@@ -15,7 +16,11 @@ from PySide6.QtWidgets import (
 
 
 from minecraftlauncher.back import fabric
-from minecraftlauncher.front.window.username_change import QCloseEvent
+from minecraftlauncher.front.window import (
+    WarningDialog,
+    WarningType,
+    ButtonConfig,
+)
 
 log = logging.getLogger(__name__)
 
@@ -189,19 +194,19 @@ class FabricInstallWindow(QDialog):
         try:
             success = fabric.install(game_ver, loader_ver)
         except FileExistsError:
-            msg_box = QMessageBox.question(
+            dialog_input = WarningDialog.warn(
                 self,
                 "Fabric already installed",
-                f"fabric-loader-{fab_v} is already installed, re-install it?"
-                % (loader_ver, game_ver),
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                f"fabric-loader-{fab_v} is already installed, re-install it?",
+                WarningType.MODLOADER_VERSION_CONFLICT,
+                button_config=ButtonConfig.YES_NO,
             )
-            if msg_box == QMessageBox.StandardButton.Yes:
+            if dialog_input:
                 success = fabric.install(game_ver, loader_ver, True)
             else:
                 return
         if success:
-            QMessageBox.information(
+            QMessageBox.about(  # TODO: subclass QMessageBox for this
                 self, "Success", f"Successfully installed {fab_v}"
             )
             self.installed_fabric.emit()

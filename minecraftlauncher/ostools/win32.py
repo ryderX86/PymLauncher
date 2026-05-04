@@ -1,22 +1,14 @@
-# pylint: disable-all
-import os
-import sys
-import uuid
-import ctypes
-import ctypes.wintypes
+# pylint: disable=e1101
 import logging
 
-from win32com.shell import shell, shellcon  # type: ignore
+from win32com.shell import shell  # type: ignore
 from win32com.propsys import propsys, pscon  # type: ignore
-import winnt
 import pythoncom
-import pywintypes
 import win32api
 
 from minecraftlauncher import config
 from minecraftlauncher.front import resources
 from minecraftlauncher.back import profile_manager
-from minecraftlauncher.datatypes import GameProfile
 from minecraftlauncher.constants import AUTHOR_USR, LAUNCHER_NAME
 
 log = logging.getLogger(__name__)
@@ -73,7 +65,6 @@ def set_jump_list():  # TODO: rename to build_jump_list()
                 "in jump list items.",
                 item,
             )
-            pass
 
     for profile_id in config.jump_list_items:
         if profile_id not in profile_manager.profiles:

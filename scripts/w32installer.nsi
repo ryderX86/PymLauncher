@@ -5,7 +5,7 @@
 
 !define NAME "Minecraft Launcher (Python)"
 !define APPFILE "launcher.exe"
-!define VERSION "1.0.0"
+!define VERSION ${PROG_VERSION}
 !define SLUG "${NAME} v${VERSION}"
 !define AUMID "ryderX86.minecraftlauncher-python"
 !define PUBLISHER "ryderX86"
@@ -57,7 +57,7 @@ Section "App"
     WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${AUMID}" "QuietUninstallString" "$\"$INSTDIR\uninstall.exe$\" /S"
     WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${AUMID}" "InstallLocation" "$\"$INSTDIR$\""
     WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${AUMID}" "Publisher" "${PUBLISHER}"
-    WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${AUMID}" "DisplayVersion" "N/A"
+    WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${AUMID}" "DisplayVersion" "${PROG_VERSION}"
     WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${AUMID}" "NoModify" 1
     WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${AUMID}" "NoRepair" 1
 SectionEnd

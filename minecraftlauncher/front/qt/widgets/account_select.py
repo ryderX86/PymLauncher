@@ -8,7 +8,7 @@ import logging
 
 from PySide6.QtCore import Signal
 from PySide6.QtGui import QKeyEvent
-from PySide6.QtWidgets import QComboBox
+from PySide6.QtWidgets import QComboBox, QAbstractItemView
 
 from minecraftlauncher.back import account_manager
 from minecraftlauncher.front.resources import symbol
@@ -29,6 +29,9 @@ class AccountSelect(QComboBox):
 
         self._previous_index = -1
         self.currentIndexChanged.connect(self._on_index_changed)
+        self.view().setVerticalScrollMode(
+            QAbstractItemView.ScrollMode.ScrollPerPixel
+        )
 
     def _correct_size(self, t: str):
         current_size = self.size()
@@ -52,6 +55,7 @@ class AccountSelect(QComboBox):
             if xuid == active_xuid:
                 active_idx = i
 
+        self.insertSeparator(self.count())
         self.addItem(symbol("profile-add"), ADD_ACCOUNT_TEXT)
 
         if accounts:
@@ -90,7 +94,7 @@ class AccountSelect(QComboBox):
             self.account_changed.emit(xuid)
 
     def next_account(self):
-        add_idx = self.count() - 1
+        add_idx = self.count() - 2
         idx = self.currentIndex()
         if idx + 1 >= add_idx:
             if self.count() < 2:
@@ -102,10 +106,9 @@ class AccountSelect(QComboBox):
     def wheelEvent(self, e):
         if not e:
             return super().wheelEvent(e)
-        add_idx = self.count() - 1
         pixels = e.pixelDelta().y()
         degrees = e.angleDelta().y()
         if pixels < 0 or degrees < 0:
-            if (self.currentIndex() + 1) == add_idx:
+            if not self.itemData(self.currentIndex() + 1):
                 return None
         return super().wheelEvent(e)

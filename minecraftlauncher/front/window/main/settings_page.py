@@ -16,10 +16,12 @@ from PySide6.QtWidgets import (
     QComboBox,
     QPushButton,
     QCheckBox,
+    QDialog,
 )
 
 from minecraftlauncher.front.qt.widgets import TooltipHint, Section
 from minecraftlauncher.front.window import TextPopup
+from minecraftlauncher.front.qt import CustomMapper
 from minecraftlauncher import config, constants
 
 log = logging.getLogger(__name__)
@@ -31,10 +33,14 @@ class SettingsPage(QWidget):
     settings_changed = Signal()
     status_update = Signal(str)
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, *, is_modal: bool = False):
+        self._is_modal = is_modal
         super().__init__(parent)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(40, 40, 40, 40)
+
+        self.mapper = CustomMapper(self)
+        self.mapper.saved.connect(self.settings_changed.emit)
 
         title = QLabel("Settings")
         title.setProperty("heading", True)
@@ -59,6 +65,12 @@ class SettingsPage(QWidget):
         post_launch_lo.addWidget(post_launch_l)
         self.post_launch_options = QComboBox()
         self.post_launch_options.setProperty("compact", True)
+        self.mapper.add_mapping(
+            self.post_launch_options,
+            saver=lambda _: config.set_(
+                "post_launch_option", self.post_launch_options.currentData()
+            ),
+        )
         post_launch_lo.addWidget(self.post_launch_options)
         post_launch_lo.addWidget(tooltip)
         post_launch_lo.addStretch()
@@ -68,28 +80,27 @@ class SettingsPage(QWidget):
         open_browser_for_login = QCheckBox(
             "Open browser automatically for sign-in"
         )
-        open_browser_for_login.setChecked(config.open_browser_for_login)
-        open_browser_for_login.checkStateChanged.connect(
-            lambda c: config.set_(
-                "open_browser_for_login", c == Qt.CheckState.Checked
-            )
+        self.mapper.add_mapping(
+            open_browser_for_login,
+            saver=lambda c: config.set_("open_browser_for_login", c),
         )
+        open_browser_for_login.setChecked(config.open_browser_for_login)
         behavior.addWidget(open_browser_for_login)
 
         copy_code_for_login = QCheckBox("Copy sign-in code to clipboard")
-        copy_code_for_login.setChecked(config.copy_code_for_login)
-        copy_code_for_login.checkStateChanged.connect(
-            lambda c: config.set_(
-                "copy_code_for_login", c == Qt.CheckState.Checked
-            )
+        self.mapper.add_mapping(
+            copy_code_for_login,
+            saver=lambda c: config.set_("copy_code_for_login", c),
         )
+        copy_code_for_login.setChecked(config.copy_code_for_login)
         behavior.addWidget(copy_code_for_login)
 
         allow_audio = QCheckBox("Allow warning/error sounds")
-        allow_audio.setChecked(config.allow_audio)
-        allow_audio.checkStateChanged.connect(
-            lambda c: config.set_("allow_audio", c == Qt.CheckState.Checked)
+        self.mapper.add_mapping(
+            allow_audio,
+            saver=lambda c: config.set_("allow_audio", c),
         )
+        allow_audio.setChecked(config.allow_audio)
         behavior.addWidget(allow_audio)
 
         # Downloads
@@ -112,6 +123,10 @@ class SettingsPage(QWidget):
         rd_label = QLabel("When a file doesn't have a hash:")
         redownload_lo.addWidget(rd_label)
         self.redownload_option = QComboBox()
+        self.mapper.add_mapping(
+            self.redownload_option,
+            saver=self._on_redownload_option_change,
+        )
         self.redownload_option.setProperty("compact", True)
         redownload_lo.addWidget(rd_label)
         redownload_lo.addWidget(self.redownload_option)
@@ -126,15 +141,12 @@ class SettingsPage(QWidget):
         layout.addWidget(visual)
 
         tooltips_enabled = QCheckBox("Show Tooltip Icons")
+        self.mapper.add_mapping(
+            tooltips_enabled,
+            saver=lambda c: config.set_("tooltip_icons_enabled", c),
+        )
         tooltips_enabled.setChecked(config.tooltip_icons_enabled)
-        tooltips_enabled.checkStateChanged.connect(
-            lambda c: config.set_(
-                "tooltip_icons_enabled", c == Qt.CheckState.Checked
-            )
-        )
-        tooltips_enabled.checkStateChanged.connect(
-            lambda c: TooltipHint.refresh_visibility()
-        )
+        self.mapper.saved.connect(TooltipHint.refresh_visibility)
         visual.addWidget(tooltips_enabled)
 
         show_logs_w = QWidget()
@@ -147,15 +159,19 @@ class SettingsPage(QWidget):
             "(Might slow your PC!)"
         )
         show_logs_check = QCheckBox("Show game logs on home page")
+        self.mapper.add_mapping(
+            show_logs_check,
+            saver=lambda c: config.set_("show_logs_on_home", c),
+        )
 
         # show_logs_check.setChecked(config.show_logs_on_home)
-        def show_logs_changed(check_state: Qt.CheckState):
-            nonlocal self
-            checked = check_state == Qt.CheckState.Checked
-            config.set_("show_logs_on_home", checked)
-            self.settings_changed.emit()
+        # def show_logs_changed(check_state: Qt.CheckState):
+        #     nonlocal self
+        #     checked = check_state == Qt.CheckState.Checked
+        #     config.set_("show_logs_on_home", checked)
+        #     self.settings_changed.emit()
 
-        show_logs_check.checkStateChanged.connect(show_logs_changed)
+        # show_logs_check.checkStateChanged.connect(show_logs_changed)
         show_logs_lo.addWidget(show_logs_check)
         show_logs_lo.addWidget(show_logs_tt)
 
@@ -177,6 +193,32 @@ class SettingsPage(QWidget):
         #     dev.addWidget(qss_toggle)
 
         #     layout.addWidget(dev)
+
+        compat = Section("Compatibility")
+
+        json_row_w = QWidget()
+        json_row = QHBoxLayout(json_row_w)
+        json_row.setContentsMargins(0, 0, 0, 0)
+        json_option = QCheckBox("Enforce JSON spec")
+        json_option.setChecked(config.enforce_json_spec)
+        self.mapper.add_mapping(
+            json_option, saver=lambda b: config.set_("enforce_json_spec", b)
+        )
+        json_row.addWidget(json_option)
+        json_option_tt = TooltipHint(
+            "Whether or not to enforce JSON spec in JSON files.\n\n"
+            "Mojang's launcher saves JSON files with a format outside "
+            "of JSON spec. Checking this box will enforce the JSON spec onto "
+            "the various JSON files shared by both launchers, which may "
+            "result in both launchers changing the file's format slightly "
+            "every time one or the other is launched/closed.\n\n"
+            "It's recommended to keep this off if you plan on using Mojang's "
+            "launcher simultaneously in the current working directory."
+        )
+        json_row.addWidget(json_option_tt)
+        compat.addWidget(json_row_w)
+
+        layout.addWidget(compat)
 
         layout.addStretch()
 
@@ -200,6 +242,40 @@ class SettingsPage(QWidget):
         buttons_lo.addWidget(open_config_btn)
 
         layout.addWidget(buttons_w)
+
+        manage_w = QWidget()
+        manage_lo = QHBoxLayout(manage_w)
+        manage_lo.setContentsMargins(0, 0, 0, 0)
+
+        cancel_btn = QPushButton("Cancel")
+
+        apply_btn = QPushButton("Apply")
+        apply_btn.setEnabled(False)
+
+        if self._is_modal:
+            manage_lo.addStretch()
+            ok_btn = QPushButton("OK")
+            manage_lo.addWidget(ok_btn)
+
+            p = self.parent()
+            if isinstance(p, QDialog):
+                cancel_btn.clicked.connect(p.reject)
+            manage_lo.addWidget(cancel_btn)
+
+            manage_lo.addWidget(apply_btn)
+        else:
+            manage_lo.addWidget(apply_btn)
+            manage_lo.addWidget(cancel_btn)
+            cancel_btn.setEnabled(False)
+            cancel_btn.clicked.connect(self.mapper.revert_changes)
+            cancel_btn.setText("Reset")
+            self.mapper.changes_made.connect(cancel_btn.setEnabled)
+            manage_lo.addStretch()
+
+        layout.addWidget(manage_w)
+
+        self.mapper.changes_made.connect(apply_btn.setEnabled)
+        apply_btn.clicked.connect(self.mapper.save)
 
     def _open_settings_file(self):
         log.debug("Opened launcher settings file with default app")
@@ -250,9 +326,7 @@ class SettingsPage(QWidget):
                 self.redownload_option.setCurrentIndex(0)
             case config.JarRedownloadBehavior.REDOWNLOAD_ONCE:
                 self.redownload_option.setCurrentIndex(1)
-        self.redownload_option.currentIndexChanged.connect(
-            self._on_redownload_option_change
-        )
+        self.mapper.start()
 
     def _on_post_launch_options_change(self, i: int):
         config.post_launch_option = config.PostLaunchBehavior(i)
@@ -260,6 +334,15 @@ class SettingsPage(QWidget):
     def _on_redownload_option_change(self, i: int):
         data: int = self.redownload_option.itemData(i)
         config.redownload_option = config.JarRedownloadBehavior(data)
+
+    def _reset_redownload_option_change(self, *args):
+        match config.redownload_option:
+            case config.JarRedownloadBehavior.NEVER:
+                self.redownload_option.setCurrentIndex(2)
+            case config.JarRedownloadBehavior.REDOWNLOAD:
+                self.redownload_option.setCurrentIndex(0)
+            case config.JarRedownloadBehavior.REDOWNLOAD_ONCE:
+                self.redownload_option.setCurrentIndex(1)
 
     def _open_acknowledgements(self):
         file = QFile(":/acknowledgements.txt")

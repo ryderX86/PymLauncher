@@ -43,3 +43,15 @@ https://github.com/lincolnloop/python-qrcode/blob/main/LICENSE
 [BSD 3-Clause License](
 https://github.com/pyca/cryptography/blob/main/LICENSE.BSD
 )
+- **[pywin32](
+https://github.com/mhammond/pywin32/blob/main/win32/License.txt)** - Licensed
+under the [BSD 3-Clause License](
+https://github.com/mhammond/pywin32/blob/main/win32/License.txt).
+- **[jaraco/keyring](https://github.com/jaraco/keyring)** - Licensed under the
+[MIT License](https://opensource.org/license/mit)
+## Other Third-Party Components
+These components have no licensing info (that I can find), but are listed here
+for credit, as I likely wouldn't have been able to make this project happen
+without them:
+- **[NSIS-ApplicationID](
+https://github.com/connectiblutz/NSIS-ApplicationID)**

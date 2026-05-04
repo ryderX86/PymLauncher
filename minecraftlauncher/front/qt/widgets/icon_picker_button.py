@@ -23,18 +23,22 @@ class IconPickerButton(QPushButton):
         self.dropdown.hide_me.connect(lambda: self.setChecked(False))
         self.setCheckable(True)
         self._icon_name: str = ""
-        self.setIconSize(QSize(32, 32))
+        self.setIconSize(QSize(64, 64))
         self.dropdown._populate_icons()
         self.__ignore_clicks = False
-        self.setFixedSize(QSize(64, 40))
+        self.setFixedSize(QSize(98, 80))
         self._lo = QHBoxLayout(self)
         self._icon = QLabel()
         self._lo.addWidget(self._icon)
         self._label = QLabel()
         self._lo.addStretch()
         self._lo.addWidget(self._label)
+        self._lo.setContentsMargins(8, 8, 8, 8)
         self._label.setPixmap(
             resources.symbol("dropdown").pixmap(QSize(12, 12))
+        )
+        self._icon.setAlignment(
+            Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft
         )
         self._label.setAlignment(
             Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignRight
@@ -115,8 +119,12 @@ class IconPickerButton(QPushButton):
 
     def _on_change_icon(self, name: str, ico: QIcon):
         self._icon_name = name
-        wh = int(self.height() / 1.6)
-        self._icon.setPixmap(ico.pixmap(QSize(wh, wh)))
+        # wh = int(self.height() / 1.6)
+        pix = ico.pixmap(QSize(64, 64))
+        if pix.isNull():
+            self._icon.setPixmap(pix)
+        else:
+            self._icon.setPixmap(pix.scaled(64, 64))
         if not self.dropdown.automated:
             self.icon_changed.emit(name)
 

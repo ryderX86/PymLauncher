@@ -16,6 +16,15 @@ using the following command:
 python -m venv .venv
 ```
 3. Run `pip install -r requirements.txt`
+### Windows
+4. Ensure NSIS is installed: https://nsis.sourceforge.io/Download
+5. Add `makensis` from the NSIS install directory (default:
+`C:\Program Files (x86)\NSIS`) to PATH
+6. Run either `.\scripts\build_w32.bat` or CD into the `scripts` folder and run
+`python -m nbuild` (optionally pass `--debug` to see verbose build info)
+7. If everything goes well, check for the `dist` folder at the root of the
+folder you cloned into. `installer.exe` will be the installer NSIS created, and
+`minecraftlauncher.dist` will contain the actual program files.
 ### Linux
 4. Ensure either GCC (5.1 or higher), Clang, or Zig are installed
 4. 

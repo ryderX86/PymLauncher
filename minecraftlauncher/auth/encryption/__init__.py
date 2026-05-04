@@ -40,6 +40,7 @@ match platform.system():
             log.error("Failed to load Linux encryption module:", exc_info=err)
             WarningDialog.warn(
                 None,
+                "Failed to load encryption module",
                 "Failed to load encryption module for your operating system.\n"
                 "If you would like your accounts.bin file to be encrypted, "
                 'please install either "gnome-keyring" and "libsecret",\n'
@@ -47,7 +48,6 @@ match platform.system():
                 "use KDE) using your system package manager.\n"
                 "This warning will only appear once.",
                 WarningType.ACCOUNTS_BIN_ENCRYPTION,
-                "Failed to load encryption module",
                 show_once=True,
             )
             from .defaults import (

@@ -1,9 +1,9 @@
 from logging.handlers import MemoryHandler
+from collections.abc import Callable
 from types import TracebackType
 import logging
 import ctypes
 import sys
-import os
 
 from PySide6.QtCore import (
     qInstallMessageHandler,
@@ -45,7 +45,7 @@ class _LoggingFormatter(logging.Formatter):
     if not DEBUG_LOGGING:
 
         def format(self, record: logging.LogRecord):
-            record.name = record.name.replace("minecraftlauncher.", "")
+            record.name = record.name.replace("launcher.", "")
             return super().format(record)
 
 
@@ -62,8 +62,7 @@ else:
         "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
     )
 root_logger.addHandler(MEMORY_HANDLER)
-_urllib_logger = logging.getLogger("urllib3")
-_urllib_logger.setLevel(logging.CRITICAL)
+logging.getLogger("urllib3").setLevel(logging.CRITICAL)
 
 root_logger.handlers[0].setFormatter(FORMATTER)
 
@@ -99,11 +98,25 @@ if not DEV:
 
     sys.excepthook = except_hook
 
+# setting it here allows me to not fool around with detecting when it's created
+# or spam the functions to get it
+QAPP = QApplication(sys.argv)
 
 session = requests.sessions.Session()
 session.headers["User-Agent"] = USER_AGENT
 logging.debug("User agent: %s", USER_AGENT)
 
-# setting it here allows me to not fool around with detecting when it's created
-# or spam the functions to get it
-QAPP = QApplication(sys.argv)
+offline_mode_hooks: list[Callable[[bool], None]] = []
+
+
+def add_offline_mode_hook(hook: Callable[[bool], None]):
+    """
+    Adds a function that handles offline mode changing for that module.
+
+    `hook` should be a function that takes a `bool`.
+
+    If `True` is passed, we're in offline mode.
+
+    Otherwise, we're back online.
+    """
+    offline_mode_hooks.append(hook)

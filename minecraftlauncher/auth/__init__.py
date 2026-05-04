@@ -4,6 +4,7 @@ from .minecraft_profile import MinecraftProfile, TextureState, SkinModel
 from .minecraft_token import MinecraftToken
 from .xbox_token import XboxToken
 from .xsts_token import XstsToken
+from .auth_error import AuthError, AuthStep
 
 
 def auth_flow(msa: MicrosoftAccount):

@@ -9,7 +9,8 @@ from PySide6.QtGui import QClipboard, QImage, QPixmap, QIcon
 
 from minecraftlauncher import QAPP, config
 
-from .text import indent
+from .text import indent, is_path_valid
+from .error_box import error_box
 
 log = logging.getLogger(__name__)
 

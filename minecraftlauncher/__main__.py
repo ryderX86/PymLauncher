@@ -2,15 +2,14 @@
 # nuitka-project-if: sys.platform == "win32":
 #   nuitka-project: --windows-console-mode=disable
 from logging.handlers import RotatingFileHandler
-from collections.abc import Callable
-from time import sleep
+from time import sleep, time
 import logging
 import atexit
 import sys
 
 from PySide6.QtCore import QFile
 from PySide6.QtGui import QIcon
-from PySide6.QtWidgets import QApplication, QStyleFactory
+from PySide6.QtWidgets import QStyleFactory
 
 from . import constants, FORMATTER, DEV, MEMORY_HANDLER, config, QAPP, args
 from .functions.error_box import error_box
@@ -28,27 +27,9 @@ from .back import (
 )
 from .auth import LauncherAccount
 
-log = logging.getLogger(
-    __name__ if __name__ != "__main__" else "minecraftlauncher"
-)
-
-offline_mode_hooks: list[Callable[[bool], None]] = []
+log = logging.getLogger(__name__ if __name__ != "__main__" else "launcher")
 
 clean_exit = False
-
-
-def add_offline_mode_hook(hook: Callable[[bool], None]):
-    """
-    Adds a function that handles offline mode changing for that module.
-
-    `hook` should be a function that takes a `bool`.
-
-    If `True` is passed, we're in offline mode.
-
-    Otherwise, we're back online.
-    """
-    offline_mode_hooks.append(hook)
-
 
 log_dir = constants.LAUNCHER_DATA_DIR / "logs"
 log_file = log_dir / "latest.log"
@@ -77,6 +58,7 @@ flags = [
 ]
 if flags:
     log.info("Flags: %s", ", ".join(flags))
+ls_stop = time()
 
 
 class App:
@@ -88,33 +70,31 @@ class App:
     log = log.getChild("App")
 
     def __init__(self):
+        setup_start = time()
         self.log.debug("Setting up...")
-        self.qapp: QApplication = QAPP
-        self.qapp.setApplicationName("Minecraft Launcher")
+        QAPP.setApplicationName("Minecraft Launcher")
         match constants.OS:
             case "windows":
                 pass
             case _:
-                self.qapp.setStyle(QStyleFactory.create("Windows"))
-        self.qapp.setStyleSheet(STYLESHEET)
-        self.qapp.setFont(FONT)
-        self.qapp.setPalette(PALETTE)
+                QAPP.setStyle(QStyleFactory.create("Windows"))
+        QAPP.setStyleSheet(STYLESHEET)
+        QAPP.setFont(FONT)
+        QAPP.setPalette(PALETTE)
         if QFile(":/icon.ico").exists():
-            self.qapp.setWindowIcon(QIcon(":/icon.ico"))
+            QAPP.setWindowIcon(QIcon(":/icon.ico"))
         else:
             log.debug("Couldn't set app icon")
-        # just in case it doesn't fully run the rest of main():
-        self.qapp.aboutToQuit.connect(self._set_clean_exit)
-
         self.lb_window = LoadingBlockerWindow()
+        self.lb_window.rejected.connect(self._close_event)
         self.lb_window.open()
+        # just in case it doesn't fully run the rest of main():
+        QAPP.aboutToQuit.connect(self._set_clean_exit)
 
         self.main_window = MainWindow()
         self.main_window.login_requested.connect(self.show_login)
         self.main_window.account_page.logout_requested.connect(self.logout)
         self.main_window.home_page.play_requested.connect(self.play)
-
-        self.lb_window.rejected.connect(self._close_event)
 
         self.main_window.account_dropdown.account_changed.connect(
             self._on_account_changed
@@ -130,6 +110,8 @@ class App:
             if args.debug_splash_screen:
                 self.lb_window.set_text("Waiting 5s for splash debugging")
                 sleep(5)
+        setup_stop = time()
+        log.debug("Setup time: %f", setup_stop - setup_start)
 
     def _set_clean_exit(self):
         global clean_exit
@@ -182,7 +164,7 @@ class App:
         # self.lb_window.setParent(self.main_window)
         self.lb_window.hide()
         self.main_window.check_for_launch_arg()
-        return self.qapp.exec()
+        return QAPP.exec()
 
     def show_login(self):
         dialog = LoginWindow(self.main_window)
@@ -222,7 +204,7 @@ class App:
         if active_account:
             account_manager.remove_account(active_account)
         if len(account_manager.accounts) > 0:
-            account_manager.active_account = account_manager.accounts[0]
+            account_manager.active_account = account_manager.accounts[0].xuid
         self._refresh_account_ui()
 
         if not account_manager.accounts:
@@ -264,9 +246,10 @@ class App:
             acc = account_manager.fetch_account(xuid)
             assert acc
             if not acc.token or not acc.token.is_active:
+                self.lb_window.set_text("Reauthenticating")
                 self.lb_window.open()
                 if acc.refresh():
-                    log.debug("Refreshed %s", xuid)
+                    log.debug("Refreshed %s (%s)", acc.gamertag, xuid)
                     self.lb_window.accept()
                     account_manager.save_or_replace_account(acc)
                 else:
@@ -312,8 +295,8 @@ def exit_():
     config.save()
     profile_manager.save_launcher_profiles()
     profile_manager.save_launcher_meta()
-    # if account_manager.accounts:
-    #     account_manager.save_accounts()
+    if account_manager.accounts:
+        account_manager.save_accounts()
 
 
 def main():

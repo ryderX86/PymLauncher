@@ -12,6 +12,7 @@ build/
 develop-eggs/
 dist/
 !resources/dist
+!scripts/build
 downloads/
 eggs/
 .eggs/
