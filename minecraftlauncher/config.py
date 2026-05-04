@@ -135,12 +135,6 @@ def save():
             continue
         elif isinstance(val, (list, dict)) and not val:
             continue  # skip bloat
-        elif key.startswith("_") or key.endswith("_"):
-            continue
-        elif key.upper() == key:
-            continue
-        elif key[0] == key[0].upper():
-            continue
         obj_out[key] = val
     json_out = json.dumps(obj_out, indent=2)
     if not LAUNCHER_DATA_DIR.exists():
