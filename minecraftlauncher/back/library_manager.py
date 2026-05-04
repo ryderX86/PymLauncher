@@ -27,6 +27,7 @@ from .download_helpers import (
     should_download_file,
     _check_file_sha1,
     RunnableDownloader,
+    BulkDownloadManager,
 )
 
 log = logging.getLogger(__name__)
@@ -51,7 +52,7 @@ def evaluate_rules(rules: list[dict]) -> bool:
     result = False
 
     for rule in rules:
-        action = rule.get("action", "") == "allow"
+        action = rule.get("action") == "allow"
         os_constraint = rule.get("os")
 
         if not os_constraint:
@@ -376,9 +377,16 @@ def download_libraries_threaded(
             )
 
     pool.setMaxThreadCount(75)
+    pool.setExpiryTimeout(90)
+    mgr = BulkDownloadManager(pool)
     for dl in download_list:
+        mgr.add_runnable(dl)
         pool.start(dl)
-    pool.waitForDone(-1)
+    timedout = not pool.waitForDone(900)
+    if timedout:
+        raise RuntimeError("Downloads timed out completely")
+    elif mgr.check_for_failures():
+        raise mgr.exceptions[0]
 
     log.debug(
         "Finished downloading libraries: %d new / %d total", downloaded, total

@@ -42,11 +42,34 @@ class _LoggingFormatter(logging.Formatter):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
+    def format_colors(self, record: logging.LogRecord):
+        line = super().format(record)
+        match record.levelno:
+            case logging.DEBUG:
+                color = "90"
+            case logging.INFO:
+                color = "97"
+            case logging.WARNING:
+                color = "33"
+            case logging.ERROR:
+                color = "91"
+            case logging.CRITICAL:
+                color = "31"
+            case _:
+                color = "96"
+        return "".join(["\033[", color, "m", line, "\033[0m"])
+
     if not DEBUG_LOGGING:
 
         def format(self, record: logging.LogRecord):
             record.name = record.name.replace("launcher.", "")
             return super().format(record)
+
+    if not DEV:
+        pass
+
+    else:
+        format = format_colors
 
 
 root_logger = logging.getLogger()
@@ -89,6 +112,8 @@ def _qt_logger(type_: QtMsgType, context: QMessageLogContext, msg: str):
 
 
 qInstallMessageHandler(_qt_logger)
+
+logging.info("Starting up")
 
 if not DEV:
 

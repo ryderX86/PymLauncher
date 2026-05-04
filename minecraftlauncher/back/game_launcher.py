@@ -8,9 +8,10 @@ substitution, and starts the game process.
 from collections.abc import Callable
 from string import Template
 from pathlib import Path
+import subprocess
 import logging
 import os
-import subprocess
+import re
 
 from PySide6.QtCore import QThread, Signal
 import requests
@@ -44,6 +45,8 @@ from . import (
 
 log = logging.getLogger(__name__)
 
+TEMPLATE_LEFTOVERS_REGEX = re.compile(r"${([a-zA-Z0-9_\-]+)}")
+
 
 def _substitute(template: str, values: dict[str, str]):
     values = {k: v for k, v in values.items() if v is not None}
@@ -51,7 +54,14 @@ def _substitute(template: str, values: dict[str, str]):
     subbed = t.safe_substitute(values)
     # unfrozen only so auth tokens don't get leaked into logs when built:
     if DEV and "${" in subbed:
-        log.warning("Unsubstituted template leftover in string: '%s'", subbed)
+        leftovers: list[str] = TEMPLATE_LEFTOVERS_REGEX.findall(subbed)
+        if "xuid" in leftovers:
+            leftovers.remove("xuid")
+        if leftovers:
+            log.warning(
+                "Unsubstituted template leftover(s) in string: '%s'",
+                str(leftovers),
+            )
     return subbed
 
 
@@ -413,48 +423,156 @@ class LaunchWorker(QThread):
                 self.version_id = version_manager.get_latest_snapshot()
 
         self.status.emit("Fetching version info...")
-        version_json = version_manager.fetch_version_json(self.version_id)
-        version_json = version_manager.resolve_inheritence(version_json)
-
+        try:
+            version_json = version_manager.fetch_version_json(self.version_id)
+        except Exception as err:
+            self.finished.emit(
+                False, f"Failed to get version info ({type(err).__name__})"
+            )
+            log.error("Failed to get version manifest:", exc_info=err)
+            return
+        try:
+            version_json = version_manager.resolve_inheritence(version_json)
+        except Exception as err:
+            self.finished.emit(
+                False,
+                f"Failed to resolve inheritence for version {self.version_id}",
+            )
+            log.error(
+                "Inheritence parsing failed for %s:",
+                self.version_id,
+                exc_info=err,
+            )
+            return
         self.status.emit("Downloading client JAR...")
-        jar_path = version_manager.download_client_jar(
-            version_json,
-            progress_callback=lambda c, t: self.progress.emit(
-                f"{self.version_id}.jar", c / 1_000_000, t / 1_000_000, True
-            ),
-        )
+        try:
+            jar_path = version_manager.download_client_jar(
+                version_json,
+                progress_callback=lambda c, t: self.progress.emit(
+                    f"{self.version_id}.jar", c / 1_000_000, t / 1_000_000, True
+                ),
+            )
+        except Exception as err:
+            log.error(
+                "Failed downloading client JAR for %s:",
+                self.version_id,
+                exc_info=err,
+            )
+            self.finished.emit(
+                False,
+                f"Failed downloading client JAR for {self.version_id} "
+                f"({type(err).__name__})",
+            )
+            return
 
-        # self.status.emit("Checking for assets...")
-        # asset_index = asset_manager.filter_assets_downloads(
-        #     asset_manager.fetch_asset_index(version_json),
-        #     progress_callback=lambda c, t: self.progress.emit(
-        #         "Checking assets", c, t
-        #     )
-        # )
         self.status.emit("Downloading assets...")
-        asset_manager.download_assets_threaded(
-            asset_manager.fetch_asset_index(version_json),
-            progress_callback=lambda c, t: self.progress.emit(
-                "Downloading assets", c, t, False
-            ),
-        )
+        try:
+            asset_manager.download_assets_threaded(
+                asset_manager.fetch_asset_index(version_json),
+                progress_callback=lambda c, t: self.progress.emit(
+                    "Downloading assets", c, t, False
+                ),
+            )
+        except Exception as err:
+            log.error(
+                "Failed downloading assets for %s:",
+                self.version_id,
+                exc_info=err,
+            )
+            self.finished.emit(
+                False,
+                f"Failed downloading assets for version {self.version_id} "
+                f"({type(err).__name__})",
+            )
 
         self.status.emit("Checking log4j config file...")
-        log4j_config = asset_manager.check_or_download_logging_config(
-            version_json
-        )
+        try:
+            log4j_config = asset_manager.check_or_download_logging_config(
+                version_json
+            )
+        except Exception as err:
+            log.error(
+                "Failed to get Log4J config set up for version %s:",
+                self.version_id,
+                exc_info=err,
+            )
+            launch = WarningDialog.warn(
+                self.parent(),
+                "Warning",
+                "Failed to download Log4J config file. "
+                "Launching is not recommended unless you're playing offline ONLY. "
+                "Launch anyways?",
+                button_config=ButtonConfig.YES_NO,
+                type_=WarningType.LOG4J_CONFIG_FAILED,
+            )
+            if launch:
+                log.warning(
+                    "User chose to launch game despite Log4J config issue"
+                )
+                log4j_config = ""
+            else:
+                log.info("User aborted launch due to Log4J config issue")
+                self.finished.emit(False, "User aborted launch")
+                return
 
         self.status.emit("Downloading libraries...")
-        libs = library_manager.filter_libraries(version_json)
-        library_manager.download_libraries_threaded(
-            libs,
-            progress_callback=lambda c, t: self.progress.emit(
-                "Downloading libraries", c, t, False
-            ),
-        )
-        library_manager.download_natives(libs)
+        try:
+            libs = library_manager.filter_libraries(version_json)
+        except Exception as err:
+            log.error(
+                "Failed to filter libraries for %s, trying to continue "
+                "anyways...",
+                self.version_id,
+            )
+            libs = version_json.get("libraries", [])
+        try:
+            library_manager.download_libraries_threaded(
+                libs,
+                progress_callback=lambda c, t: self.progress.emit(
+                    "Downloading libraries", c, t, False
+                ),
+            )
+        except Exception as err:
+            log.error(
+                "Failed downloading libraries for version %s:",
+                self.version_id,
+                exc_info=err,
+            )
+            self.finished.emit(
+                False,
+                f"Failed downloading libraries for version {self.version_id} "
+                f"({type(err).__name__})",
+            )
+            return
+        try:
+            library_manager.download_natives(libs)
+        except Exception as err:
+            log.error(
+                "Failed to download natives for %s:",
+                self.version_id,
+                exc_info=err,
+            )
+            self.finished.emit(
+                False,
+                f"Failed downloading natives for version {self.version_id} "
+                f"({type(err).__name__})",
+            )
+            return
         natives_dir = MINECRAFT_DIR / "bin" / self.version_id
-        natives_dir = library_manager.extract_natives(libs, natives_dir)
+        try:
+            natives_dir = library_manager.extract_natives(libs, natives_dir)
+        except Exception as err:
+            log.error(
+                "Failed extracting natives for %s:",
+                self.version_id,
+                exc_info=err,
+            )
+            self.finished.emit(
+                False,
+                f"Failed extracting natives for version {self.version_id} "
+                f"({type(err).__name__})",
+            )
+            return
 
         self.status.emit("Checking for Java install...")
         profile_jre = self.profile_data.java_path
@@ -467,8 +585,8 @@ class LaunchWorker(QThread):
                     check=True,
                 )
             except subprocess.CalledProcessError as err:
-                self.log.error(
-                    "Java exited with code %d:\n%s",
+                self.log.warning(
+                    "Java installation exited with code %d:\n%s",
                     err.returncode,
                     str(err.output),
                 )
@@ -476,22 +594,53 @@ class LaunchWorker(QThread):
                     "Aborting launch, and notifying user of invalid "
                     "JRE location."
                 )
-                self.finished.emit(False, str(err.output))
+                self.finished.emit(
+                    False,
+                    "Failed to detect if Java install is valid: "
+                    f'"{err.output}"',
+                )
                 return
             else:
                 java_exc = Path(profile_jre)
         else:
             jre_name = version_json.get("javaVersion", {}).get("component", "")
-            jre_manifest = java_manager.get_jvm_version_manifest(jre_name)
+            try:
+                jre_manifest = java_manager.get_jvm_version_manifest(jre_name)
+            except Exception as err:
+                log.error(
+                    "Failed getting JRE manifest for %s:",
+                    jre_name,
+                    exc_info=err,
+                )
+                self.finished.emit(
+                    False,
+                    "Couldn't get JRE info for version "
+                    f"{self.version_id}/{jre_name}"
+                    f"({type(err).__name__})",
+                )
+                return
             if not offline_mode:
                 self.status.emit("Downloading Java...")
-                java_exc = java_manager.install_java_version_threaded(
-                    jre_name,
-                    jre_manifest,
-                    progress_callback=lambda c, t: self.progress.emit(
-                        "Downloading Java", c, t, False
-                    ),
-                )
+                try:
+                    java_exc = java_manager.install_java_version_threaded(
+                        jre_name,
+                        jre_manifest,
+                        progress_callback=lambda c, t: self.progress.emit(
+                            "Downloading Java", c, t, False
+                        ),
+                    )
+                except Exception as err:
+                    log.error(
+                        "Failed downloading JRE version %s:",
+                        jre_name,
+                        exc_info=err,
+                    )
+                    self.finished.emit(
+                        False,
+                        "Failed downloading FRE manifest for version "
+                        f"{self.version_id}/{jre_name} ({type(err).__name__})",
+                    )
+                    return
             else:
                 self.log.warning(
                     "Offline mode active, JRE executable may be broken!"
@@ -509,8 +658,20 @@ class LaunchWorker(QThread):
             case "windows":
                 pass
             case _:
-                java_manager.mark_executable(java_exc)
+                if not java_manager.mark_executable(java_exc):
+                    log.warning(
+                        "Couldn't mark JRE exec at '%s' as executable. "
+                        "Notifying user and aborting",
+                        java_exc,
+                    )
+                    self.finished.emit(
+                        False,
+                        f"Couldn't mark JRE executable at '{java_exc}' as "
+                        "executable",
+                    )
+                    return
 
+        # this is probably the one thing that can't catastrophically fail
         classpath = library_manager.build_classpath(libs, jar_path)
 
         if self.auth_info.token_valid:
@@ -588,7 +749,7 @@ class LaunchWorker(QThread):
             self.profile_data.mods_folder_mode,
         )
         logged_cmd = " ".join(cmd).replace(
-            self.auth_info.token.access_token, "TOKEN"
+            self.auth_info.token.access_token, "[REDACTED]"
         )
         self.log.info("Launch command: '%s'", logged_cmd)
 
@@ -644,7 +805,7 @@ class LaunchWorker(QThread):
         stdout_cache.reverse()
         stdout = "\n".join(stdout_cache)
 
-        self.log.debug("Returned with code %d", self._p.returncode)
+        self.log.info("Game returned with code %d", self._p.returncode)
         if self._p.returncode == 0:
             if config.redownload_option > 1:
                 config.redownload_option = 0

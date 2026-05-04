@@ -57,7 +57,7 @@ flags = [
     )
 ]
 if flags:
-    log.info("Flags: %s", ", ".join(flags))
+    log.debug("Flags: %s", ", ".join(flags))
 
 
 class App:
@@ -84,7 +84,7 @@ class App:
             log.debug("Couldn't set app icon")
         self.lb_window = LoadingBlockerWindow()
         self.lb_window.rejected.connect(self._close_event)
-        self.lb_window.open()
+        self.lb_window.show()
         # just in case it doesn't fully run the rest of main():
         QAPP.aboutToQuit.connect(self._set_clean_exit)
 
@@ -107,6 +107,8 @@ class App:
             if args.debug_splash_screen:
                 self.lb_window.set_text("Waiting 5s for splash debugging")
                 sleep(5)
+
+        log.debug("UI setup complete")
 
     def _set_clean_exit(self):
         global clean_exit
@@ -154,7 +156,7 @@ class App:
             self.lb_window.hide()
             self.show_login()
         self._refresh_account_ui()
-        self.log.debug("Showing UI to user")
+        self.log.info("Finished loading. Showing main window")
         self.main_window.show()
         # self.lb_window.setParent(self.main_window)
         self.lb_window.hide()

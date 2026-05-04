@@ -34,6 +34,7 @@ class WarningType(IntEnum):
     ACCOUNTS_BIN_ENCRYPTION = 1
     DELETE_PROFILE = 2
     MODLOADER_VERSION_CONFLICT = 3
+    LOG4J_CONFIG_FAILED = 4
 
 
 class WarningDialog(QDialog):

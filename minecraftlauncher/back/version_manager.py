@@ -98,17 +98,22 @@ def fetch_version_manifest(force_refresh: bool = False):
             try:
                 mf = json.loads(mf_text)
             except json.JSONDecodeError as err:
-                log.error("JSON decoding failed:", exc_info=err)
-                log.info("Failed to read version manifest! Re-downloading...")
+                log.warning(
+                    "Failed to read version manifest! Re-downloading...",
+                    exc_info=err,
+                )
                 os.remove(mf_path)
             else:
                 if (
                     "snapshot" not in mf["latest"]
                     or "release" not in mf["latest"]
                 ):
-                    log.warning("Tampered manifest cache! Re-downloading")
+                    log.warning(
+                        "Manifest cache is in an invalid format, "
+                        "re-downloading."
+                    )
                 else:
-                    log.info("Using existing versions cache.")
+                    log.debug("Using existing versions cache.")
                     manifest_cache = mf
                     return manifest_cache
         else:

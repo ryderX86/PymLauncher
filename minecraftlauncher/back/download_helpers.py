@@ -11,7 +11,7 @@ import time
 import lzma
 
 import requests
-from PySide6.QtCore import QRunnable
+from PySide6.QtCore import QRunnable, QObject, Signal, QThreadPool
 
 from minecraftlauncher import session
 
@@ -176,7 +176,27 @@ def filter_downloads(
     return downloads
 
 
-class RunnableDownloader(QRunnable):
+class DownloadError(Exception):
+    def __init__(self, url: str, path: Path | str, msg: str | None = None):
+        if isinstance(path, Path):
+            path = str(path.resolve().absolute())
+        if self.__context__ and not msg:
+            msg = (
+                f"Failed to download file from URL '{url}' to '{path}' "
+                f"(original exception: {type(self.__context__).__name__})"
+            )
+        elif not msg:
+            msg = f"Failed to download file from URL '{url}' to '{path}'"
+        super().__init__(msg, url, path)
+        if isinstance(self.__context__, Exception):
+            self.__traceback__ = self.__context__.__traceback__
+        self.destination = path
+        self.url = url
+
+
+class RunnableDownloader(QObject, QRunnable):
+    exception = Signal(Exception)
+
     threads_quit = False
     sleep_time = 0.0
 
@@ -236,6 +256,7 @@ class RunnableDownloader(QRunnable):
         self._lzma = use_lzma
         self._callback = callback
         self._check_hash = check_hash
+        self._last_exception: Exception | None = None
 
     def _check_sha1(self):
         if not self._hash:
@@ -268,6 +289,7 @@ class RunnableDownloader(QRunnable):
                 resp = session.get(self._url, timeout=30)
                 resp.raise_for_status()
             except Exception as err:
+                self._last_exception = err
                 self.log.error(
                     "Failed to get file from '%s': %s", self._url, str(err)
                 )
@@ -285,6 +307,9 @@ class RunnableDownloader(QRunnable):
                     if self._check_sha1():
                         break
                     else:
+                        self._last_exception = RuntimeError(
+                            "SHA mismatch occured after download"
+                        )
                         self.log.error(
                             "Download failed, retrying (SHA-1 mismatch)"
                         )
@@ -294,10 +319,11 @@ class RunnableDownloader(QRunnable):
             finally:
                 attempts += 1
         if not resp:
-            raise RuntimeError(
-                f"Failed to download file from '{self._url}' to "
-                f"'{str(self._path)}'"
-            )
+            err = DownloadError(self._url, self._path)
+            self.exception.emit(err)
+            if self._last_exception:
+                raise err from self._last_exception
+            raise err
         else:
             if self._callback:
                 self._callback(1)
@@ -306,3 +332,41 @@ class RunnableDownloader(QRunnable):
     @classmethod
     def kill_all(cls):
         cls.threads_quit = True
+
+
+class BulkDownloadManager:
+    def __init__(self, pool: QThreadPool):
+        self._pool = pool
+        self._failed = False
+        self._exceptions: list[Exception] = []
+
+    def add_runnable(self, runnable: RunnableDownloader):
+        runnable.exception.connect(self.handle_exception)
+
+    def handle_exception(self, err: Exception):
+        self._failed = True
+        log.error("Error occured in RunnableDownloader:", exc_info=err)
+        log.info(
+            "Stopping all RunnableDownloaders and waiting for pool to clear."
+        )
+        self._exceptions.append(err)
+        RunnableDownloader.kill_all()
+        self._pool.waitForDone(2)
+        # restore functionality in case it was a URL/syntax issue
+        RunnableDownloader.threads_quit = False
+
+    @property
+    def exceptions(self):
+        return self._exceptions
+
+    def check_for_failures(self):
+        running_threads = self._pool.activeThreadCount()
+        if running_threads > 0:
+            log.warning(
+                "BulkDownloadManager.check_for_failures() called before "
+                "completion! Current running threads: %d",
+                running_threads,
+            )
+            return None
+        log.debug("BulkDownloadManager: Downloads complete")
+        return self._failed

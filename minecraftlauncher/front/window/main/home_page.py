@@ -25,9 +25,7 @@ from PySide6.QtWidgets import (
 from minecraftlauncher.functions.error_box import error_box
 from minecraftlauncher.back.profile_manager import GameProfile
 from minecraftlauncher.back.game_launcher import LaunchWorker
-from minecraftlauncher.back import (
-    profile_manager,
-)
+from minecraftlauncher.back import profile_manager
 from minecraftlauncher.exceptions.datatypes import InvalidVersionIdError
 from minecraftlauncher.constants import MINECRAFT_DIR, offline_mode
 from minecraftlauncher.auth import LauncherAccount

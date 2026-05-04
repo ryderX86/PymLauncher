@@ -14,7 +14,7 @@ match OS:
     case "linux":
         _FLAGS = Qt.WindowType.SplashScreen | Qt.WindowType.FramelessWindowHint
     case _:
-        _FLAGS = Qt.WindowType.SplashScreen
+        _FLAGS = Qt.WindowType.FramelessWindowHint
 
 log = logging.getLogger(__name__)
 
@@ -53,6 +53,10 @@ class LoadingBlockerWindow(QDialog):
 
     def open(self) -> None:
         super().open()
+        QAPP.processEvents()
+
+    def show(self) -> None:
+        super().show()
         QAPP.processEvents()
 
     def hide(self):

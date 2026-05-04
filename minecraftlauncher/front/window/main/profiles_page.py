@@ -324,9 +324,9 @@ class ProfilesPage(QWidget):
         version_view = self.version_combo.view()
         assert version_view
         self._version_id_validator = VersionTextValidator()
-        self.version_combo.setValidator(self._version_id_validator)
         self.version_combo.editTextChanged.connect(self._dirty_check)
         self.version_combo.editTextChanged.connect(self._args_changer)
+        self.version_combo.setValidator(self._version_id_validator)
         self.mapper.addMapping(
             self.version_combo, MapIndex.VERSION, b"currentText"
         )
@@ -969,6 +969,8 @@ class ProfilesPage(QWidget):
         return self.jvm_args_input.text()
 
     def _args_changer(self, version_id: str | int):
+        if not self._loaded:
+            return
         prof = profile_manager.get_current_profile()
         if isinstance(version_id, int):
             version_id = self.version_combo.itemText(version_id)

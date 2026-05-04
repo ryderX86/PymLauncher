@@ -17,7 +17,11 @@ import requests
 from PySide6.QtCore import QThreadPool
 
 from minecraftlauncher.constants import RESOURCES_URL, MINECRAFT_DIR
-from minecraftlauncher.back.download_helpers import download, RunnableDownloader
+from minecraftlauncher.back.download_helpers import (
+    download,
+    RunnableDownloader,
+    BulkDownloadManager,
+)
 from minecraftlauncher import session
 
 log = logging.getLogger(__name__)
@@ -330,11 +334,18 @@ def download_assets_threaded(
     #     )
     # else:
     #     final_dl_list = BulkDownloadWorker.auto_split(download_list)
-
+    pool.setExpiryTimeout(90)
     pool.setMaxThreadCount(75)
+    mgr = BulkDownloadManager(pool)
     for worker in download_list:
+        mgr.add_runnable(worker)
         pool.start(worker)
-    pool.waitForDone(-1)
+    timedout = not pool.waitForDone(900)  # 15 min
+    if timedout:
+        raise RuntimeError("Downloads timed out completely")
+    if mgr.check_for_failures():
+        raise mgr.exceptions[0]
+    log.debug("Asset downloads complete")
     return len(download_list)
 
 
