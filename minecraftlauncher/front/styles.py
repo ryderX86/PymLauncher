@@ -457,42 +457,42 @@ QFrame[frameShape="5"] {{
 """
 
 match sys.platform:
-    case "win32":
-        mixin = f"""
-            QMenu {{
-                border-radius: 1px;
-                icon-size: 16px;
-                padding: 4px;
-                background-color: {BG_SURFACE};
-                background-clip: border;
-                border: 1px solid {BORDER};
-                font-size: 10pt;
-            }}
-            QMenu::item {{
-                background-color: transparent;
-                padding: 4px 6px;
-                border-radius: 4px;
-            }}
-            QMenu::item[danger="true"] {{
-                background-color: {DANGER};
-            }}
-            QMenu::icon {{
-                top: 1px;
-                left: 4px;
-            }}
-            QMenu::item:selected {{
-                background-color: {BG_SURFACE_LIGHT};
-            }}
-            QMenu::item:disabled {{
-                color: {TEXT_MUTED};
-            }}
+    # case "win32":
+    #     mixin = f"""
+    #         QMenu {{
+    #             border-radius: 1px;
+    #             icon-size: 16px;
+    #             padding: 4px;
+    #             background-color: {BG_SURFACE};
+    #             background-clip: border;
+    #             border: 1px solid {BORDER};
+    #             font-size: 10pt;
+    #         }}
+    #         QMenu::item {{
+    #             background-color: transparent;
+    #             padding: 4px 6px;
+    #             border-radius: 4px;
+    #         }}
+    #         QMenu::item[danger="true"] {{
+    #             background-color: {DANGER};
+    #         }}
+    #         QMenu::icon {{
+    #             top: 1px;
+    #             left: 4px;
+    #         }}
+    #         QMenu::item:selected {{
+    #             background-color: {BG_SURFACE_LIGHT};
+    #         }}
+    #         QMenu::item:disabled {{
+    #             color: {TEXT_MUTED};
+    #         }}
 
-            QMenu::icon:checked {{}}
-        """
-        # template = "\n".join([template, mixin])
+    #         QMenu::icon:checked {{}}
+    #     """
+    # template = "\n".join([template, mixin])
     case "darwin":
         pass
-    case _:
+    case "linux":
         mixin = """
             QComboBox ::item {{
                 min-height: 2em;

@@ -12,10 +12,13 @@ from PySide6.QtWidgets import QComboBox, QAbstractItemView
 
 from minecraftlauncher.back import account_manager
 from minecraftlauncher.front.resources import symbol
+from minecraftlauncher.functions import error_box
+from minecraftlauncher import offline_mode
 
 log = logging.getLogger(__name__)
 
 ADD_ACCOUNT_TEXT = "Add account"
+ADD_ACCOUNT_OFFLINE_ERR_TEXT = "Cannot add account while offline!"
 
 
 class AccountSelect(QComboBox):
@@ -85,6 +88,9 @@ class AccountSelect(QComboBox):
 
         text = self.itemText(index)
         if text == ADD_ACCOUNT_TEXT:
+            if offline_mode:
+                error_box(ADD_ACCOUNT_OFFLINE_ERR_TEXT)
+                return
             self.add_account_requested.emit()
             return
 

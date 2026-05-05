@@ -27,13 +27,13 @@ from minecraftlauncher.back.profile_manager import GameProfile
 from minecraftlauncher.back.game_launcher import LaunchWorker
 from minecraftlauncher.back import profile_manager
 from minecraftlauncher.exceptions.datatypes import InvalidVersionIdError
-from minecraftlauncher.constants import MINECRAFT_DIR, offline_mode
+from minecraftlauncher.constants import MINECRAFT_DIR
 from minecraftlauncher.auth import LauncherAccount
 from minecraftlauncher.front import resources
 from minecraftlauncher.front.qt.models import ProfileSelectionModel
 from minecraftlauncher.front.qt.widgets import Header1, SecondaryLabel
 from minecraftlauncher.front.styles import TERMINAL_FONT
-from minecraftlauncher import config
+from minecraftlauncher import config, offline_mode
 
 log = logging.getLogger(__name__)
 

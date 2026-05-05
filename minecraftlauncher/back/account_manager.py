@@ -8,7 +8,7 @@ from minecraftlauncher.auth import LauncherAccount
 from minecraftlauncher.auth.encryption import data_load_hook, data_save_hook
 from minecraftlauncher.functions.text import indent
 from minecraftlauncher.functions import reswrite
-from minecraftlauncher import DEV, session
+from minecraftlauncher import DEV, session, offline_mode
 
 log = logging.getLogger(__name__)
 
@@ -121,8 +121,10 @@ def load_accounts() -> tuple[list[LauncherAccount], str | None]:
     found_active = False
     for raw_acc in raw_accounts:
         acc = LauncherAccount.from_json(raw_acc)
-        if acc.gamertag == active_account and (
-            not acc.token_valid or not acc.msa_valid
+        if (
+            acc.gamertag == active_account
+            and (not acc.token_valid or not acc.msa_valid)
+            and not offline_mode
         ):
             success = acc.refresh()
             if success:
@@ -141,7 +143,9 @@ def load_accounts() -> tuple[list[LauncherAccount], str | None]:
             )
             if account.token_valid or account.msa_valid:
                 break
-            if account.refresh():
+
+            # this *shouldn't* execute refresh() when offline?
+            if offline_mode or account.refresh():
                 refreshed_account = True  # lol
                 break
             log.warning(

@@ -131,6 +131,11 @@ session = requests.sessions.Session()
 session.headers["User-Agent"] = USER_AGENT
 logging.debug("User agent: %s", USER_AGENT)
 
+offline_mode = False
+"""
+Used to stop internet-requiring functions before they execute
+"""
+
 offline_mode_hooks: list[Callable[[bool], None]] = []
 
 
@@ -145,3 +150,14 @@ def add_offline_mode_hook(hook: Callable[[bool], None]):
     Otherwise, we're back online.
     """
     offline_mode_hooks.append(hook)
+
+
+def set_offline_mode(offline: bool):
+    """
+    Set the `offline_mode` variable and fire off all the offline mode hooks.
+    """
+    global offline_mode
+    offline_mode = offline
+    logging.debug("Setting offline mode %s", "on" if offline_mode else "off")
+    for func in offline_mode_hooks:
+        func(offline_mode)

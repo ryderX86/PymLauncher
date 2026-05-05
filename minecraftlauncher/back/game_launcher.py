@@ -22,7 +22,6 @@ from minecraftlauncher.constants import (
     MINECRAFT_DIR,
     OS,
     DEV,
-    offline_mode,
 )
 from minecraftlauncher.front.window import (
     WarningDialog,
@@ -32,7 +31,7 @@ from minecraftlauncher.front.window import (
 from minecraftlauncher.datatypes import GameProfile
 from minecraftlauncher.back.library_manager import evaluate_rules
 from minecraftlauncher.auth import LauncherAccount
-from minecraftlauncher import config
+from minecraftlauncher import config, offline_mode
 from .library_manager import build_classpath, filter_libraries
 from .java_manager import find_java_exc
 from . import (
@@ -754,6 +753,8 @@ class LaunchWorker(QThread):
         logged_cmd = " ".join(cmd).replace(
             self.auth_info.token.access_token, "[REDACTED]"
         )
+        if OS == "windows":
+            logged_cmd.replace("", "")
         self.log.info("Launch command: '%s'", logged_cmd)
 
         sub_logger = logging.getLogger(Path(cmd[0]).name)

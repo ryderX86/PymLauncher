@@ -4,6 +4,7 @@ Common functions for downloading files.
 
 from pathlib import Path
 from typing import Literal, Callable, TypeVar, Iterable
+from types import FunctionType
 from datetime import timedelta, datetime
 import logging
 import hashlib
@@ -13,10 +14,25 @@ import lzma
 import requests
 from PySide6.QtCore import QRunnable, QObject, Signal, QThreadPool
 
-from minecraftlauncher import session
+from minecraftlauncher import session, offline_mode
 
 log = logging.getLogger(__name__)
 T = TypeVar("T")
+
+
+def _offline_mode_warning(func: FunctionType):
+    def wrapped_func(*args, **kwargs):
+        if offline_mode:
+            log.warning(
+                "'%s()' shouldn't have been called during offline mode!",
+                func.__name__,
+            )
+        return func(*args, **kwargs)
+
+    wrapped_func.__annotations__ = func.__annotations__
+    wrapped_func.__defaults__ = func.__defaults__
+    wrapped_func.__kwdefaults__ = func.__kwdefaults__
+    return wrapped_func
 
 
 def _download(
@@ -69,6 +85,7 @@ def _download(
             return resp
 
 
+@_offline_mode_warning
 def download(
     url: str,
     max_retries: int = 2,
@@ -212,6 +229,7 @@ class RunnableDownloader(QObject, QRunnable):
 
     log = log.getChild("RunnableDownloader")
 
+    @_offline_mode_warning
     def __init__(
         self,
         url: str,
@@ -335,6 +353,7 @@ class RunnableDownloader(QObject, QRunnable):
 
 
 class BulkDownloadManager:
+    @_offline_mode_warning
     def __init__(self, pool: QThreadPool):
         self._pool = pool
         self._failed = False

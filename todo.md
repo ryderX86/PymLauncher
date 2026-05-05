@@ -30,4 +30,5 @@ literally anything to do with downloads/`requests`
 
 ---
 ### General
-- Implement Packaging package: https://packaging.pypa.io/en/latest/version.html#packaging.version.Version
+- **DONE** ~~Implement Packaging package: https://packaging.pypa.io/en/latest/version.html#packaging.version.Version~~
+- Look into the stdlib `tempfile` module for replacing the other methods of making temp files

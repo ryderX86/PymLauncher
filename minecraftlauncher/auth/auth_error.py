@@ -11,6 +11,8 @@ class AuthStep(StrEnum):
 
 
 class AuthError:
+    __slots__ = ("step", "err", "description")
+
     def __init__(self, failure_step: AuthStep, errno: int | str, err_desc: str):
         self.step = failure_step
         self.err = errno
@@ -43,7 +45,7 @@ class AuthError:
             case _:
                 return "Unknown"
 
-    def __str__(self):
+    def err_string(self):
         return (
             "Authentication error occured:\n"
             f" Authentication step: {self.step}\n"

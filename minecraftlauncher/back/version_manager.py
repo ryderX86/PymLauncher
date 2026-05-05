@@ -88,7 +88,9 @@ def fetch_version_manifest(force_refresh: bool = False):
         return manifest_cache
 
     log.info("Looking for existing version manifest")
-    mf_path = f"{MINECRAFT_DIR}{D}versions{D}version_manifest_v2.json"
+    mf_path = os.path.join(
+        MINECRAFT_DIR, "versions", "version_manifest_v2.json"
+    )
     if os.path.isfile(mf_path):
         log.info("Found it! Checking age...")
         max_age = (datetime.now() - timedelta(hours=4)).timestamp()
@@ -102,7 +104,6 @@ def fetch_version_manifest(force_refresh: bool = False):
                     "Failed to read version manifest! Re-downloading...",
                     exc_info=err,
                 )
-                os.remove(mf_path)
             else:
                 if (
                     "snapshot" not in mf["latest"]
@@ -118,7 +119,6 @@ def fetch_version_manifest(force_refresh: bool = False):
                     return manifest_cache
         else:
             log.info("Existing manifest is too old, getting a new one.")
-
     log.info("Fetching version manifest from '%s'", VERSION_MANIFEST_URL)
     VERSION_DIR.mkdir(parents=True, exist_ok=True)
     try:
@@ -136,7 +136,7 @@ def fetch_version_manifest(force_refresh: bool = False):
     return manifest_cache
 
 
-def _build_local_version_list(exclude: list[GameVersionStub] | None = None):
+def build_local_version_list(exclude: list[GameVersionStub] | None = None):
     if not exclude:
         exclude = []
     versions_dir = MINECRAFT_DIR / "versions"
@@ -144,8 +144,10 @@ def _build_local_version_list(exclude: list[GameVersionStub] | None = None):
     for folder in os.scandir(versions_dir):
         if not folder.is_dir():
             continue
-        jar_path = f"{versions_dir}{D}{folder.name}{D}{folder.name}.jar"
-        json_path = f"{versions_dir}{D}{folder.name}{D}{folder.name}.json"
+        jar_path = os.path.join(versions_dir, folder.name, f"{folder.name}.jar")
+        json_path = os.path.join(
+            versions_dir, folder.name, f"{folder.name}.json"
+        )
         if not os.path.isfile(json_path):
             log.warning("Version %s doesn't have a JSON file!", folder.name)
             continue
@@ -244,7 +246,7 @@ def get_version_list(
         build_ts = ver.get("time", ver.get("releaseTime"))
         new_ver = GameVersionStub(id_, type_, url, False, timestamp, build_ts)
         versions.append(new_ver)
-    versions.extend(_build_local_version_list(versions))
+    versions.extend(build_local_version_list(versions))
     _version_list_cache = versions
     # forge is expected to always appear at the bottom unfortuantely, since for
     # some ungodly reason before more recent versions they always set the time
@@ -342,7 +344,7 @@ def fetch_version_json(version_id: str) -> dict[str, Any]:
 
     if not os.path.isdir(ver_dir):
         os.makedirs(ver_dir)
-    with open(local_path, "r") as f:
+    with open(local_path, "w") as f:
         f.write(resp.text)
     return resp.json()
 

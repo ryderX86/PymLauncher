@@ -4,6 +4,7 @@ import binascii
 
 
 class JWT:
+    __slots__ = ("header", "payload", "signature")
     # TODO: verify_signature()
 
     header: dict

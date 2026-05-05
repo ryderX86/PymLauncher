@@ -13,7 +13,7 @@ from minecraftlauncher.constants import (
     LAUNCH_ENTITLEMENTS_URL,
     MOJ_AUTH_URL_ALT,
 )
-from minecraftlauncher import constants, session
+from minecraftlauncher import session, set_offline_mode
 from .auth_error import AuthError, AuthStep
 
 log = logging.getLogger(__name__)
@@ -35,6 +35,18 @@ def _unidentified_xuid():
 
 
 class MinecraftToken:
+    __slots__ = (
+        "username",
+        "roles",
+        "access_token",
+        "token_type",
+        "_expires_in",
+        "acquired_at",
+        "expires_at",
+        "owned_items",
+        "jwt",
+        "xuid",
+    )
     username: str
     """
     UUID, not the public-facing UUID however
@@ -112,7 +124,7 @@ class MinecraftToken:
                     exc.__qualname__,
                 )
                 if attempts >= 2:
-                    constants.offline_mode = True
+                    set_offline_mode(True)
                     break
                 else:
                     log.info("Waiting 5 seconds before next attempt...")
@@ -159,7 +171,7 @@ class MinecraftToken:
                     exc.__qualname__,
                 )
                 if connection_attempts >= 2:
-                    constants.offline_mode = True
+                    set_offline_mode(True)
                     break
                 else:
                     pass

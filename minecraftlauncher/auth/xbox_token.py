@@ -10,13 +10,15 @@ from minecraftlauncher.auth.microsoft_account import MicrosoftAccount
 from minecraftlauncher.constants import (
     XBOX_AUTH_URL,
 )
-from minecraftlauncher import constants, session
+from minecraftlauncher import session, set_offline_mode
 from .auth_error import AuthError, AuthStep
 
 log = logging.getLogger(__name__)
 
 
 class XboxToken:
+    __slots__ = ("json", "token", "expires_at", "acquired_at")
+
     json: dict
     """
     Full JSON Xbox Live token
@@ -24,6 +26,14 @@ class XboxToken:
     token: str
     """
     Xbox Live token (not the raw JSON, use `.as_json()` or `.json` for that)
+    """
+    expires_at: float
+    """
+    Unix timestamp at which this token is no longer valid
+    """
+    acquired_at: float
+    """
+    Unix timestamp at which this token was acquired by the client
     """
 
     def __init__(self, xbl_token: dict):
@@ -90,7 +100,7 @@ class XboxToken:
                     exc.__qualname__,
                 )
                 if connection_attempts >= 2:
-                    constants.offline_mode = True
+                    set_offline_mode(True)
                     break
                 else:
                     pass

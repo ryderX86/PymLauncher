@@ -11,7 +11,7 @@ from minecraftlauncher.constants import (
     AZURE_SCOPE,
     MSA_REFRESH_URL,
 )
-from minecraftlauncher import constants, session
+from minecraftlauncher import session, set_offline_mode
 from .auth_error import AuthError, AuthStep
 
 log = logging.getLogger(__name__)
@@ -156,7 +156,7 @@ class MicrosoftAccount:
                     exc.__qualname__,
                 )
                 if connection_attempts >= 2:
-                    constants.offline_mode = True
+                    set_offline_mode(True)
                     break
                 else:
                     pass

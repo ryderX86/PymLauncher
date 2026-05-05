@@ -10,6 +10,7 @@ log = logging.getLogger(__name__)
 
 
 class LauncherAccount:
+    __slots__ = ("msa", "xbox", "token", "profile", "gamertag", "xuid", "uhs")
     msa: MicrosoftAccount
     xbox: XboxToken | None
     token: MinecraftToken | None
@@ -17,7 +18,15 @@ class LauncherAccount:
 
     gamertag: str
     """
-    Xbox Live gamertag, for identifying accounts
+    Xbox Live gamertag, for UI account identification
+    """
+    xuid: str
+    """
+    Xbox User ID, for identifying accounts
+    """
+    uhs: str
+    """
+    Xbox User Hash, used by XBL/XSTS APIs
     """
 
     def __init__(

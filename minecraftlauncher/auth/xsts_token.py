@@ -10,7 +10,7 @@ from minecraftlauncher.auth.xbox_token import XboxToken
 from minecraftlauncher.constants import (
     XSTS_AUTH_URL,
 )
-from minecraftlauncher import constants, session
+from minecraftlauncher import session, set_offline_mode
 from .exceptions import XstsAuthError
 from .auth_error import AuthError, AuthStep
 
@@ -18,6 +18,10 @@ log = logging.getLogger(__name__)
 
 
 class XstsToken:
+    mojang_uri = "rp://api.minecraftservices.com/"
+    xbox_uri = "http://xboxlive.com"
+
+    __slots__ = ("json", "token", "expires_at", "acquired_at")
     json: dict
     """
     Full JSON Xbox Live XSTS token
@@ -26,9 +30,14 @@ class XstsToken:
     """
     Xbox Live XSTS token (not the raw JSON, use `.as_json()` or `.json` for that)
     """
-
-    mojang_uri = "rp://api.minecraftservices.com/"
-    xbox_uri = "http://xboxlive.com"
+    expires_at: float
+    """
+    Unix timestamp at which this token is no longer valid
+    """
+    acquired_at: float
+    """
+    Unix timestamp at which this token was acquired by the client
+    """
 
     def __init__(self, xsts_token: dict):
         if isinstance(xsts_token, str):
@@ -96,7 +105,7 @@ class XstsToken:
                     exc.__qualname__,
                 )
                 if connection_attempts >= 2:
-                    constants.offline_mode = True
+                    set_offline_mode(True)
                     break
                 else:
                     pass

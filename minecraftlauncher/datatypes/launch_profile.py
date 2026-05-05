@@ -21,6 +21,21 @@ MODS_DIR_REGEX = re.compile(
     r"-Dfabric\.(modsFolder|addMods)=((?:\"[^\"]+\"|\S+))"
 )
 
+NEW_DEFAULT_ARGS = (
+    "-XX:+UseCompactObjectHeaders "
+    "-XX:+AlwaysPreTouch "
+    "-XX:+UseStringDeduplication "
+    "-XX:+UseZGC"
+)
+DEFAULT_ARGS = (
+    "-XX:+UnlockExperimentalVMOptions "
+    "-XX:+UseG1GC "
+    "-XX:G1NewSizePercent=20 "
+    "-XX:G1ReservePercent=20 "
+    "-XX:MaxGCPauseMillis=50 "
+    "-XX:G1HeapRegionSize=32M"
+)
+
 DEFAULT_ARGS_LIST = [
     "-XX:+UseCompactObjectHeaders "
     "-XX:+AlwaysPreTouch "
@@ -252,7 +267,21 @@ class GameProfile:
     def default_jvm_args(self) -> str:
         id_ = self.real_version_id
         if not id_:
-            id_ = version_manager.get_latest_release()
+            log.warning(
+                "Couldn't get true version ID from '%s' initially.",
+                self.version_id,
+            )
+            match self.version_id:
+                case "latest-release":
+                    id_ = version_manager.get_latest_release()
+                case "latest-snapshot":
+                    id_ = version_manager.get_latest_snapshot()
+                case _:
+                    log.warning(
+                        "Couldn't assign '%s' to 'real_version_id'!",
+                        self.version_id,
+                    )
+                    id_ = version_manager.get_latest_release()
         versions = version_manager.get_version_list()
         version_stub: GameVersionStub | None = None
         for stub in versions:

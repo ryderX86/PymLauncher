@@ -17,12 +17,6 @@ from .args import work_dir, debug_logging as _debug_logging
 
 DEV = not bool(globals().get("__compiled__", False))
 
-offline_mode = False  # pylint: disable=invalid-name
-"""
-Monkey-patch-able variable for all modules to know if we
-should be operating offline or not.
-"""
-
 if DEV:
     LAUNCHER_VERSION = "dev"
     DEBUG_LOGGING = True
@@ -96,30 +90,37 @@ JAVA_MANIFEST_URL = (
     "/2ec0cc96c44e5a76b9c8b7c39df7210883d12871/all.json"
 )
 
-
 # Default paths
 _plat = platform.system()
-_friendly_plat = _plat
+_friendly_plat = " ".join([_plat, platform.version()])
+match _plat:
+    case "Windows":
+        if "APPDATA" in os.environ:
+            APPDATA_STR = "%APPDATA%"
+            APPDATA = Path(os.environ["APPDATA"]).expanduser().resolve()
+        else:
+            APPDATA = Path("~\\AppData\\Roaming").expanduser().resolve()
+            APPDATA_STR = "%USERPROFILE%\\AppData\\Roaming"
+    case "Linux":
+        APPDATA_STR = "~"
+        APPDATA = Path(APPDATA_STR).expanduser().resolve()
+        _friendly_plat = platform.freedesktop_os_release().get(
+            "PRETTY_NAME", _friendly_plat
+        )
+    case "Darwin":
+        APPDATA = Path("~/Library/Application Support").expanduser().resolve()
+    case _:
+        if "XDG_DATA_HOME" in os.environ:
+            APPDATA = Path(os.environ["XDG_DATA_HOME"]).expanduser().resolve()
+            APPDATA_STR = os.environ["XDG_DATA_HOME"]
+        else:
+            APPDATA_STR = "~/.local/share"
+            APPDATA = Path(APPDATA_STR).expanduser().resolve()
 base: Path
 if work_dir:
     base = work_dir
 else:
-    match _plat:
-        case "Windows":
-            base = Path("~\\AppData\\Roaming").expanduser().resolve()
-        case "Linux":
-            base = Path("~").expanduser().resolve()
-            _friendly_plat = platform.freedesktop_os_release().get(
-                "PRETTY_NAME", _friendly_plat
-            )
-        case "Darwin":
-            base = Path("~/Library/Application Support").expanduser().resolve()
-        case _:
-            base_ = os.environ.get(
-                "XDG_DATA_HOME", Path("~/.local/share").expanduser().resolve()
-            )
-            base = Path(base_)
-            del base_
+    base = APPDATA
 
 USER_AGENT = (
     f"{AUTHOR_USR}/{LAUNCHER_NAME} {LAUNCHER_VERSION} ({_friendly_plat}) "

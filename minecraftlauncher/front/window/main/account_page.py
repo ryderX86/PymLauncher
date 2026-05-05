@@ -24,6 +24,7 @@ from minecraftlauncher.functions.error_box import error_box
 from minecraftlauncher.functions import copy_to_clipboard, clipboard_present
 from minecraftlauncher.constants import CHECKMARK_DELAY
 from minecraftlauncher.front.window.skin_change import SkinChange
+from minecraftlauncher import add_offline_mode_hook, offline_mode
 
 log = logging.getLogger(__name__)
 
@@ -141,6 +142,7 @@ class AccountPage(QWidget):
         manage.addWidget(logout_button)
 
         layout.addWidget(manage_w)
+        add_offline_mode_hook(self.offline_mode_hook)
 
     def set_account_info(self, info: LauncherAccount):
         """Update account info displayed on page"""
@@ -190,9 +192,15 @@ class AccountPage(QWidget):
             self.log.debug("Logout aborted by user.")
 
     def _change_skin(self):
+        if offline_mode:
+            log.warning("_change_skin() shouldn't have been called!")
+            return
         log.debug("Showing skin change dialog")
         if self._account_info:
             self.dialog = SkinChange(self._account_info)
             self.dialog.skin_changed.connect(self.skin_upload.emit)
             self.dialog.exec()
             self.dialog.deleteLater()
+
+    def offline_mode_hook(self, offline: bool):
+        self.change_skin_button.setDisabled(offline)

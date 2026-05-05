@@ -18,7 +18,7 @@ from minecraftlauncher.front.window.modloaders import (
 from minecraftlauncher.front.qt.widgets import Section
 from minecraftlauncher.back import account_manager
 from minecraftlauncher.functions import beep
-from minecraftlauncher import constants
+from minecraftlauncher import constants, add_offline_mode_hook
 from . import HRow
 
 log = logging.getLogger(__name__)
@@ -53,9 +53,9 @@ class UtilitiesPage(QWidget):
         )
         f_label = QLabel("Fabric installer:")
         fabric_row.addWidget(f_label)
-        f_button = QPushButton("Open")
-        f_button.clicked.connect(self.fab_install_window.exec)
-        fabric_row.addWidget(f_button)
+        self.f_win_button = QPushButton("Open")
+        self.f_win_button.clicked.connect(self.fab_install_window.exec)
+        fabric_row.addWidget(self.f_win_button)
 
         layout.addWidget(fabric_row)
 
@@ -89,7 +89,7 @@ class UtilitiesPage(QWidget):
         layout.addStretch()
 
     def build(self):
-        pass
+        add_offline_mode_hook(self.offline_mode_hook)
 
     # literally zero reason for this to even take up memory in prod
     if constants.DEV:
@@ -115,3 +115,6 @@ class UtilitiesPage(QWidget):
                 dump_path.unlink()
 
             QTimer.singleShot(1000, delete_temp_file)
+
+    def offline_mode_hook(self, offline: bool):
+        self.f_win_button.setDisabled(offline)
