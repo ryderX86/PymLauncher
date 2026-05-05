@@ -18,7 +18,7 @@ game_versions_list: list[tuple[str, bool]] = []
 loader_versions_list: list[str] = []
 
 
-def _get_master(force_refresh: bool = False):
+def _ensure_master(force_refresh: bool = False):
     global _master_manifest
     if force_refresh or not _master_manifest:
         log.debug("Loading Fabric manifest...")
@@ -50,7 +50,7 @@ def _get_master(force_refresh: bool = False):
 
 def get_game_versions_list(force_refresh: bool = False):
     global game_versions_list
-    _get_master()
+    _ensure_master()
 
     if game_versions_list and not force_refresh:
         return game_versions_list
@@ -78,7 +78,7 @@ def get_game_versions_list(force_refresh: bool = False):
 
 def get_loader_versions_list(force_refresh: bool = False):
     global loader_versions_list
-    _get_master()
+    _ensure_master()
 
     if loader_versions_list and not force_refresh:
         return loader_versions_list
@@ -96,7 +96,7 @@ def get_loader_versions_list(force_refresh: bool = False):
 
 # maybe TODO(?): insert 'jar' into the version JSON?
 def install(game_ver: str, fabric_ver: str, override: bool = False):
-    _get_master()
+    _ensure_master()
     log.debug("fabric-loader-%s-%s install requested", fabric_ver, game_ver)
     URL = (
         "https://meta.fabricmc.net/v2/versions/loader/"
