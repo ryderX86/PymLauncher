@@ -38,13 +38,13 @@ _POSIX = r"((~/|/)((?![^/]+\.)[^\x00\n\r\/]+/?)+)|~"
 
 match platform.system():
     case "Windows":
-        _FP_REGEX = _WIN
+        FP_REGEX = _WIN
     case _:
-        _FP_REGEX = _POSIX
+        FP_REGEX = _POSIX
 
 
 def is_path_valid(fp: str):
-    m = re.match(_FP_REGEX, fp)
+    m = re.match(FP_REGEX, fp)
     if not m:
         return False
     return m.string == fp
