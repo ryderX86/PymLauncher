@@ -10,6 +10,7 @@ import logging
 import hashlib
 import time
 import lzma
+import os
 
 import requests
 from PySide6.QtCore import QRunnable, QObject, Signal, QThreadPool
@@ -107,27 +108,24 @@ def download(
     return _download(url, max_retries, timeout, sha=sha)
 
 
-def _check_file_sha1(path: str | Path, sha1: str):
+def _check_file_sha1(path: str | os.PathLike, sha1: str):
     """return `True` if the file exists & sha1 matches"""
-    if isinstance(path, str):
-        path = Path(path)
+    if not os.path.isfile(path):
+        return False
     if not sha1:
         return True
-    if (not path.exists()) or (not path.is_file()):
-        return False
-    file_hash = hashlib.sha1(path.read_bytes()).hexdigest()
+    with open(path, "rb") as file:
+        file_hash = hashlib.sha1(file.read()).hexdigest()
     return bool(file_hash == sha1)
 
 
-def _check_file_size(path: str | Path, size: int):
+def _check_file_size(path: str | os.PathLike, size: int):
     if not size:
         log.warning("check_file_size() called without a valid size!")
         return True
-    if isinstance(path, str):
-        path = Path(path)
-    if (not path.exists()) or (not path.is_file()):
+    if not os.path.isfile(path):
         return False
-    return path.stat().st_size == size
+    return os.stat(path).st_size == size
 
 
 def file_exists_or_age(
@@ -137,20 +135,16 @@ def file_exists_or_age(
     Return `True` if the file exists and is under the age specified in
     `max_age` (seconds).
     """
-    if isinstance(path, str):
-        path = Path(path)
-    if not path.exists():
-        return False
-    elif not path.is_file():
+    if not os.path.isfile(path):
         return False
     if isinstance(max_age, (int, float)):
         max_age = timedelta(seconds=max_age)
     real_max_age: float = (datetime.now() - max_age).timestamp()
-    return path.stat().st_mtime > real_max_age
+    return os.stat(path).st_mtime > real_max_age
 
 
 def should_download_file(
-    path: str | Path,
+    path: str | os.PathLike,
     *,
     sha: str | None = None,
     size: int | None = None,
@@ -162,11 +156,7 @@ def should_download_file(
 
     **WARNING:** SHA-256 not implemented yet.
     """
-    if isinstance(path, str):
-        path = Path(path)
-    if not path.exists():
-        return True
-    elif not path.is_file():
+    if not os.path.isfile(path):
         return True
     if sha:
         match hash_type:
@@ -194,7 +184,9 @@ def filter_downloads(
 
 
 class DownloadError(Exception):
-    def __init__(self, url: str, path: Path | str, msg: str | None = None):
+    def __init__(
+        self, url: str, path: os.PathLike | str, msg: str | None = None
+    ):
         if isinstance(path, Path):
             path = str(path.resolve().absolute())
         if self.__context__ and not msg:
@@ -219,7 +211,7 @@ class RunnableDownloader(QObject, QRunnable):
 
     _url: str
     """File download URL"""
-    _path: Path
+    _path: str | Path
     """File final location"""
     _hash: str | None
     """File hash to check against"""
@@ -257,18 +249,19 @@ class RunnableDownloader(QObject, QRunnable):
         """
         super().__init__()
         self._url = url
-        if isinstance(path, Path):
-            self._path = path
-        self._path = Path(path)
-        if not self._path.parent.exists():
-            if not mkdir:
-                raise FileNotFoundError(self._path)
-            try:
-                self._path.parent.mkdir(parents=True, exist_ok=True)
-            except Exception as err:
-                raise ValueError(
-                    f"Invalid path given for download: {str(self._path)}"
-                ) from err
+        self._path = path
+        self._file_exists = os.path.isfile(path)
+        if not self._file_exists:
+            parent = os.path.dirname(path)
+            if not os.path.isdir(parent):
+                if not mkdir:
+                    raise FileNotFoundError(self._path)
+                try:
+                    os.makedirs(parent, exist_ok=True)
+                except Exception as err:
+                    raise ValueError(
+                        f"Invalid path given for download: {str(self._path)}"
+                    ) from err
         self._hash = sha1
         self._override = override
         self._lzma = use_lzma
@@ -283,7 +276,7 @@ class RunnableDownloader(QObject, QRunnable):
 
     @property
     def needs_download(self) -> bool:
-        if self._hash and self._path.exists() and self._path.is_file():
+        if self._hash and os.path.isfile(self._path):
             if self._check_sha1():
                 return False
         return True
@@ -295,11 +288,11 @@ class RunnableDownloader(QObject, QRunnable):
         self.download()
 
     def download(self):
-        if self._check_hash and self._path.exists() and self._path.is_file():
+        if self._check_hash and self._file_exists:
             if self._check_sha1():
                 return False
             self.log.debug("File exists but SHA1 doesn't match, deleting.")
-            self._path.unlink(True)
+            os.unlink(self._path)
         attempts = 0
         resp = None
         while attempts < 3:
@@ -320,9 +313,9 @@ class RunnableDownloader(QObject, QRunnable):
                     content = lzma.decompress(resp.content)
                 else:
                     content = resp.content
-                self._path.write_bytes(content)
                 if self._hash:
-                    if self._check_sha1():
+                    sha1 = hashlib.sha1(content).hexdigest()
+                    if sha1 == self._hash:
                         break
                     else:
                         self._last_exception = RuntimeError(
@@ -332,8 +325,14 @@ class RunnableDownloader(QObject, QRunnable):
                             "Download failed, retrying (SHA-1 mismatch)"
                         )
                         resp = None
+                        continue
                 else:
-                    log.warning("SHA-1 doesn't exist for '%s'", self._path)
+                    log.warning(
+                        "No SHA1 provided for file downloaded at '%s'",
+                        self._path,
+                    )
+                with open(self._path, "wb") as f:
+                    f.write(content)
             finally:
                 attempts += 1
         if not resp:

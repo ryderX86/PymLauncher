@@ -118,7 +118,7 @@ match _plat:
             APPDATA = Path(APPDATA_STR).expanduser().resolve()
 base: Path
 if work_dir:
-    base = work_dir
+    base = Path(work_dir)
 else:
     base = APPDATA
 
