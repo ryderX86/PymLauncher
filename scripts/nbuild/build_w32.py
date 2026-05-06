@@ -10,6 +10,7 @@ from . import (
     RESOURCE_COMPILE_SCRIPT,
     ICO_PATH,
     PROJECT_TOML,
+    BASE_ARGS,
 )
 
 log = logging.getLogger(__name__)
@@ -56,21 +57,14 @@ args = [
     py_exec,
     "-m",
     "nuitka",
-    "--standalone",
-    "--show-anti-bloat-changes",
-    "--show-source-changes=minecraftlauncher",
+    *BASE_ARGS,
+    # attach keeps subprocess.Popen() from working properly, for some reason
     "--windows-console-mode=disable",
-    "--python-flag=-m",
-    "--python-flag=isolated",
-    "--enable-plugin=pyside6",
-    "--include-qt-plugins=sensible,qml",
-    "--output-dir=./dist",
-    "--noinclude-dlls=*.cpp.o",
-    "--noinclude-dlls=*.qsb",
     f"--windows-icon-from-ico={ICO_PATH}",
     "--output-filename=launcher.exe",
     f"--product-version={PROJECT_TOML["project"]["version"]}",
     f"--product-name={PROJECT_TOML["project"]["name"]}",
+    # this should probably come from pyproject.toml as well?
     '--file-description="Minecraft Launcher written in Python"',
 ]
 

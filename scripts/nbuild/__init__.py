@@ -99,3 +99,22 @@ NOINCLUDE_LIBS = {
     "Qt6Quick3DSpatialAudio",
     "Qt*Particle*",
 }
+
+BASE_ARGS = [
+    "--standalone",
+    "--show-anti-bloat-changes",
+    # source changes are console debug args anyways, no reason not to show them
+    "--show-source-changes=minecraftlauncher",
+    "--python-flag=-m",
+    # don't include libs from the user's python install
+    "--python-flag=isolated",
+    # remove assert statements and docstrings
+    "--python-flag=-OO",
+    "--enable-plugin=pyside6",
+    "--include-qt-plugins=sensible,qml",
+    "--output-dir=./dist",
+    # pyside6-deploy includes these and they seem to just be anti-bloat, so no
+    # harm in including them here too:
+    "--noinclude-dlls=*.cpp.o",
+    "--noinclude-dlls=*.qsb",
+]
