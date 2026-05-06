@@ -321,8 +321,6 @@ class ProfilesPage(QWidget):
         self.version_combo.addItems(
             [constants.LATEST_VERSION_TEXT, constants.LATEST_SNAPSHOT_TEXT]
         )
-        version_view = self.version_combo.view()
-        assert version_view
         self._version_id_validator = VersionTextValidator()
         self.version_combo.editTextChanged.connect(self._dirty_check)
         self.version_combo.editTextChanged.connect(self._args_changer)
@@ -547,7 +545,6 @@ class ProfilesPage(QWidget):
     def _process_mods_folder_checkbox(self, checked: bool | None = None):
         if not isinstance(checked, bool):
             checked = self.use_mods_folder_input.isChecked()
-        assert isinstance(checked, bool)
         if checked:
             prof = profile_manager.get_current_profile()
             self.mods_folder_input.setDisabled(False)

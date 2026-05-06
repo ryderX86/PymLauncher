@@ -419,7 +419,6 @@ class HomePage(QWidget):
         else:
             error_box(f"Failed to launch the game: {message}")
             prof = profile_manager.get_current_profile()
-            assert prof
             self._profile_change(prof)
 
     def config_changed(self):

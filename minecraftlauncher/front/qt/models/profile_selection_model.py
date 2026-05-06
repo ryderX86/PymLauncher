@@ -62,5 +62,5 @@ class ProfileSelectionModel(QItemSelectionModel):
 
     def model(self) -> ProfileModel:
         m = self._model_old()
-        assert m
+        assert isinstance(m, ProfileModel)
         return m  # type: ignore

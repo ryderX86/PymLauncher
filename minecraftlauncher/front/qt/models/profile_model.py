@@ -165,7 +165,7 @@ class ProfileModel(QAbstractTableModel):
     def profile(self, idx: QModelIndex | QPersistentModelIndex):
         if not idx.isValid():
             return
-        prof = self.data(idx, Qt.ItemDataRole.UserRole)
+        prof: GameProfile = self.data(idx, Qt.ItemDataRole.UserRole)
         assert isinstance(prof, GameProfile)
         return prof
 
