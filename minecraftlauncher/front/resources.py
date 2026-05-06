@@ -32,6 +32,8 @@ TEXTURE_CACHE_DIR = LAUNCHER_DATA_DIR / "textures_cache"
 
 
 class BaseIconPath:
+    __slots__ = ("_path", "_dm_path", "_ext")
+
     def __init__(
         self, path: str, dm_path: str | None = None, *, ext: str | None = None
     ):

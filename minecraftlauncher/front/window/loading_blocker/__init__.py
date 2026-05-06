@@ -20,6 +20,8 @@ log = logging.getLogger(__name__)
 
 
 class LoadingBlockerWindow(QDialog):
+    __slots__ = ("label",)
+
     def __init__(self, parent=None, flags=_FLAGS):
         log.debug("Making loading blocker window")
         super().__init__(parent, flags)
