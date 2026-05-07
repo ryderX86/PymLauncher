@@ -40,6 +40,8 @@ _inheritence_cache: dict[str, dict] = {}
 
 _args_cache: dict[str, str] = {}
 
+_version_json_cache: dict[str, dict] = {}
+
 
 def _get_manifest_cache_ids():
     fetch_version_manifest()
@@ -207,6 +209,7 @@ def get_version_list(
     or `path`.
     """
     global _version_list_cache
+    global _version_json_cache
     global _inheritence_cache
     manifest = fetch_version_manifest()
     mf_versions: list[dict] = manifest.get("versions", [])
@@ -215,12 +218,14 @@ def get_version_list(
     elif override:
         log.debug("Forcibly refreshing versions cache")
         _inheritence_cache = {}
+        _version_json_cache = {}
     versions = []
     for ver in mf_versions:
         id_ = ver.get("id")
         if not id_:
-            log.warning("Skipping unknown version (no ID) in\
-                        get_version_list().")
+            log.warning(
+                "Skipping unknown version (no ID) in get_version_list()."
+            )
             continue
         url = ver.get("url")
         if not url:
@@ -277,7 +282,9 @@ def _get_manifest_entry(version_id: str) -> dict[str, Any] | None:
             return ver
 
 
-def fetch_version_json(version_id: str) -> dict[str, Any]:
+def fetch_version_json(
+    version_id: str, override: bool = False
+) -> dict[str, Any]:
     """
     Fetch and return the full version JSON for `version_id`.
 
@@ -287,7 +294,7 @@ def fetch_version_json(version_id: str) -> dict[str, Any]:
     When downloading, the file will be cached. If the file exists but isn't in
     the manifest, it'll be returned if it can be read as JSON. If the file
     exists and is in the manifest, the SHA1 will be compared, and if it
-    matches, it'll be returned, else it'll redownload.
+    matches, it'll be returned, otherwise it'll redownload.
 
     If the file doesn't exist but the ID is in the manifest, it'll download
     the manifest.
@@ -295,6 +302,10 @@ def fetch_version_json(version_id: str) -> dict[str, Any]:
     If all else fails (or JSON decoding for a local version fails) it'll raise
     a `ValueError`.
     """
+    if version_id in _version_json_cache and not override:
+        return _version_json_cache[version_id]
+    elif override:
+        log.debug("Overriding cached version JSON for %r", version_id)
     fetch_version_manifest()
     ver_dir = os.path.join(VERSION_DIR, version_id)
     local_path = os.path.join(ver_dir, f"{version_id}.json")
@@ -309,7 +320,8 @@ def fetch_version_json(version_id: str) -> dict[str, Any]:
         local_sha1 = hashlib.sha1(local_bytes).hexdigest()
         if (mf_entry and mf_entry["sha1"] == local_sha1) or (not mf_entry):
             try:
-                return json.loads(local_text)
+                _version_json_cache[version_id] = json.loads(local_text)
+                return _version_json_cache[version_id]
             except json.JSONDecodeError as err:
                 log.error(
                     "JSON decode failed for '%s':",
@@ -345,7 +357,8 @@ def fetch_version_json(version_id: str) -> dict[str, Any]:
         os.makedirs(ver_dir)
     with open(local_path, "w") as f:
         f.write(resp.text)
-    return resp.json()
+    _version_json_cache[version_id] = resp.json()
+    return _version_json_cache[version_id]
 
 
 def _resolve_inheritence(
