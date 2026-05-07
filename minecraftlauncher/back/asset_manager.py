@@ -5,13 +5,13 @@ Handles downloading the asset index and individual asset objects
 for a given Minecraft version.
 """
 
-from collections.abc import Callable
 from datetime import datetime, timedelta
+from collections.abc import Callable
+from xml.etree import ElementTree
 from pathlib import Path
+import logging
 import hashlib
 import json
-import logging
-from xml.etree import ElementTree
 
 import requests
 from PySide6.QtCore import QThreadPool
@@ -83,7 +83,9 @@ def fetch_asset_index(version_json: dict) -> dict:
 
 def patch_logging_config(path: Path):
     PATTERN = r"[%d{HH:mm:ss}] [%t/%level]: %msg{nolookups}%n"
-    xml = ElementTree.fromstring(path.read_text())
+    with open(path, "r") as f:
+        txt = f.read()
+    xml = ElementTree.fromstring(txt)
     patched = False
     elements = [*xml.iter("XMLLayout"), *xml.iter("LegacyXMLLayout")]
     for c in elements:

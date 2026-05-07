@@ -59,13 +59,14 @@ args = [
     "nuitka",
     *BASE_ARGS,
     # attach keeps subprocess.Popen() from working properly, for some reason
-    "--windows-console-mode=disable",
+    "--windows-console-mode=attach",
     f"--windows-icon-from-ico={ICO_PATH}",
     "--output-filename=launcher.exe",
     f"--product-version={PROJECT_TOML["project"]["version"]}",
     f"--product-name={PROJECT_TOML["project"]["name"]}",
     # this should probably come from pyproject.toml as well?
     '--file-description="Minecraft Launcher written in Python"',
+    "--user-package-configuration-file=./scripts/nuitka.yaml",
 ]
 
 for d in NOINCLUDE_DATA:

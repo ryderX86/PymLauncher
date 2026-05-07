@@ -16,6 +16,6 @@ if exist .\dist\installer.exe (
 
 cd %__CWD%
 
-python -m nbuild
+python -m nbuild %*
 
 cd %__LAST_CWD%

@@ -2,7 +2,7 @@
 import platform
 import logging
 
-from . import build_hooks, CWD
+from . import CWD
 
 logging.debug("Working directory: %s", CWD)
 

@@ -18,15 +18,13 @@ from .args import work_dir, debug_logging as _debug_logging
 DEV = not bool(globals().get("__compiled__", False))
 
 if DEV:
-    LAUNCHER_VERSION = "dev"
     DEBUG_LOGGING = True
 else:
-    from .__version__ import VERSION
-
-    LAUNCHER_VERSION = VERSION
     DEBUG_LOGGING = _debug_logging
 
 LAUNCHER_NAME = "minecraftlauncher-python"
+# LAUNCHER_VERSION is replaced at compile-time
+LAUNCHER_VERSION = "dev"
 AUTHOR_USR = "ryderX86"
 EMAIL = "ryder@r86.me"
 

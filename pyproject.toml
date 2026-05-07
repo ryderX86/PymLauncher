@@ -1,6 +1,8 @@
 [project]
 name = "MinecraftLauncher-py"
-version = "1.0.0.7"
+version = "1.0.0.9"
+
+[tool]
 
 [tool.black]
 line-length = 80

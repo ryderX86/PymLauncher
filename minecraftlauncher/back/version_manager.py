@@ -91,7 +91,7 @@ def fetch_version_manifest(force_refresh: bool = False):
     mf_path = os.path.join(
         MINECRAFT_DIR, "versions", "version_manifest_v2.json"
     )
-    if os.path.isfile(mf_path):
+    if os.path.isfile(mf_path) and not force_refresh:
         log.info("Found it! Checking age...")
         max_age = (datetime.now() - timedelta(hours=4)).timestamp()
         if os.lstat(mf_path).st_mtime > max_age:
@@ -244,8 +244,8 @@ def get_version_list(
                     log.debug("Unexpected release type: '%s'", type_)
         timestamp = ver.get("releaseTime", ver.get("time"))
         build_ts = ver.get("time", ver.get("releaseTime"))
-        new_ver = GameVersionStub(id_, type_, url, False, timestamp, build_ts)
-        versions.append(new_ver)
+        stub = GameVersionStub(id_, type_, url, False, timestamp, build_ts)
+        versions.append(stub)
     versions.extend(build_local_version_list(versions))
     _version_list_cache = versions
     # forge is expected to always appear at the bottom unfortuantely, since for

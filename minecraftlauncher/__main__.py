@@ -1,6 +1,3 @@
-# nuitka-project: --standalone
-# nuitka-project-if: sys.platform == "win32":
-#   nuitka-project: --windows-console-mode=disable
 from logging.handlers import RotatingFileHandler
 from time import sleep
 import logging
@@ -27,7 +24,7 @@ from .back import (
 )
 from .auth import LauncherAccount
 
-log = logging.getLogger(__name__ if __name__ != "__main__" else "launcher")
+log = logging.getLogger("minecraftlauncher")
 
 clean_exit = False
 
@@ -107,8 +104,6 @@ class App:
             if args.debug_splash_screen:
                 self.lb_window.set_text("Waiting 5s for splash debugging")
                 sleep(5)
-
-        log.debug("UI setup complete")
 
     def _set_clean_exit(self):
         global clean_exit

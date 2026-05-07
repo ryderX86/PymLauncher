@@ -6,6 +6,7 @@ Profile management page.
 
 from pathlib import Path
 import logging
+import time
 import os
 
 from PySide6.QtCore import (
@@ -181,24 +182,11 @@ class ProfilesPage(QWidget):
         shortcut.activated.connect(self._ctrl_s)
         shortcut.setContext(Qt.ShortcutContext.WindowShortcut)
         self._bg_worker: VersionJsonBackgroundDownloader | None = None
+        self._ver_refresh_last_click: float = 0.0
 
     def _ctrl_s(self):
         if self.save_button.isEnabled():
             self._save()
-
-    @property
-    def _selected_uuid(self):
-        prof = profile_manager.get_current_profile()
-        if prof:
-            return prof.uuid
-        return None
-
-    @_selected_uuid.setter
-    def _selected_uuid(self, new_id: str):
-        prof = profile_manager.profiles.get(new_id)
-        if not prof:
-            raise ValueError("UUID not found in profiles cache")
-        profile_manager.set_current_profile(prof)
 
     def build(self):
         self._load()
@@ -789,6 +777,11 @@ class ProfilesPage(QWidget):
         #     self.icon_menu.addItem(icon, name, name)
 
     def refresh_version_combo(self):
+        click_time = time.time()
+        if self._ver_refresh_last_click >= click_time - 1.0:
+            log.debug("Refreshing version list (web request)")
+            version_manager.fetch_version_manifest(True)
+        self._ver_refresh_last_click = click_time
         log.debug("Refreshing version list")
         current_selected_ver = self.version_combo.currentText()
         self.version_combo.blockSignals(True)
@@ -860,8 +853,6 @@ class ProfilesPage(QWidget):
                     self.version_combo.addItem(id_, ver.local)
 
     def _check_changed_vals(self) -> list[tuple[str, str, str]]:
-        if not self._selected_uuid:
-            return []
         profile = profile_manager.get_current_profile()
         # (key, old, new)
         changed_values: list[tuple[str, str, str]] = []
@@ -924,9 +915,7 @@ class ProfilesPage(QWidget):
         return changed_values
 
     def _save_current(self):
-        if not self._selected_uuid:
-            return
-        profile = profile_manager.profiles[self._selected_uuid]
+        profile = profile_manager.get_current_profile()
         changed_values = self._check_changed_vals()
         log.info("Saving profile '%s' (ID: %s)", profile.name, profile.uuid)
         string = []
@@ -945,8 +934,6 @@ class ProfilesPage(QWidget):
     def _delete_profile(self, profile: GameProfile | None = None):
         if not profile:
             profile = profile_manager.get_current_profile()
-        if not self._selected_uuid:
-            return
         confirmation = WarningDialog.warn(
             self,
             "Delete Profile?",

@@ -1,0 +1,48 @@
+- module-name: "minecraftlauncher.constants"
+  variables:
+    setup_code: 
+      - "import tomllib"
+      - "f = open('./pyproject.toml', 'r')"
+      - "pt = tomllib.loads(f.read())"
+      - "version = pt['project']['version']"
+    declarations:
+      "version": "version"
+  anti-bloat:
+    - description: "Override \"dev\" in LAUNCHER_VERSION with actual version"
+      replacements:
+        'LAUNCHER_VERSION = "dev"': '"LAUNCHER_VERSION = %r" % get_variable("version")'
+    - description: "Override 'DEV' constant and remove runtime calculation"
+      replacements_plain:
+        'DEV = not bool(globals().get("__compiled__", False))': "DEV = False"
+- module-name: "minecraftlauncher.auth.encryption"
+  variables:
+    setup_code:
+      - "import platform"
+      - "match platform.system():"
+      - " case 'Windows':"
+      - "   ENABLED = True"
+      - "   PREFIX = 'win32'"
+      - " case 'Linux':"
+      - "   ENABLED = True"
+      - "   PREFIX = 'linux'"
+      - " case _:"
+      - "   ENABLED = False"
+      - "   PREFIX = 'no'"
+    declarations:
+      "prefix": "PREFIX"
+      "enabled": "ENABLED"
+  anti-bloat:
+    - description: "Remove runtime OS/import calculations"
+      change_function:
+        "run_import": "un-callable"
+      replacements_plain:
+        "\nrun_import()": ""
+      when: "not linux"
+    - description: "Remove runtime OS/import calculations (pt2)"
+      append_result:
+        '"from .%s_encryption import encrypt, decrypt, data_load_hook, data_save_hook" % get_variable("prefix")'
+      when: "not linux"
+    - description: "Remove runtime OS/import calculations (pt3)"
+      append_result:
+        '"ENABLED = %s" % get_variable("enabled")'
+      when: "not linux"

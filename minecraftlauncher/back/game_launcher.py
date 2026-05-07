@@ -357,6 +357,7 @@ def launch_game(command: list[str], cwd: str | Path | None):
     process = subprocess.Popen(
         command,
         cwd=cwd,
+        stdin=subprocess.DEVNULL,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,

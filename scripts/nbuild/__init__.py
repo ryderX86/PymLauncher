@@ -8,10 +8,12 @@ VENV_PATH = CWD / ".venv"
 
 _parser = ArgumentParser("Build-script")
 _parser.add_argument("-d", "--debug", action="store_true", default=False)
+_parser.add_argument("-r", "--build-report", action="store_true", default=False)
 
 _args = _parser.parse_args()
 
 DEBUG: bool = _args.debug
+MAKE_BUILD_REPORT: bool = _args.build_report
 
 if DEBUG:
     logging.basicConfig(level=logging.DEBUG)
@@ -104,7 +106,11 @@ BASE_ARGS = [
     "--standalone",
     "--show-anti-bloat-changes",
     # source changes are console debug args anyways, no reason not to show them
-    "--show-source-changes=minecraftlauncher",
+    (
+        "--show-source-changes=minecraftlauncher"
+        if not DEBUG
+        else "--show-source-changes=*"
+    ),
     "--python-flag=-m",
     # don't include libs from the user's python install
     "--python-flag=isolated",
@@ -118,3 +124,8 @@ BASE_ARGS = [
     "--noinclude-dlls=*.cpp.o",
     "--noinclude-dlls=*.qsb",
 ]
+
+if MAKE_BUILD_REPORT:
+    BASE_ARGS.append("--report=./dist/build-report.xml")
+if DEBUG:
+    BASE_ARGS.append("--verbose-output=./dist/verbose-output.txt")

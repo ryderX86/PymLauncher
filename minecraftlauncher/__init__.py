@@ -59,16 +59,7 @@ class _LoggingFormatter(logging.Formatter):
                 color = "96"
         return "".join(["\033[", color, "m", line, "\033[0m"])
 
-    if not DEBUG_LOGGING:
-
-        def format(self, record: logging.LogRecord):
-            record.name = record.name.replace("launcher.", "")
-            return super().format(record)
-
-    if not DEV:
-        pass
-
-    else:
+    if DEV:
         format = format_colors
 
 
