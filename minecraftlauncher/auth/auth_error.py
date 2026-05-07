@@ -47,8 +47,8 @@ class AuthError:
 
     def err_string(self):
         return (
-            "Authentication error occured:\n"
-            f" Authentication step: {self.step}\n"
-            "Error code: {self.error_code}\n"
-            f' Error description: "self.description"'
+            "Authentication error details:\n"
+            f"  Authentication step: {self.step!r}\n"
+            f"  Error code: {self.error_code!r}\n"
+            f"  Error description: {self.description!r}"
         )

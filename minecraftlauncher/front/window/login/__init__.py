@@ -323,7 +323,7 @@ class LoginWindow(QDialog):
         msa = MicrosoftAccount(token_data)
         lp = auth_flow(msa)
         if not lp:
-            log.error("Auth chain failed! Details:\n%s", str(lp))
+            log.error("Auth chain failed! Details:\n%s", lp.err_string())
             self.status_label.setText("Authentication failed")
             self.start_button.setEnabled(True)
             self.open_browser.setHidden(False)
