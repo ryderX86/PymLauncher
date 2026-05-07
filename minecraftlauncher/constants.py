@@ -196,9 +196,7 @@ match OS:
             pf = "Program Files (x86)"
         else:
             pf = "Program Files"
-        MOJANG_JAVA_BASE = Path(
-            f"C:\\Program Files{pf}\\Minecraft Launcher\\runtime"
-        )
+        MOJANG_JAVA_BASE = Path(f"C:\\{pf}\\Minecraft Launcher\\runtime")
         del pf
     case _:
         MOJANG_JAVA_BASE = Path()
