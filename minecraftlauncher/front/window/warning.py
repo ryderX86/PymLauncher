@@ -36,6 +36,14 @@ CHECKBOX_TEXT_YESNO = "Remember my choice next time"
 
 
 class WarningDialog(QMessageBox):
+    __slots__ = (
+        "_warning_type",
+        "_button_config",
+        "status",
+        "_show_once",
+        "checkbox",
+    )
+
     def __init__(
         self,
         text: str,
