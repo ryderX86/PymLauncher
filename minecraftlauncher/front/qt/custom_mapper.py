@@ -1,3 +1,9 @@
+from types import (
+    FunctionType,
+    MethodType,
+    BuiltinFunctionType,
+    BuiltinMethodType,
+)
 from collections.abc import Callable
 from typing import Any
 import logging
@@ -6,6 +12,10 @@ from PySide6.QtCore import Signal, SignalInstance, QObject
 from PySide6.QtWidgets import QWidget, QLineEdit, QComboBox, QCheckBox
 
 log = logging.getLogger(__name__)
+
+LiterallyAnyFunction = (
+    FunctionType | MethodType | BuiltinMethodType | BuiltinFunctionType
+)
 
 
 class CustomMapper(QObject):
@@ -16,7 +26,21 @@ class CustomMapper(QObject):
     changes_made = Signal(bool)
     saved = Signal()
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, strict: bool = True):
+        """
+        QWidgetDataMapper alternative.
+
+        Setting `strict` to `False` will disable any exceptions being raised
+        for getter errors when saving.
+
+        Use `start()` after adding mappings using `add_mapping()`; `stop()` to
+        stop monitoring either permenantly or temporarily.
+
+        If `saver` is provided when adding widgets, you can use `save()` to get
+        all of the data from the widgets, otherwise the data will be returned.
+        If some widgets are given data but not others, save will return the
+        data for widgets that don't have savers.
+        """
         super().__init__(parent)
         self._widgets = {}
         """
@@ -35,6 +59,7 @@ class CustomMapper(QObject):
 
         self._active: bool = False
         self.blockSignals(True)
+        self._strict = strict
 
     def add_mapping(
         self,
@@ -59,9 +84,31 @@ class CustomMapper(QObject):
             Callable[[], str] | Callable[[], int] | Callable[[], bool] | None
         ) = None,
     ):
+        """
+        ## Arguments
+        `widget`: Widget to monitor
+
+        `getter`: Method/function that will be used to get the widget's current
+        value for comparison. If not provided, there will be an attempt to
+        match the widget's type and get the function from that. If that fails,
+        a `ValueError` will be raised.
+
+        `setter`: Method/function that takes one argument that will be used to
+        set the widget's current value. Same as `getter`, if this isn't
+        provided, the widget type will be matched, etc.
+
+        `signal`: Signal to monitor for widget's data changing. Same as
+        `getter` and `setter`, this will be matched to the widget type if not
+        provided.
+
+        `saver`: Method/function to call for saving this widget's data
+
+        `saver_getter`: Method/function to call for getting this widget's data
+        when saving. If not provided, this will default to `getter`
+        """
         id_ = id(widget)
         match widget:
-            case QLineEdit() if not all([getter, setter, signal]):
+            case QLineEdit() if not all((getter, setter, signal)):
                 if not getter:
                     getter = widget.text
                 if not setter:
@@ -69,7 +116,7 @@ class CustomMapper(QObject):
                 if not signal:
                     signal = widget.textChanged
             case QComboBox() if (
-                not all([getter, setter, signal]) and not widget.isEditable()
+                not all((getter, setter, signal)) and not widget.isEditable()
             ):
                 if not getter:
                     getter = widget.currentIndex
@@ -78,7 +125,7 @@ class CustomMapper(QObject):
                 if not signal:
                     signal = widget.currentIndexChanged
             case QComboBox() if (
-                not all([getter, setter, signal]) and widget.isEditable()
+                not all((getter, setter, signal)) and widget.isEditable()
             ):
                 if not getter:
                     getter = widget.currentText
@@ -86,19 +133,39 @@ class CustomMapper(QObject):
                     setter = widget.setCurrentText
                 if not signal:
                     signal = widget.currentTextChanged
-            case QCheckBox() if not all([getter, setter, signal]):
+            case QCheckBox() if not all((getter, setter, signal)):
                 if not getter:
                     getter = widget.isChecked
+                if not setter:
                     setter = widget.setChecked
+                if not signal:
                     signal = widget.checkStateChanged
+            case _ if not all((getter, setter, signal)):
+                raise ValueError(
+                    "Must be given all of 'getter', 'setter', and 'signal' if "
+                    "widget is not one of: QLineEdit, QComboBox, QCheckBox"
+                )
+        if not isinstance(getter, LiterallyAnyFunction):
+            raise TypeError(
+                "'getter' must be FunctionType or MethodType, "
+                f"not {type(getter).__name__!r}"
+            )
+        if not isinstance(setter, LiterallyAnyFunction):
+            raise TypeError(
+                "'setter' must be FunctionType or MethodType, "
+                f"not {type(setter).__name__!r}"
+            )
+        if not isinstance(signal, SignalInstance):
+            raise TypeError(
+                "'signal' must be PySide6.QtCore.Signal, "
+                f"not {type(signal).__name__!r}"
+            )
+        assert getter
+        assert setter
+        assert signal
         if not saver_getter:
             saver_getter = getter
         self._widgets[id_] = (widget, getter, setter, saver, saver_getter)
-        if not signal or not getter or not setter:
-            raise ValueError(
-                "Must be given all of 'getter', 'setter', and 'signal' if "
-                "widget is not one of: QLineEdit, QComboBox, QCheckBox"
-            )
         signal.connect(self._data_changed)
 
     def _data_changed(self, *args, **kwargs):
@@ -135,23 +202,38 @@ class CustomMapper(QObject):
         self.changes_made.emit(False)
         return
 
-    def save(self):
-        for id_, (_, _, _, saver, saver_getter) in self._widgets.items():
+    def save(self) -> dict[QWidget, Any]:
+        other_vals = {}
+        for id_, (widget, _, _, saver, saver_getter) in self._widgets.items():
+            try:
+                data = saver_getter()
+            except Exception as err:
+                log.error(
+                    "Failed to run saver_getter() on object at address %r:",
+                    hex(id_),
+                    exc_info=err,
+                )
+                if self._strict:
+                    raise err
+                continue
             if saver:
                 try:
-                    saver(saver_getter())
+                    saver(data)
                 except Exception as err:
                     log.error(
                         "Failed to run saver(saver_getter()) on object at "
                         "memory address %s\n"
                         "Result of 'saver_getter()': %s",
                         hex(id_),
-                        saver_getter(),
+                        data,
                         exc_info=err,
                     )
+            else:
+                other_vals[widget] = data
         self.set_initial_values()
         self._data_changed()
         self.saved.emit()
+        return other_vals
 
     def start(self):
         self.set_initial_values()
