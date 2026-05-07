@@ -1,6 +1,6 @@
 [project]
 name = "MinecraftLauncher-py"
-version = "1.0.0.13"
+version = "1.0.0.15"
 
 [tool]
 
