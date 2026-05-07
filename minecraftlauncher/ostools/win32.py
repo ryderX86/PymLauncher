@@ -32,11 +32,11 @@ def set_jump_list():  # TODO: rename to build_jump_list()
     """
     if not profile_manager.profiles:
         log.warning("set_jump_list() called before profiles are loaded!")
+        return
 
     profile_links = []
-    rm_from_config = []  # list of IDs to remove from the config file
+    config_removal_queue = []  # list of IDs to remove from the config file
 
-    log.debug("Setting up CustomDestinationList object")
     jump_list = pythoncom.CoCreateInstance(  # type: ICustomDestinationList
         shell.CLSID_DestinationList,
         None,
@@ -54,9 +54,9 @@ def set_jump_list():  # TODO: rename to build_jump_list()
         rm_link = removed_array.GetAt(i, shell.IID_IShellLink)  # IShellLink
 
         prof_id = str(rm_link.GetArguments()).split("=")[1].strip()
-        rm_from_config.append(prof_id)
+        config_removal_queue.append(prof_id)
 
-    for item in rm_from_config:
+    for item in config_removal_queue:
         try:
             config.jump_list_items.remove(item)
         except ValueError:
@@ -69,7 +69,7 @@ def set_jump_list():  # TODO: rename to build_jump_list()
     for profile_id in config.jump_list_items:
         if profile_id not in profile_manager.profiles:
             log.warning("Profile %s doesn't exist!", profile_id)
-            rm_from_config.append(profile_id)
+            config_removal_queue.append(profile_id)
             continue
         profile = profile_manager.get_profile(profile_id)
         link = pythoncom.CoCreateInstance(  # type: PyIShellLink
@@ -85,13 +85,10 @@ def set_jump_list():  # TODO: rename to build_jump_list()
             ico_path = resources.cache_icon(
                 resources.profile_icon(profile.icon), profile.uuid
             )
-            log.debug("Trying to set the link's icon")
             link.SetIconLocation(ico_path, 0)  # type: ignore
 
-        log.debug("Attempting to set link path to '%s'", EXE_PATH)
         link.SetPath(EXE_PATH)  # type: ignore
 
-        log.debug("Setting the lnk name")
         ps = link.QueryInterface(propsys.IID_IPropertyStore)
         title_pk = pscon.PKEY_Title
         ps.SetValue(  # type: ignore
@@ -100,7 +97,6 @@ def set_jump_list():  # TODO: rename to build_jump_list()
         )
         ps.Commit()  # type: ignore
 
-        log.debug("Setting the description to the profile ID")
         link.SetDescription(  # type: ignore
             f"Opens the launcher and immediately starts {profile.name}"
         )
@@ -117,6 +113,7 @@ def set_jump_list():  # TODO: rename to build_jump_list()
         for link in profile_links[:max_items]:
             collection.AddObject(link)  # type: ignore
 
+        log.debug("Committing task list")
         task_array = collection.QueryInterface(shell.IID_IObjectArray)
         jump_list.AddUserTasks(task_array)  # type: ignore
     else:

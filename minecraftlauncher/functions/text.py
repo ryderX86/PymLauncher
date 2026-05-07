@@ -29,18 +29,18 @@ def indent(text: str | dict | list, amount: int = 2):
     return "\n".join(lines)
 
 
-_WIN = (
+_WIN_PATH_REGEX = (
     r"(([A-Za-z]:\\)|(%[a-zA-Z0-9]+%\\?))(((?!(\.\.)|(CON)|(PRN)|(AUX)|(NUL)|("
     r"COM[0-9¹²³])|(LPT[0-9¹²³])|([^\\]+\.[\\\.])|([<>:\"/?*\x00-\x1f\\]))[^<>"
     r":\"/?*\x00-\x1f\\]*)\\?)+"
 )
-_POSIX = r"((~/|/)((?![^/]+\.)[^\x00\n\r\/]+/?)+)|~"
+_POSIX_PATH_REGEX = r"((~/|/)((?![^/]+\.)[^\x00\n\r\/]+/?)+)|~"
 
 match platform.system():
     case "Windows":
-        FP_REGEX = _WIN
+        FP_REGEX = _WIN_PATH_REGEX
     case _:
-        FP_REGEX = _POSIX
+        FP_REGEX = _POSIX_PATH_REGEX
 
 
 def is_path_valid(fp: str):
