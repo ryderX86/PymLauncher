@@ -352,6 +352,8 @@ class RunnableDownloader(QObject, QRunnable):
 
 
 class BulkDownloadManager:
+    __slots__ = ("_pool", "_failed", "_exceptions")
+
     @_offline_mode_warning
     def __init__(self, pool: QThreadPool):
         self._pool = pool

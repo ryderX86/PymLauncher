@@ -28,6 +28,15 @@ KNOWN_MSA_DICT_VALS = [
 
 
 class MicrosoftAccount:
+    __slots__ = (
+        "token_type",
+        "scope",
+        "_expires_in",
+        "access_token",
+        "refresh_token",
+        "acquired_at",
+        "_other_token_info",
+    )
     token_type: str  # Always "Bearer"
     scope: str
     """

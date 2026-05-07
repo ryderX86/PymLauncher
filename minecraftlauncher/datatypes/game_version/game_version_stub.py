@@ -18,7 +18,7 @@ class GameVersionType(StrEnum):
     BETA = "old_beta"
 
 
-@dataclass
+@dataclass(slots=True)
 class GameVersionStub:
     id: str
     """The ID of the game version (i.e. `1.7.10`, `26w31a`, or `26.1`)"""
@@ -33,6 +33,9 @@ class GameVersionStub:
     is_local: InitVar[bool]
     release_time: InitVar[str | None]
     time: InitVar[str | None]
+
+    _release_ts: float = field(init=False)
+    _build_ts: float = field(init=False)
 
     def __post_init__(
         self,

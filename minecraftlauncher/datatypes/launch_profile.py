@@ -50,7 +50,7 @@ DEFAULT_ARGS_LIST = {
 }
 
 
-@dataclass
+@dataclass(slots=True)
 class GameProfile:
     """Launcher game profile"""
 
