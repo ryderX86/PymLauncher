@@ -119,13 +119,13 @@ def add_profile_switch_handler(func: Callable[[GameProfile], None]):
 def remove_profile_switch_handler(
     func_idx: Callable[[GameProfile], None] | int,
 ):
-    match type(func_idx):
+    match func_idx:
         case int():
             if func_idx > len(_profile_switch_handlers):
                 raise IndexError()
             _profile_switch_handlers.pop(func_idx)
             return
-        case FunctionType():
+        case FunctionType() | Callable():
             if func_idx not in _profile_switch_handlers:
                 return
             _profile_switch_handlers.pop(
