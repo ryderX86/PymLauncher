@@ -10,6 +10,7 @@ from minecraftlauncher.front.rgb import hex_to_rgbi
 from minecraftlauncher import QAPP
 
 CRole = QPalette.ColorRole
+CGroup = QPalette.ColorGroup
 
 
 def hex_to_qrgb(hex_: str):
@@ -44,7 +45,10 @@ DANGER = "#e74c3c"
 DANGER_HOVER = "#c0392b"
 
 PALETTE.setColor(CRole.WindowText, hex_to_qrgb(TEXT_PRIMARY))
+PALETTE.setColor(CGroup.Disabled, CRole.WindowText, hex_to_qrgb(TEXT_MUTED))
 PALETTE.setColor(CRole.ButtonText, hex_to_qrgb(TEXT_PRIMARY))
+PALETTE.setColor(CGroup.Disabled, CRole.ButtonText, hex_to_qrgb(TEXT_MUTED))
+PALETTE.setColor(CGroup.Active, CRole.ButtonText, hex_to_qrgb(TEXT_SECONDARY))
 PALETTE.setColor(CRole.ToolTipText, hex_to_qrgb(TEXT_PRIMARY))
 PALETTE.setColor(CRole.Window, hex_to_qrgb(BG_DARK))
 PALETTE.setColor(CRole.Base, hex_to_qrgb(BG_DARK))
@@ -217,7 +221,6 @@ QLineEdit, QTextEdit, QPlainTextEdit {{
 }}
 QLineEdit:hover, QTextEdit:hover, QPlainTextEdit:hover {{
     border-color: {BORDER_LIGHT};
-    background-color: {BG_SURFACE_LIGHT}
 }}
 QLineEdit:focus, QTextEdit:focus, QPlainTextEdit:focus {{
     border-color: {BORDER_LIGHT};
@@ -242,7 +245,10 @@ QComboBox:separator {{
 }}
 QComboBox:hover {{
     border-color: {BORDER_LIGHT};
-    background-color: {BG_SURFACE_LIGHT};
+}}
+QComboBox:disabled {{
+    color: {TEXT_MUTED};
+    background-color: {BG_DARK};
 }}
 QComboBox[invalid="true"] {{
     border-color: {DANGER_HOVER};
@@ -317,7 +323,7 @@ QSpinBox {{
     padding: 4px 8px;
 }}
 
-/* Progress bar 
+/* Progress bar
 QProgressBar {{
     background-color: {BG_DARK};
     border: 1px solid {BORDER};
@@ -335,7 +341,7 @@ QProgressBar::chunk {{
 }}
 */
 
-/* Scrollbar 
+/* Scrollbar
 QScrollBar:vertical {{
     background: {BG_DARK};
     width: 10px;

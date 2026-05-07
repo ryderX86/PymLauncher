@@ -138,6 +138,7 @@ if DEV:
         LAUNCHER_DATA_DIR = base / LAUNCHER_NAME
         LAUNCHER_CONFIG_FILE = LAUNCHER_DATA_DIR / "config.json"
 
+# architecture stuff, should get almost all turned into constants by nuitka
 OS: Literal["windows", "osx", "linux", "unknown"]
 OS_PATH_DELIM: Literal["\\", "/"] = "/"
 OS_VER: str = platform.version()

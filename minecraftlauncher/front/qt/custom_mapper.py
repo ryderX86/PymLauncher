@@ -25,6 +25,8 @@ class CustomMapper(QObject):
 
     changes_made = Signal(bool)
     saved = Signal()
+    widgets_set = Signal()
+    """Signal fired off when reset() or set_initial_values() is done"""
 
     def __init__(self, parent=None, strict: bool = True):
         """
@@ -60,6 +62,7 @@ class CustomMapper(QObject):
         self._active: bool = False
         self.blockSignals(True)
         self._strict = strict
+        self._save_hooks: set[Callable[[], None]] = set()
 
     def add_mapping(
         self,
@@ -101,7 +104,9 @@ class CustomMapper(QObject):
         `getter` and `setter`, this will be matched to the widget type if not
         provided.
 
-        `saver`: Method/function to call for saving this widget's data
+        `saver`: Method/function to call for saving this widget's data. Must
+        take exactly one argument of type `str`, `int`, or `bool`. Can return
+        anything.
 
         `saver_getter`: Method/function to call for getting this widget's data
         when saving. If not provided, this will default to `getter`
@@ -192,7 +197,11 @@ class CustomMapper(QObject):
     def set_initial_values(self):
         for id_, (_, getter, _, _, _) in self._widgets.items():
             self._initial_values[id_] = getter()
+        self.widgets_set.emit()
         return
+
+    reset = set_initial_values
+    """Alias for `set_initial_values()`"""
 
     def revert_changes(self):
         self._active = False
@@ -232,6 +241,8 @@ class CustomMapper(QObject):
                 other_vals[widget] = data
         self.set_initial_values()
         self._data_changed()
+        for h in self._save_hooks:
+            h()
         self.saved.emit()
         return other_vals
 
@@ -243,3 +254,19 @@ class CustomMapper(QObject):
     def stop(self):
         self._active = False
         self.blockSignals(True)
+
+    def add_save_hook(self, hook: Callable[[], None]):
+        """
+        Add a method/function to be called when `save()` is finished.
+
+        Must be a callable that takes zero arguments.
+        """
+        self._save_hooks.add(hook)
+
+    def remove_save_hook(self, hook: Callable[[], None]):
+        """
+        Remove a method/function from being called when `save()` is finished.
+
+        Must be a callable that has already been added to `add_save_hook()`
+        """
+        self._save_hooks.remove(hook)

@@ -4,7 +4,13 @@ import os
 _parser = ArgumentParser()
 
 _work_dir = _parser.add_argument(
-    "-wd", "--workDir", "--work_dir", "--work-dir", type=str, dest="work_dir"
+    "-wd",
+    "--workDir",
+    "--work_dir",
+    "--work-dir",
+    type=str,
+    dest="work_dir",
+    default=None,
 )
 _parser.add_argument(
     "--resourceDebug",
@@ -33,7 +39,15 @@ _parser.add_argument(
 _parser.add_argument("--launch-profile", type=str, dest="launch_profile")
 _parsed_args = _parser.parse_args()
 
-if _parsed_args and _parsed_args.work_dir:
+work_dir: str | None = _parsed_args.work_dir if _parsed_args else None
+resource_debug: bool = _parsed_args.resource_debug if _parsed_args else False
+exporting_debug = _parsed_args.exporting_debug if _parsed_args else False
+debug_logging = _parsed_args.debug_logging if _parsed_args else False
+launch_profile: str | None = _parsed_args.launch_profile
+debug_splash_screen: bool = _parsed_args.debug_splash_screen
+
+if work_dir is not None:
+    work_dir = os.path.normpath(work_dir)
     if not os.path.isdir(_parsed_args.work_dir):
         try:
             os.makedirs(_parsed_args.work_dir, exist_ok=True)
@@ -42,10 +56,3 @@ if _parsed_args and _parsed_args.work_dir:
                 _work_dir,
                 f"Failed to create path at {_parsed_args.work_dir}",
             ) from err
-
-work_dir: str | None = _parsed_args.work_dir if _parsed_args else None
-resource_debug: bool = _parsed_args.resource_debug if _parsed_args else False
-exporting_debug = _parsed_args.exporting_debug if _parsed_args else False
-debug_logging = _parsed_args.debug_logging if _parsed_args else False
-launch_profile: str | None = _parsed_args.launch_profile
-debug_splash_screen: bool = _parsed_args.debug_splash_screen

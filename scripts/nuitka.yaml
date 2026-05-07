@@ -22,8 +22,8 @@
       - " case 'Windows':"
       - "   ENABLED = True"
       - "   PREFIX = 'win32'"
-      - " case 'Linux':"
-      - "   ENABLED = True"
+      - " case 'Linux':" # this won't be used but the compiler will throw a tantrum otherwise, probably
+      - "   ENABLED = False"
       - "   PREFIX = 'linux'"
       - " case _:"
       - "   ENABLED = False"
@@ -32,22 +32,23 @@
       "prefix": "PREFIX"
       "enabled": "ENABLED"
   anti-bloat:
-    - description: "Remove runtime OS/import calculations"
+    - description: "Remove runtime OS/import calculations on non-Linux"
       change_function:
         "run_import": "un-callable"
       replacements_plain:
         "\nrun_import()": ""
       when: "not linux"
-    - description: "Remove runtime OS/import calculations (pt2)"
+    - description: "Remove runtime OS/import calculations on non-Linux (pt2)"
       append_result:
         '"from .%s_encryption import encrypt, decrypt, data_load_hook, data_save_hook" % get_variable("prefix")'
       when: "not linux"
-    - description: "Remove runtime OS/import calculations (pt3)"
+    - description: "Remove runtime OS/import calculations on non-Linux (pt3)"
       append_result:
         '"ENABLED = %s" % get_variable("enabled")'
       when: "not linux"
 - module-name: "minecraftlauncher.back.java_manager"
   anti-bloat:
-    - description: "Remove executable mark function since it's useless here"
+    - description: "Remove executable mark function code on win32"
       change_function:
         "mark_executable": "'(lambda: True)'"
+      when: "win32"

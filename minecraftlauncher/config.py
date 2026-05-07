@@ -134,7 +134,7 @@ def save():
         val = globals()[key]
         if val is None:
             continue
-        elif isinstance(val, (list, dict)) and not val:
+        elif isinstance(val, (list, dict, set)) and not val:
             continue  # skip bloat
         elif isinstance(val, set):
             obj_out[key] = [*val]
