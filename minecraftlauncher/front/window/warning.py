@@ -1,17 +1,11 @@
 from enum import IntEnum
 import logging
 
-from PySide6.QtCore import Qt
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import (
     QApplication,
-    QDialog,
+    QMessageBox,
     QCheckBox,
-    QPushButton,
-    QVBoxLayout,
-    QHBoxLayout,
-    QWidget,
-    QLabel,
 )
 
 from minecraftlauncher import config
@@ -20,8 +14,8 @@ log = logging.getLogger(__name__)
 
 
 class ButtonConfig(IntEnum):
-    OK = 0
-    YES_NO = 1
+    OK = QMessageBox.StandardButton.Ok
+    YES_NO = QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
 
 
 class UserReturn(IntEnum):
@@ -37,7 +31,11 @@ class WarningType(IntEnum):
     LOG4J_CONFIG_FAILED = 4
 
 
-class WarningDialog(QDialog):
+CHECKBOX_TEXT_OK = "Do not show this message again"
+CHECKBOX_TEXT_YESNO = "Remember my choice next time"
+
+
+class WarningDialog(QMessageBox):
     def __init__(
         self,
         text: str,
@@ -49,60 +47,50 @@ class WarningDialog(QDialog):
         button_config: ButtonConfig = ButtonConfig.OK,
         parent=None,
     ):
-        super().__init__(parent)
-        self._text = text
-        self._title = title
-        self._ico = icon
+        super().__init__(parent, text=text)
         self._warning_type = type_
         self._button_config = button_config
         self.status = None
         self._show_once = show_once
-
-    def _build_ui(self):
-        root = QVBoxLayout(self)
-        root.setAlignment(Qt.AlignmentFlag.AlignCenter)
-
-        msg = QLabel(self._text)
-        if self._ico:
-            msg.setPixmap(self._ico.pixmap(32, 32))
-
-        root.addWidget(msg)
-
-        checkbox_row_w = QWidget()
-        checkbox_row = QHBoxLayout(checkbox_row_w)
-
-        self.checkbox = QCheckBox("Do not show this message again")
-        if self._button_config == ButtonConfig.YES_NO:
-            self.checkbox.setText("Remember my choice next time")
-        self.checkbox.setChecked(False)
-        checkbox_row.addWidget(self.checkbox)
-        if self._warning_type:
-            root.addWidget(checkbox_row_w)
-
-        button_row_w = QWidget()
-        button_row = QHBoxLayout(button_row_w)
-        button_row.addStretch()
-
+        if title:
+            self.setWindowTitle(title)
+        if icon:
+            self.setIconPixmap(icon.pixmap(32, 32))
         match self._button_config:
             case ButtonConfig.OK:
-                self.main_button = QPushButton("OK")
-                button_row.addWidget(self.main_button)
-                self.no_button = None
+                self.setStandardButtons(
+                    self.StandardButton(self._button_config)
+                )
+                self.button(self.StandardButton.Ok).clicked.connect(
+                    self._ok_yes
+                )
+                if not icon:
+                    self.setIcon(self.Icon.Warning)
             case ButtonConfig.YES_NO:
-                self.main_button = QPushButton("Yes")
-                button_row.addWidget(self.main_button)
-                self.no_button = QPushButton("No")
-                self.no_button.clicked.connect(self._no)
-                button_row.addWidget(self.no_button)
-            case _:  # shouldn't happen, just making the type checker happy
-                raise ValueError(f"Bad button config: {self._button_config}")
-
-        self.main_button.clicked.connect(self._ok_yes)
-
-        root.addWidget(button_row_w)
+                self.setStandardButtons(
+                    self.StandardButton(self._button_config)
+                )
+                self.button(self.StandardButton.Yes).clicked.connect(
+                    self._ok_yes
+                )
+                self.button(self.StandardButton.No).clicked.connect(self._no)
+                if not icon:
+                    self.setIcon(self.Icon.Question)
+            case _:
+                raise ValueError(f"Bad button type: {self._button_config!r}")
+        if type_ is not None:
+            if type_ not in WarningType:
+                log.warning("Unregistered warning type: %r", type_)
+            match self._button_config:
+                case ButtonConfig.OK:
+                    self._checkbox = QCheckBox(CHECKBOX_TEXT_OK)
+                case ButtonConfig.YES_NO:
+                    self._checkbox = QCheckBox(CHECKBOX_TEXT_YESNO)
+            self.setCheckBox(self._checkbox)
+            self._checkbox.setChecked(False)
 
     def _handle_dismissal(self):
-        if self.checkbox.isChecked() or self._show_once:
+        if self._checkbox.isChecked() or self._show_once:
             if not isinstance(self._warning_type, WarningType):
                 log.warning(
                     "Checkbox was checked without a warning type! Ignoring."
@@ -135,12 +123,14 @@ class WarningDialog(QDialog):
                 self._warning_type.value,  # type: ignore
             )
             if str(self._warning_type) in config.dialog_answers:
-                if config.dialog_answers[str(self._warning_type)] is True:
+                if (
+                    config.dialog_answers.get(str(self._warning_type), False)
+                    is True
+                ):
                     self.status = UserReturn.OK_YES
                 else:
                     self.status = UserReturn.NO
             return 0
-        self._build_ui()
         if config.allow_audio:
             QApplication.beep()
         return super().exec()
@@ -156,12 +146,14 @@ class WarningDialog(QDialog):
                 self._warning_type.value,  # type: ignore
             )
             if str(self._warning_type) in config.dialog_answers:
-                if config.dialog_answers[str(self._warning_type)]:
+                if (
+                    config.dialog_answers.get(str(self._warning_type), False)
+                    is True
+                ):
                     self.status = UserReturn.OK_YES
                 else:
                     self.status = UserReturn.NO
             return None
-        self._build_ui()
         return super().show()
 
     def accept(self) -> None:
@@ -202,7 +194,9 @@ class WarningDialog(QDialog):
             show_once=show_once,
         )
         dialog.exec()
-        match dialog.status:
+        s = dialog.status
+        dialog.deleteLater()
+        match s:
             case UserReturn.OK_YES:
                 return True
             case UserReturn.NO:
