@@ -1,6 +1,4 @@
 from collections.abc import Buffer
-from xml.etree import ElementTree
-from pathlib import Path
 import logging
 import os
 

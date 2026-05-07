@@ -13,20 +13,13 @@ from PySide6.QtCore import (
 from PySide6.QtWidgets import QApplication
 import requests
 
-from .constants import (
-    DEV,
-    USER_AGENT,
-    DEBUG_LOGGING,
-    OS,
-    AUTHOR_USR,
-    LAUNCHER_NAME,
-)
+from .constants import DEV, USER_AGENT, DEBUG_LOGGING, OS, APP_SLUG
 
 if not DEV:
     match OS:
         case "windows":
             ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(
-                f"{AUTHOR_USR}.{LAUNCHER_NAME}"
+                APP_SLUG
             )
 
 if DEBUG_LOGGING:

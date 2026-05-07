@@ -47,15 +47,6 @@ if not DEV:
     root_logger.addHandler(fh)
     del root_logger
 
-flags = [
-    *filter(
-        lambda i: getattr(constants, i) and i.startswith("FLAG_"),
-        dir(constants),
-    )
-]
-if flags:
-    log.debug("Flags: %s", ", ".join(flags))
-
 
 class App:
     """Controller"""

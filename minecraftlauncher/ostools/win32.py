@@ -9,7 +9,7 @@ import win32api
 from minecraftlauncher import config
 from minecraftlauncher.front import resources
 from minecraftlauncher.back import profile_manager
-from minecraftlauncher.constants import AUTHOR_USR, LAUNCHER_NAME
+from minecraftlauncher.constants import APP_SLUG
 
 log = logging.getLogger(__name__)
 
@@ -44,7 +44,7 @@ def set_jump_list():  # TODO: rename to build_jump_list()
         shell.IID_ICustomDestinationList,
     )
 
-    jump_list.SetAppID(f"{AUTHOR_USR}.{LAUNCHER_NAME}")  # type: ignore
+    jump_list.SetAppID(APP_SLUG)  # type: ignore
 
     max_items: int
     max_items, removed_array = jump_list.BeginList()  # type: ignore

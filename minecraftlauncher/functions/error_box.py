@@ -3,7 +3,7 @@ import sys
 
 from PySide6.QtWidgets import QApplication, QMessageBox
 
-from minecraftlauncher import DEV, config
+from minecraftlauncher import constants, config
 
 log = logging.getLogger(__name__)
 
@@ -26,7 +26,7 @@ def error_box(
     If `dev_only` is set to `True`, the message box will only be shown if the
     program is running under a python executable and not a frozen executable.
     """
-    if dev_only and not DEV:
+    if dev_only and not constants.DEV:
         log.debug("Not showing error box ('dev_only' is True)")
         return
     log.debug("Showing error dialog... (%s)", "FATAL" if fatal else "not fatal")

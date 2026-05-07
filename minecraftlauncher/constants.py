@@ -27,6 +27,7 @@ LAUNCHER_NAME = "minecraftlauncher-python"
 LAUNCHER_VERSION = "dev"
 AUTHOR_USR = "ryderX86"
 EMAIL = "ryder@r86.me"
+APP_SLUG = f"{AUTHOR_USR}.{LAUNCHER_NAME}"
 
 # Authentication URLs
 MOJANG_CLIENT_ID = "00000000402B5328"  # Official MC launcher client ID

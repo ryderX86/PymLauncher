@@ -63,10 +63,10 @@ PALETTE.setColor(QPalette.ColorRole.Accent, hex_to_qrgb(ACCENT))
 STYLESHEET = f"""
 /* Main */
 QWidget[surface="true"] {{
-    background-color: {BG_SURFACE};
+    background-color: palette(alternate-base);
 }}
 QWidget[border="true"] {{
-    border: 1px solid {BORDER};
+    border: 1px solid palette(border);
 }}
 
 :focus {{
@@ -75,7 +75,7 @@ QWidget[border="true"] {{
 
 /* Window */
 QMainWindow {{
-    background-color: {BG_DARKEST};
+    background-color: palette(mid);
 }}
 
 /* Labels */
