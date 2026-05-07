@@ -148,6 +148,9 @@ def _clear_profile_refresh_handlers():
     """
     Truthfully I have no idea whether or not using a `Signal`'s connect
     method as a decorator is good or bad practice but it works I guess?
+
+    OBVIOUSLY don't call this from anywhere else, ever. It'll be a
+    `SyntaxError` or something
     """
     global _profile_refresh_handlers
     _profile_refresh_handlers = []
