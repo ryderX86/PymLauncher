@@ -226,6 +226,10 @@ QLineEdit:focus, QTextEdit:focus, QPlainTextEdit:focus {{
     border-color: {BORDER_LIGHT};
     background-color: {BG_INPUT};
 }}
+QLineEdit:disabled {{
+    color: {TEXT_MUTED};
+    background-color: {BG_DARK};
+}}
 QLineEdit[invalid="true"] {{
     border-color: {DANGER_HOVER};
 }}
