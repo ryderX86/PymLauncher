@@ -140,7 +140,7 @@ def save():
             obj_out[key] = [*val]
         else:
             obj_out[key] = val
-    json_out = json.dumps(obj_out, indent=2)
+    json_out = json.dumps(obj_out, indent=4, sort_keys=True)
     if not os.path.isdir(LAUNCHER_DATA_DIR):
         _log.debug("Creating launcher data directory")
         os.makedirs(LAUNCHER_DATA_DIR, exist_ok=True)
