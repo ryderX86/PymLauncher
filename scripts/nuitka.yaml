@@ -46,3 +46,8 @@
       append_result:
         '"ENABLED = %s" % get_variable("enabled")'
       when: "not linux"
+- module-name: "minecraftlauncher.back.java_manager"
+  anti-bloat:
+    - description: "Remove executable mark function since it's useless here"
+      change_function:
+        "mark_executable": "return True"

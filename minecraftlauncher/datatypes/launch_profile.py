@@ -36,7 +36,7 @@ DEFAULT_ARGS = (
     "-XX:G1HeapRegionSize=32M"
 )
 
-DEFAULT_ARGS_LIST = [
+DEFAULT_ARGS_LIST = {
     "-XX:+UseCompactObjectHeaders "
     "-XX:+AlwaysPreTouch "
     "-XX:+UseStringDeduplication "
@@ -47,7 +47,7 @@ DEFAULT_ARGS_LIST = [
     "-XX:G1ReservePercent=20 "
     "-XX:MaxGCPauseMillis=50 "
     "-XX:G1HeapRegionSize=32M",
-]
+}
 
 
 @dataclass
@@ -121,9 +121,13 @@ class GameProfile:
     @property
     def has_custom_args(self):
         default_args = DEFAULT_ARGS_LIST
-        if self.version_id not in ("latest-release", "latest-snapshot"):
+        if self.version_id not in [
+            "latest-release",
+            "latest-snapshot",
+            *version_manager.manifest_cache.get("versions", []),
+        ]:
             v = version_manager.fetch_version_json(self.version_id)
-            default_args = [version_manager.default_user_jvm_args_factory(v)]
+            default_args = {version_manager.default_user_jvm_args_factory(v)}
         if self.jvm_args and self.jvm_args in default_args:
             return False
         elif not self.jvm_args:

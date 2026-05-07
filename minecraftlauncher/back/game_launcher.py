@@ -576,7 +576,9 @@ class LaunchWorker(QThread):
 
         self.status.emit("Checking for Java install...")
         profile_jre = self.profile_data.java_path
-        if profile_jre:
+        if profile_jre and not os.path.isfile(profile_jre):
+            log.warning("Bad java executable: %s", profile_jre)
+        if profile_jre and os.path.isfile(profile_jre):
             try:
                 subprocess.run(
                     [profile_jre.replace("javaw", "java"), "-version"],
@@ -601,7 +603,7 @@ class LaunchWorker(QThread):
                 )
                 return
             else:
-                java_exc = Path(profile_jre)
+                java_exc = profile_jre
         else:
             jre_name = version_json.get("javaVersion", {}).get("component", "")
             try:
@@ -739,7 +741,7 @@ class LaunchWorker(QThread):
             self.auth_info.player_type,
             self.auth_info.demo_mode,
             self.auth_info.xuid,
-            str(java_exc),
+            java_exc,
             log4j_config,
             classpath,
             self.profile_data.game_dir,
@@ -810,7 +812,7 @@ class LaunchWorker(QThread):
         stdout_cache.reverse()
         stdout = "\n".join(stdout_cache)
 
-        self.log.info("Game returned with code %d", self._p.returncode)
+        self.log.info("Game process returned with code %d", self._p.returncode)
         if self._p.returncode == 0:
             if config.redownload_option > 1:
                 config.redownload_option = 0

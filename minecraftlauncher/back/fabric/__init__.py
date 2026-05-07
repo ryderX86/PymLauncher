@@ -23,19 +23,21 @@ def _ensure_master(force_refresh: bool = False):
     if force_refresh or not _master_manifest:
         log.debug("Loading Fabric manifest...")
         if file_exists_or_age(LOADER_MANIFEST_PATH) and not force_refresh:
-            cached = LOADER_MANIFEST_PATH.read_text()
+            with open(LOADER_MANIFEST_PATH, "r") as f:
+                manifest_cache_text = f.read()
             try:
-                _master_manifest = json.loads(cached)
+                _manifest_cache = json.loads(manifest_cache_text)
             except json.JSONDecodeError:
                 log.warning(
                     "Failed to read fabric-manifest.json from disk, "
                     "downloading new..."
                 )
-                _master_manifest = {}
-                del cached
+                _manifest_cache = {}
+                del manifest_cache_text
             else:
+                _master_manifest = _manifest_cache
                 log.info("Using cached fabric-versions.json")
-                return
+                return True
         log.info("Downloading Fabric manifest...")
         response = download(FABRIC_MANIFEST_URL)
         _master_manifest = response.json()
@@ -44,8 +46,9 @@ def _ensure_master(force_refresh: bool = False):
         del _master_manifest["installer"]
         if not _master_manifest:
             raise RuntimeError("Couldn't get game versions manifest for Fabric")
-        LOADER_MANIFEST_PATH.write_text(response.text, "utf-8")
-    return
+        with open(LOADER_MANIFEST_PATH, "w") as f:
+            f.write(response.text)
+    return True
 
 
 def get_game_versions_list(force_refresh: bool = False):

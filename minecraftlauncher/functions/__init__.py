@@ -64,24 +64,28 @@ def copy_to_clipboard(item: str | int | QPixmap | QIcon | QImage):
 _detect_set_clipboard()
 
 
-def reswrite(path: str | Path, content: str | Buffer):
+def reswrite(path: str | os.PathLike, content: str | Buffer):
     if isinstance(content, str):
         content = content.encode("utf-8")
-    if isinstance(path, str):
-        path = Path(path)
-    if not path.parent.exists():
+    if not isinstance(path, str):
+        path = str(path)
+        if not is_path_valid(path):
+            raise ValueError(f"Invalid path: {path!r}")
+    if not os.path.isdir(os.path.dirname(path)):
         raise FileNotFoundError(
-            f"File '{path.name}' parent at '{path.parent}' doesn't exist"
+            f"File '{os.path.split(path)}' parent at "
+            f"'{os.path.dirname(path)}' doesn't exist"
         )
 
-    tmp = path.parent / ".".join([path.name, "tmp"])
+    tmp = os.path.join(os.path.dirname(path), f"{os.path.split(path)[-1]}.tmp")
     try:
-        tmp.write_bytes(content)
+        with open(tmp, "wb") as f:
+            f.write(content)
     except Exception as err:
         log.error(
             "Exception occured while writing to '%s':", path, exc_info=err
         )
-    if path.exists():
-        path.unlink()
-    tmp.rename(path)
+    if os.path.isfile(path):
+        os.unlink(path)
+    os.rename(tmp, path)
     return True

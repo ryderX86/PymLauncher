@@ -369,7 +369,8 @@ def load_launcher_profiles():
     global profiles, _current_profile
     profile_order = get_profile_sorting()
     if os.path.isfile(PROFILES_PATH):
-        lp_text = PROFILES_PATH.read_text()
+        with open(PROFILES_PATH, "r") as f:
+            lp_text = f.read()
         try:
             lp_json = json.loads(lp_text)
         except json.JSONDecodeError as err:

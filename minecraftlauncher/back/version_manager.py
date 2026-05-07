@@ -18,7 +18,6 @@ from minecraftlauncher.constants import (
     VERSION_MANIFEST_URL,
     MINECRAFT_DIR,
     DEFAULT_JVM_ARGS,
-    OS_PATH_DELIM as D,
 )
 from minecraftlauncher.datatypes.game_version import GameVersionStub
 from minecraftlauncher.config import redownload_option
@@ -297,8 +296,8 @@ def fetch_version_json(version_id: str) -> dict[str, Any]:
     a `ValueError`.
     """
     fetch_version_manifest()
-    ver_dir = f"{VERSION_DIR}{D}{version_id}"
-    local_path = f"{ver_dir}{D}{version_id}.json"
+    ver_dir = os.path.join(VERSION_DIR, version_id)
+    local_path = os.path.join(ver_dir, f"{version_id}.json")
 
     mf_entry = _get_manifest_entry(version_id)
 

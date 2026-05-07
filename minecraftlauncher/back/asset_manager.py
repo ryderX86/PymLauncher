@@ -16,7 +16,11 @@ import json
 import requests
 from PySide6.QtCore import QThreadPool
 
-from minecraftlauncher.constants import RESOURCES_URL, MINECRAFT_DIR
+from minecraftlauncher.constants import (
+    RESOURCES_URL,
+    MINECRAFT_DIR,
+    CPU_THREADS,
+)
 from minecraftlauncher.back.download_helpers import (
     download,
     RunnableDownloader,
@@ -337,7 +341,7 @@ def download_assets_threaded(
     # else:
     #     final_dl_list = BulkDownloadWorker.auto_split(download_list)
     pool.setExpiryTimeout(90)
-    pool.setMaxThreadCount(75)
+    pool.setMaxThreadCount(CPU_THREADS * 10)
     mgr = BulkDownloadManager(pool)
     for worker in download_list:
         mgr.add_runnable(worker)

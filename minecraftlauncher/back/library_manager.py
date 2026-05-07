@@ -71,14 +71,40 @@ def evaluate_rules(rules: list[dict]) -> bool:
                 match OS:
                     case "windows" | "linux":
                         ver = parse(OS_VER)
-                        min_ver: Version = parse(
-                            os_constraint["versionRange"].get("min", "0.0.0.0")
-                        )
-                        max_ver: Version = parse(
-                            os_constraint["versionRange"].get(
-                                "max", "999.9.9.9"
+                        try:
+                            min_ver: Version = parse(
+                                os_constraint["versionRange"].get(
+                                    "min", "0.0.0.0"
+                                )
                             )
-                        )
+                        except Exception as err:
+                            log.error(
+                                "Error parsing version '%s' to "
+                                "packaging.Version:",
+                                os_constraint["versionRange"].get(
+                                    "min", "0.0.0.0"
+                                ),
+                                exc_info=err,
+                            )
+                            log.info("Minimum version range set to 0.0.0.0")
+                            min_ver = parse("0.0.0.0")
+                        try:
+                            max_ver: Version = parse(
+                                os_constraint["versionRange"].get(
+                                    "max", "999.9.9.9"
+                                )
+                            )
+                        except Exception as err:
+                            log.error(
+                                "Error parsing version '%s' to "
+                                "packaging.Version:",
+                                os_constraint["versionRange"].get(
+                                    "max", "999.9.9.9"
+                                ),
+                                exc_info=err,
+                            )
+                            log.info("Maximum version range set to 999.9.9.9")
+                            max_ver = parse("999.9.9.9")
                         if "min" in os_constraint["versionRange"]:
                             mode = "min"
                         elif set(os_constraint["versionRange"].keys()) == {

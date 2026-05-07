@@ -1,14 +1,13 @@
 from datetime import datetime
-from pathlib import Path
-import json
 import logging
+import json
+import os
 
-from minecraftlauncher.constants import SKIN_CHANGE_URL, LAUNCHER_DATA_DIR
+from minecraftlauncher.constants import LAUNCHER_DATA_DIR
 from minecraftlauncher.auth import LauncherAccount
 from minecraftlauncher.auth.encryption import data_load_hook, data_save_hook
-from minecraftlauncher.functions.text import indent
 from minecraftlauncher.functions import reswrite
-from minecraftlauncher import DEV, session, offline_mode
+from minecraftlauncher import DEV, offline_mode
 
 log = logging.getLogger(__name__)
 
@@ -52,7 +51,7 @@ def save_accounts(
 
     reswrite(ACCOUNTS_FILE, payload)
 
-    log.info("Saved %s accounts to cache file.", len(accounts))
+    log.info("Saved %d accounts to cache file.", len(accounts))
     return None
 
 
@@ -78,17 +77,17 @@ def save_or_replace_account(
             found_account = True
             break
     if found_account:
-        if xuid == lp.xuid:
-            log.debug("Account '%s' replaced in cache", lp.gamertag)
+        if gtg == lp.gamertag:
+            log.debug("Account %r replaced in cache", lp.gamertag)
         else:
             log.debug(
-                "Account '%s' replaced in cache w/ new gtg: '%s'",
+                "Account %r replaced in cache w/ new gtg: %r",
                 gtg,
                 lp.gamertag,
             )
         accounts[index] = lp
     else:
-        log.debug("Adding account '%s' to accounts cache.", lp.gamertag)
+        log.debug("Adding account %r to accounts cache.", lp.gamertag)
         accounts.append(lp)
     save_accounts()
 
@@ -97,13 +96,14 @@ def load_accounts() -> tuple[list[LauncherAccount], str | None]:
     global accounts
     global active_account
 
-    if not ACCOUNTS_FILE.exists():
+    if not os.path.isfile(ACCOUNTS_FILE):
         return [], None
 
     if accounts and active_account:
         return accounts, active_account
 
-    payload_bytes = ACCOUNTS_FILE.read_bytes()
+    with open(ACCOUNTS_FILE, "rb") as b:
+        payload_bytes = b.read()
     if payload_bytes[0:1] == b"{":
         payload = payload_bytes.decode("utf-8")
     else:
@@ -130,6 +130,12 @@ def load_accounts() -> tuple[list[LauncherAccount], str | None]:
             if success:
                 refreshed_account = True
             else:
+                log.warning(
+                    "Failed to refresh account %r/%r:%s",
+                    acc.gamertag,
+                    acc.xuid,
+                    success,
+                )
                 active_account = None
         accounts.append(acc)
         if acc.xuid == active_account:
@@ -138,18 +144,16 @@ def load_accounts() -> tuple[list[LauncherAccount], str | None]:
         for account in accounts:
             active_account = account.xuid
             log.warning(
-                "No active account set in cache file, setting to '%s'.",
+                "No active account set in cache file, setting to %r.",
                 account.gamertag,
             )
-            if account.token_valid or account.msa_valid:
+            if account.token_valid:
                 break
-
-            # this *shouldn't* execute refresh() when offline?
-            if offline_mode or account.refresh():
-                refreshed_account = True  # lol
+            elif offline_mode or account.refresh():
+                refreshed_account = True
                 break
             log.warning(
-                "Couldn't refresh tokens for '%s', trying again",
+                "Couldn't refresh tokens for %r, trying again",
                 account.gamertag,
             )
             active_account = None
@@ -157,7 +161,9 @@ def load_accounts() -> tuple[list[LauncherAccount], str | None]:
     elif refreshed_account:
         save_accounts()
     log.info(
-        "Loaded %d account(s) from '%s'", len(accounts), ACCOUNTS_FILE.name
+        "Loaded %d account(s) from %r",
+        len(accounts),
+        os.path.split(ACCOUNTS_FILE)[-1],
     )
     return accounts, active_account
 
@@ -178,6 +184,10 @@ def remove_account(xuid: str) -> bool:
         save_accounts()
         return True
     else:
+        log.warning(
+            "Tried to remove an account that wasn't in the cache! (XUID: %r)",
+            xuid,
+        )
         return False
 
 
@@ -185,7 +195,7 @@ def set_active_account(xuid: str) -> bool:
     global active_account
 
     if xuid not in [acc.xuid for acc in accounts]:
-        raise ValueError("LauncherProfile '%s' not in cache!")
+        raise ValueError(f"LauncherProfile {xuid} not in cache!")
     active_account = xuid
     acc = fetch_account(xuid)
     assert acc
@@ -242,125 +252,3 @@ def _create_skin_cache_if_not_exists():
             return True
         else:
             return False
-
-
-def cache_skin(
-    uuid: str,
-    skin_data: bytes,
-    *,
-    skin_name: str = "",
-    variant: str = "classic",
-):
-    """
-    Save a skin image to cache
-
-    Returns the path
-    """
-    _create_skin_cache_if_not_exists()
-
-    # Create filepath
-    now = datetime.now()
-    timestamp = now.strftime("%Y%m%d_%H%M%S")
-    if not skin_name:
-        skin_name = "skin"
-    filepath = SKINS_CACHE_DIR / uuid / (f"{skin_name}_{timestamp}.png")
-
-    # Save PNG
-    if not filepath.exists():
-        filepath.touch()
-    filepath.write_bytes(skin_data)
-
-    # Save metadata
-    meta = json.loads(SKIN_METADATA_PATH.read_text("utf-8"))
-    # that should be fine since we verify we can load the JSON earlier on
-    # with _create_skin_cache_if_not_exists()
-    meta[filepath.name] = {
-        "name": skin_name,
-        "variant": variant,
-        "cached_at": int(now.timestamp()),
-        "account": uuid,
-    }
-    SKIN_METADATA_PATH.write_text(json.dumps(meta), "utf-8")
-
-    log.debug("Saved skin for %s with name '%s' to cache.", uuid, filepath.name)
-    return filepath
-
-
-def _load_cached_skin_meta_no_uuid():
-    """
-    USE `_create_skin_cache_if_not_exists()` FIRST
-    THIS WILL NOT CALL IT
-    """
-    meta: dict[str, dict[str, str | int]]
-    meta = json.loads(SKIN_METADATA_PATH.read_text("utf-8"))
-    return meta
-
-
-def load_cached_skin_metadata(uuid: str | None = None):
-    _create_skin_cache_if_not_exists()
-
-    if not uuid:
-        return _load_cached_skin_meta_no_uuid()
-
-    meta_all: dict[str, dict[str, str | int]]
-    meta_all = json.loads(SKIN_METADATA_PATH.read_text("utf-8"))
-    meta = {k: v for k, v in meta_all.items() if v.get("uuid", "") == uuid}
-    return meta
-
-
-def get_cached_skin_path(uuid: str, filename: str):
-    """Returns a `pathlib.Path()` object if the skin exists, else `None`"""
-    _create_skin_cache_if_not_exists()
-
-    filepath = SKINS_CACHE_DIR / uuid / filename
-    if (not filepath.exists()) and (not filepath.is_file()):
-        return None
-    else:
-        return filepath
-
-
-def set_skin(
-    access_token: str, skin_path: str | Path, variant: str = "classic"
-):
-    """
-    Upload and set the user's current skin via Mojang's API
-
-    `variant` should be either `"classic"` or `"slim"`, will default to
-    `"classic"` if not one of those two values.
-
-    Returns `True` on success, otherwise `False`.
-    """
-    _create_skin_cache_if_not_exists()
-
-    if isinstance(skin_path, str):
-        skin_path = Path(skin_path)
-    if (not skin_path.exists()) or (not skin_path.is_file()):
-        log.warning("Skin at given path '%s' doesn't exist!", str(skin_path))
-        return False
-
-    headers = {"Authorization": f"Bearer {access_token}"}
-
-    variant = variant.lower()
-    match variant:
-        case "classic" | "slim":
-            pass
-        case _:
-            log.warning(
-                "Skin variant type was set to invalid value '%s'!", variant
-            )
-            variant = "classic"
-
-    skin_bytes = skin_path.read_bytes()
-    files = {"variant": variant, "file": ("skin.png", skin_bytes, "image/png")}
-    resp = session.post(SKIN_CHANGE_URL, headers=headers, files=files)
-
-    if resp.status_code in (200, 204):
-        log.info("Successfully changed skin to '%s'", skin_path.name)
-        return True
-    else:
-        log.error(
-            "Skin upload failed!\n  HTTP status %d:\n%s",
-            resp.status_code,
-            indent(resp.text, 4),
-        )
-    return False

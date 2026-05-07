@@ -211,7 +211,7 @@ class RunnableDownloader(QObject, QRunnable):
 
     _url: str
     """File download URL"""
-    _path: str | Path
+    _path: str | os.PathLike
     """File final location"""
     _hash: str | None
     """File hash to check against"""
@@ -225,7 +225,7 @@ class RunnableDownloader(QObject, QRunnable):
     def __init__(
         self,
         url: str,
-        path: Path | str,
+        path: os.PathLike | str,
         sha1: str | None = None,
         override: bool = False,
         mkdir: bool = True,

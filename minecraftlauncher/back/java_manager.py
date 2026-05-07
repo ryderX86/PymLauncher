@@ -21,9 +21,10 @@ from minecraftlauncher.constants import (
     OS,
     ARCH,
     MOJANG_JAVA_BASE,
-    JAVA_PATH,  # type: ignore
+    JAVA_PATH,
     JAVA_MANIFEST_URL,
     JAVA_OS,
+    CPU_THREADS,
 )
 from minecraftlauncher.functions.text import indent
 from .download_helpers import download, RunnableDownloader, BulkDownloadManager
@@ -45,19 +46,20 @@ def get_jvm_manifest(force_update: bool = False) -> dict:
         log.info("Manual JRE manifest download triggered.")
     elif jvm_manifest:
         return jvm_manifest
-    elif JVM_MANIFEST_PATH.exists() and JVM_MANIFEST_PATH.is_file():
+    elif os.path.isfile(JVM_MANIFEST_PATH):
         log.debug("Checking cached jre_manifest.json...")
-        cache_age = JVM_MANIFEST_PATH.stat().st_mtime
+        cache_age = os.stat(JVM_MANIFEST_PATH).st_mtime
         max_age = (datetime.now() - timedelta(days=7)).timestamp()
         if max_age < cache_age:
-            mf_text = JVM_MANIFEST_PATH.read_text()
+            with open(JVM_MANIFEST_PATH, "r") as f:
+                mf_text = f.read()
             try:
                 mf = json.loads(mf_text)
             except json.JSONDecodeError as err:
                 log.error("Error reading 'jre_manifest.json':", exc_info=err)
                 log.info("Have to re-download 'jre_manifest.json'.")
-                JVM_MANIFEST_PATH.unlink()
-                log.debug("Deleted '%s'", str(JVM_MANIFEST_PATH))
+                os.unlink(JVM_MANIFEST_PATH)
+                log.debug("Deleted '%s'", JVM_MANIFEST_PATH)
             else:
                 log.info("Using cached jre_manifest.json")
                 jvm_manifest = mf
@@ -69,7 +71,8 @@ def get_jvm_manifest(force_update: bool = False) -> dict:
     resp = download(JAVA_MANIFEST_URL)
     mf_raw = resp.json()
     jvm_manifest = mf_raw
-    JVM_MANIFEST_PATH.write_text(resp.text)
+    with open(JVM_MANIFEST_PATH, "w") as f:
+        f.write(resp.text)
     log.info("Saved JRE manifest to disk.")
     return jvm_manifest
 
@@ -198,27 +201,27 @@ def java_base_path(name: str):
 
 
 def java_exc_path(name: str):
-    jre_path_default = JAVA_PATH / name
-    jre_path_mojang = MOJANG_JAVA_BASE / name
+    jre_path_default = os.path.join(JAVA_PATH, name)
+    jre_path_mojang = os.path.join(MOJANG_JAVA_BASE, name)
 
     match OS:  # TODO: cross-platform
         case "windows":
-            exec_path_def = jre_path_default / "bin" / "javaw.exe"
-            exec_path_moj = (
-                jre_path_mojang / JAVA_OS / name / "bin" / "javaw.exe"
+            exec_path_def = os.path.join(jre_path_default, "bin", "javaw.exe")
+            exec_path_moj = os.path.join(
+                jre_path_mojang, JAVA_OS, name, "bin", "javaw.exe"
             )
         case "osx":
-            exec_path_def = (
-                jre_path_default
-                / "jre.bundle"
-                / "Contents"
-                / "Home"
-                / "bin"
-                / "java"
+            exec_path_def = os.path.join(
+                jre_path_default,
+                "jre.bundle",
+                "Contents",
+                "Home",
+                "bin",
+                "java",
             )
             exec_path_moj = exec_path_def
         case _:
-            exec_path_def = jre_path_default / "bin" / "java"
+            exec_path_def = os.path.join(jre_path_default, "bin", "java")
             exec_path_moj = exec_path_def
 
     return exec_path_def, exec_path_moj
@@ -234,9 +237,9 @@ def find_java_exc(name: str):
     """
     exec_path_def, exec_path_moj = java_exc_path(name)
 
-    if exec_path_def.exists() and exec_path_def.is_file():
+    if os.path.isfile(exec_path_def):
         return exec_path_def
-    elif exec_path_moj.exists() and exec_path_moj.is_file():
+    elif os.path.isfile(exec_path_moj):
         return exec_path_moj
     raise RuntimeError("No working java executable found")
 
@@ -268,14 +271,15 @@ def install_java_version(
         valid = True
         completed = 0
         for subpath in dirs:
-            dir_ = Path(jre_path_mojang, *subpath.split("/"))
-            if not (dir_.exists() and dir_.is_dir()):
+            dir_ = os.path.join(jre_path_mojang, *subpath.split("/"))
+            if not os.path.isdir(dir_):
                 valid = False
                 break
         for subpath, finfo in files.items():
-            path = Path(jre_path_mojang * subpath.split("/"))
-            if path.exists() and path.is_file():
-                f_sha1 = hashlib.sha1(path.read_bytes()).hexdigest()
+            path = os.path.join(jre_path_mojang, *subpath.split("/"))
+            if os.path.isfile(path):
+                with open(path, "rb") as b:
+                    f_sha1 = hashlib.sha1(b.read()).hexdigest()
                 e_sha1 = finfo["downloads"]["raw"].get("sha1")
                 if e_sha1 and f_sha1 != e_sha1:
                     valid = False
@@ -290,9 +294,11 @@ def install_java_version(
             log.info("Found vanilla Java install that matches.")
             if "MinecraftJava.exe" in files.keys():
                 # this might be horrible but idk yet, YOLO
-                final_path = jre_path_mojang / name / "MinecraftJava.exe"
+                final_path = os.path.join(
+                    jre_path_mojang, name, "MinecraftJava.exe"
+                )
             else:
-                final_path = Path(jre_path_mojang, *exc_path)
+                final_path = os.path.join(jre_path_mojang, *exc_path)
             log.info("JRE executable path: '%s'", str(final_path))
             return final_path
         else:
@@ -361,9 +367,9 @@ def install_java_version(
     log.info("Download complete, %d/%d new files.", downloaded, total_size)
 
     if "MinecraftJava.exe" in files.keys():
-        return jre_path_default / "MinecraftJava.exe"
+        return os.path.join(jre_path_default, "MinecraftJava.exe")
     else:
-        return Path(jre_path_default, *exc_path)
+        return os.path.join(jre_path_default, *exc_path)
 
 
 def install_java_version_threaded(
@@ -386,8 +392,7 @@ def install_java_version_threaded(
     if progress_callback:
         progress_callback(0, total_size)
 
-    jre_path_default = JAVA_PATH / name
-    jre_path_mojang = MOJANG_JAVA_BASE / name
+    jre_path_default = os.path.join(JAVA_PATH, name)
 
     match OS:
         case "windows":
@@ -397,47 +402,7 @@ def install_java_version_threaded(
         case _:
             exc_path = ["bin", "java"]
 
-    if jre_path_mojang.exists():
-        # Check mojang launcher's java install
-        log.debug("Found Mojang launcher's Java installation, checking it...")
-        valid = True
-        completed = 0
-        for subpath in dirs:
-            dir_ = Path(jre_path_mojang, *subpath.split("/"))
-            if not (dir_.exists() and dir_.is_dir()):
-                valid = False
-                break
-        for subpath, finfo in files.items():
-            path = Path(jre_path_mojang * subpath.split("/"))
-            if path.exists() and path.is_file():
-                f_sha1 = hashlib.sha1(path.read_bytes()).hexdigest()
-                sha1 = finfo["downloads"]["raw"].get("sha1")
-                if sha1 and f_sha1 != sha1:
-                    log.debug("File failed SHA1 check: %s", str(path))
-                    valid = False
-                    break
-            else:
-                log.debug("File failed existance check: %s", str(path))
-                valid = False
-                break
-            completed += 1
-            if progress_callback:
-                progress_callback(completed, total_size)
-        if valid:
-            log.info("Found Mojang launcher's Java install that matches.")
-            if "MinecraftJava.exe" in files.keys():
-                # this might be horrible but idk yet, YOLO
-                final_path = jre_path_mojang / name / "MinecraftJava.exe"
-            else:
-                final_path = Path(jre_path_mojang, *exc_path)
-            log.info("JRE executable path: '%s'", str(final_path))
-            return final_path
-        else:
-            log.info("Didn't find matching vanilla Java install.")
-            if progress_callback:
-                progress_callback(0, total_size)
-
-    jre_path_default.mkdir(exist_ok=True, parents=True)
+    os.makedirs(jre_path_default, exist_ok=True)
     completed = 0
     downloaded = 0
 
@@ -450,10 +415,10 @@ def install_java_version_threaded(
     download_workers: list[RunnableDownloader] = []
 
     for subpath in dirs:
-        dir_ = jre_path_default / subpath
-        dir_.mkdir(parents=True, exist_ok=True)
+        dir_ = os.path.join(jre_path_default, subpath)
+        os.makedirs(dir_, exist_ok=True)
     for subpath, finfo in files.items():
-        path = Path(jre_path_default, *subpath.split("/"))
+        path = os.path.join(jre_path_default, *subpath.split("/"))
         sha1 = finfo["downloads"]["raw"].get("sha1")  # expected sha1
 
         # prioritize lower internet reliance first, then fallback to raw file
@@ -475,24 +440,14 @@ def install_java_version_threaded(
             )
         )
 
-    # if progress_callback:
-    #     progress_callback(completed, total_size)
-    #     dl_list = BulkDownloadWorker.auto_split(
-    #         download_workers,
-    #         lambda i: file_downloaded(i),
-    #         lambda: progress_callback(completed, total_size)
-    #     )
-    # else:
-    #     dl_list = BulkDownloadWorker.auto_split(download_workers)
-
-    pool.setMaxThreadCount(75)
+    pool.setMaxThreadCount(CPU_THREADS * 10)
     pool.setExpiryTimeout(90)
     mgr = BulkDownloadManager(pool)
     for dl in download_workers:
         mgr.add_runnable(dl)
         pool.start(dl)
-    timeout = not pool.waitForDone(900)
-    if timeout:
+    timed_out = not pool.waitForDone(900)
+    if timed_out:
         raise RuntimeError("Downloads completely timed out")
     elif mgr.check_for_failures():
         raise mgr.exceptions[0]
@@ -500,9 +455,9 @@ def install_java_version_threaded(
     log.info("Download complete, %d/%d new files.", downloaded, total_size)
 
     if "MinecraftJava.exe" in files.keys():
-        return jre_path_default / "MinecraftJava.exe"
+        return os.path.join(jre_path_default, "MinecraftJava.exe")
     else:
-        return Path(jre_path_default, *exc_path)
+        return os.path.join(jre_path_default, *exc_path)
 
 
 def mark_executable(exe_path: str | Path) -> bool:
