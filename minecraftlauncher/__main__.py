@@ -3,6 +3,7 @@ from time import sleep
 import logging
 import atexit
 import sys
+import os
 
 from PySide6.QtCore import QFile
 from PySide6.QtGui import QIcon
@@ -28,17 +29,16 @@ log = logging.getLogger("minecraftlauncher")
 
 clean_exit = False
 
-log_dir = constants.LAUNCHER_DATA_DIR / "logs"
-log_file = log_dir / "latest.log"
-if not log_dir.exists():
-    log_dir.mkdir()
-
 if not DEV:
+    log_dir = os.path.join(constants.LAUNCHER_DATA_DIR, "logs")
+    log_file = os.path.join(log_dir, "latest.log")
+    if not os.path.isdir(log_dir):
+        os.makedirs(log_dir, exist_ok=True)
     log.info("Running frozen, we're compiled")
     fh = RotatingFileHandler(log_file, backupCount=4)
     fh.setLevel(logging.DEBUG)
     fh.setFormatter(FORMATTER)
-    if log_file.exists() and log_file.is_file():
+    if os.path.isfile(log_file):
         fh.doRollover()
     MEMORY_HANDLER.setTarget(fh)
     MEMORY_HANDLER.flush()

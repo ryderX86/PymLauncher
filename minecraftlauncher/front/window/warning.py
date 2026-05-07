@@ -112,7 +112,7 @@ class WarningDialog(QDialog):
                 "User ignored warning type '%s'",
                 WarningType(self._warning_type).name,
             )
-            config.ignored_messages.append(self._warning_type)
+            config.ignored_messages.add(self._warning_type)
             if self._button_config == ButtonConfig.YES_NO:
                 match self.status:
                     case UserReturn.OK_YES:

@@ -5,6 +5,7 @@ minecraftlauncher.__init__ instead of having this mess.
 
 from typing import Any
 from enum import IntEnum
+import os
 import json
 import logging
 
@@ -13,7 +14,6 @@ from .constants import (
     LAUNCHER_CONFIG_FILE,
 )
 from .functions import reswrite, error_box
-from . import DEV
 
 _log = logging.getLogger(__name__)
 
@@ -57,7 +57,7 @@ post_launch_option: PostLaunchBehavior = PostLaunchBehavior.HIDE
 redownload_option: JarRedownloadBehavior = JarRedownloadBehavior.REDOWNLOAD
 maximized: bool = False
 tooltip_icons_enabled: bool = True
-ignored_messages: list[int] = []
+ignored_messages: set[int] = set()
 jump_list_items: list[str] = []  # profiles
 dialog_answers: dict[str, bool] = {}
 show_animation_on_skin_dialog: bool = False
@@ -119,12 +119,13 @@ def load(config: dict | None = None):
             _log.warning("Ignoring unknown key in config.json: '%s'", key)
             continue
         default = globals()[key]
-        if not isinstance(default, type(val)):
+        if isinstance(default, set) and isinstance(val, list):
+            globals()[key] = set(val)
+        elif not isinstance(default, type(val)):
             _log.warning("Value in '%s' has conflicting type, ignoring", key)
             continue
-        if DEV and val != default:
-            _log.debug("%s def: %s, new: %s", key, default, val)
-        globals()[key] = val
+        else:
+            globals()[key] = val
 
 
 def save():
@@ -135,10 +136,14 @@ def save():
             continue
         elif isinstance(val, (list, dict)) and not val:
             continue  # skip bloat
-        obj_out[key] = val
+        elif isinstance(val, set):
+            obj_out[key] = [*val]
+        else:
+            obj_out[key] = val
     json_out = json.dumps(obj_out, indent=2)
-    if not LAUNCHER_DATA_DIR.exists():
-        LAUNCHER_DATA_DIR.mkdir(parents=True, exist_ok=True)
+    if not os.path.isdir(LAUNCHER_DATA_DIR):
+        _log.debug("Creating launcher data directory")
+        os.makedirs(LAUNCHER_DATA_DIR, exist_ok=True)
     reswrite(LAUNCHER_CONFIG_FILE, json_out)
     _log.info("Saved config.json.")
 

@@ -6,6 +6,7 @@ import logging
 import hashlib
 import uuid
 import time
+import os
 
 from PySide6.QtGui import QImage, QIcon, QPixmap
 import requests
@@ -65,16 +66,18 @@ def check_redownload_skin(
     if not sha:
         sha = url.split("/")[-1]
     name = name or "".join([sha[:10], "..."])
-    if p.exists():
-        file_sha = hashlib.sha256(p.read_bytes()).hexdigest()
+    if os.path.isfile(p):
+        with open(p, "rb") as b:
+            file_sha = hashlib.sha256(b.read()).hexdigest()
         if file_sha == sha:
             return
         else:
-            log.warning("Cached texture '%s' has mismatched SHA", name)
+            log.warning("Cached texture %r has mismatched SHA", name)
     if name:
-        log.debug("Downloading player texture for '%s'", name)
+        log.debug("Downloading player texture for %r", name)
     resp = try_request(url)
-    p.write_bytes(resp.content)
+    with open(p, "wb") as b:
+        b.write(resp.content)
     return
 
 

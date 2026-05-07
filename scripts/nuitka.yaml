@@ -50,4 +50,4 @@
   anti-bloat:
     - description: "Remove executable mark function since it's useless here"
       change_function:
-        "mark_executable": "return True"
+        "mark_executable": "'(lambda: True)'"
