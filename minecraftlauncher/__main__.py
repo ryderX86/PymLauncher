@@ -35,7 +35,7 @@ if not DEV:
     if not os.path.isdir(log_dir):
         os.makedirs(log_dir, exist_ok=True)
     log.info("Running frozen, we're compiled")
-    fh = RotatingFileHandler(log_file, backupCount=4)
+    fh = RotatingFileHandler(log_file, backupCount=4, maxBytes=1000**3)
     fh.setLevel(logging.DEBUG)
     fh.setFormatter(FORMATTER)
     if os.path.isfile(log_file):
