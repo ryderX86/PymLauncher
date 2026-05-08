@@ -44,6 +44,8 @@ match platform.system():
 
 
 def is_path_valid(fp: str):
+    if platform.system() == "Windows":
+        fp = fp.replace("/", "\\")
     m = re.match(FP_REGEX, fp)
     if not m:
         return False
