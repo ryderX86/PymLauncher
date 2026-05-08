@@ -8,10 +8,10 @@ for a given Minecraft version.
 from datetime import datetime, timedelta
 from collections.abc import Callable
 from xml.etree import ElementTree
-from pathlib import Path
 import logging
 import hashlib
 import json
+import os
 
 import requests
 from PySide6.QtCore import QThreadPool
@@ -30,14 +30,19 @@ from minecraftlauncher import session
 
 log = logging.getLogger(__name__)
 
-ASSETS_DIR = MINECRAFT_DIR / "assets"
-ASSETS_INDEX_DIR = ASSETS_DIR / "indexes"
-VIRTUAL_BASE = ASSETS_DIR / "virtual" / "legacy"
+ASSETS_DIR = os.path.join(MINECRAFT_DIR, "assets")
+ASSETS_INDEX_DIR = os.path.join(ASSETS_DIR, "indexes")
+VIRTUAL_BASE = os.path.join(ASSETS_DIR, "virtual", "legacy")
+OBJECTS_DIR = os.path.join(ASSETS_DIR, "objects")
 
-if (not ASSETS_DIR.exists()) or (not ASSETS_DIR.is_dir()):
-    ASSETS_DIR.mkdir(parents=True)
-if (not ASSETS_INDEX_DIR.exists()) or (not ASSETS_INDEX_DIR.is_dir()):
-    ASSETS_INDEX_DIR.mkdir(parents=True)
+if not os.path.isdir(ASSETS_DIR):
+    os.makedirs(ASSETS_DIR, exist_ok=True)
+if not os.path.isdir(ASSETS_INDEX_DIR):
+    os.makedirs(ASSETS_INDEX_DIR, exist_ok=True)
+if not os.path.isdir(VIRTUAL_BASE):
+    os.makedirs(VIRTUAL_BASE, exist_ok=True)
+if not os.path.isdir(OBJECTS_DIR):
+    os.makedirs(OBJECTS_DIR, exist_ok=True)
 
 
 def fetch_asset_index(version_json: dict) -> dict:
@@ -55,37 +60,57 @@ def fetch_asset_index(version_json: dict) -> dict:
     index_url = asset_index_info["url"]
     expected_sha1 = asset_index_info.get("sha1")
 
-    index_path = ASSETS_INDEX_DIR / f"{index_id}.json"
+    index_path = os.path.join(ASSETS_INDEX_DIR, f"{index_id}.json")
 
-    if index_path.exists() and index_path.is_file():
+    if os.path.isfile(index_path):
         if isinstance(expected_sha1, str):
             # using SHA1 to verify file
-            file_sha = hashlib.sha1(index_path.read_bytes()).hexdigest()
+            with open(index_path, "rb") as fb:
+                file_sha = hashlib.sha1(fb.read()).hexdigest()
             if file_sha == expected_sha1:
                 log.debug("Using cached asset index '%s'", str(index_id))
-                return json.loads(index_path.read_text())
+                with open(index_path, "r") as f:
+                    try:
+                        return json.loads(f.read())
+                    except json.JSONDecodeError as err:
+                        log.error(
+                            "Failed reading invalid JSON at %r:",
+                            index_path,
+                            exc_info=err,
+                        )
         else:
             # using file timestamp to verify
-            file_time = index_path.stat().st_mtime
+            file_time = os.stat(index_path).st_mtime
             compare_time = (datetime.now() - timedelta(days=1)).timestamp()
             if compare_time < file_time:
                 log.debug(
                     "Using cached asset index '%s' (time-based)", str(index_id)
                 )
-                return json.loads(index_path.read_text())
+                with open(index_path, "r") as f:
+                    txt = f.read()
+                try:
+                    return json.loads(txt)
+                except json.JSONDecodeError as err:
+                    log.error(
+                        "Failed reading invalid JSON at %r:",
+                        index_path,
+                        exc_info=err,
+                    )
 
     # download the index and return it
     log.info("Downloading asset index '%s' from '%s'", str(index_id), index_url)
     resp = session.get(index_url, timeout=30)
     resp.raise_for_status()
 
-    index_path.touch()
-    index_path.write_text(resp.text)
+    with open(index_path, "w") as f:
+        f.write(resp.text)
 
     return resp.json()
 
 
-def patch_logging_config(path: Path):
+def patch_logging_config(path: str | os.PathLike):
+    if not isinstance(path, str):
+        path = str(path)
     PATTERN = r"[%d{HH:mm:ss}] [%t/%level]: %msg{nolookups}%n"
     with open(path, "r") as f:
         txt = f.read()
@@ -98,9 +123,11 @@ def patch_logging_config(path: Path):
         c.set("pattern", PATTERN)
         patched = True
     if patched:
-        log.debug("Patched '%s' with non-XML config", path.name)
-        new_path = path.parent / ("".join([path.stem, "_patched", path.suffix]))
-        new_path.write_bytes(ElementTree.tostring(xml))
+        log.debug("Patched '%r' with non-XML config", os.path.split(path)[1])
+        stem, suffix = os.path.splitext(path)
+        new_path = f"{stem}_patched{suffix}"
+        with open(new_path, "wb") as fb:
+            fb.write(ElementTree.tostring(xml))
         return new_path
     else:
         log.warning("Couldn't patch logging config")
@@ -129,32 +156,33 @@ def check_or_download_logging_config(version_json: dict) -> str:
     sha1: str = file_info.get("sha1", "")
     url: str = file_info["url"]
 
-    dest_folder = ASSETS_DIR / "log_configs"
-    if not (dest_folder.exists() and dest_folder.is_dir()):
-        dest_folder.mkdir(parents=True, exist_ok=True)
+    dest_folder = os.path.join(ASSETS_DIR, "log_configs")
+    if not os.path.isdir(dest_folder):
+        os.makedirs(dest_folder, exist_ok=True)
 
-    dest_path = dest_folder / name
-    dest_path_patched = dest_path.parent / "".join(
-        [dest_path.stem, "_patched", dest_path.suffix]
-    )
+    dest_path = os.path.join(dest_folder, name)
+    stem, suffix = os.path.splitext(dest_path)
+    dest_path_patched = f"{stem}_patched{suffix}"
 
-    if dest_path.exists() and dest_path.is_file():
-        f_sha1 = hashlib.sha1(dest_path.read_bytes()).hexdigest()
+    if os.path.isfile(dest_path):
+        with open(dest_path, "rb") as fb:
+            f_sha1 = hashlib.sha1(fb.read()).hexdigest()
         if f_sha1 != sha1:
-            dest_path.unlink()
-    if not dest_path.exists():
+            os.unlink(dest_path)
+    if not os.path.isfile(dest_path):
         try:
             resp = download(url, sha=sha1)
-            dest_path.write_bytes(resp.content)
+            with open(dest_path, "wb") as fb:
+                fb.write(resp.content)
         except Exception as err:
             log.error("Failed to download logging config:", exc_info=err)
             raise
 
-    if not dest_path_patched.exists():
+    if not os.path.isfile(dest_path_patched):
         path = patch_logging_config(dest_path)
-        return arg.replace("${path}", str(path))
+        return arg.replace("${path}", path)
     else:
-        return arg.replace("${path}", str(dest_path_patched))
+        return arg.replace("${path}", dest_path_patched)
 
 
 def filter_assets_downloads(
@@ -174,9 +202,6 @@ def filter_assets_downloads(
     if map_virtual_assets:
         total *= 2
 
-    objects_dir = ASSETS_DIR / "objects"
-    objects_dir.mkdir(parents=True, exist_ok=True)
-
     if progress_callback:
         progress_callback(0, total)
 
@@ -184,13 +209,13 @@ def filter_assets_downloads(
     for virtual_path, info in objects.items():
         file_hash = info["hash"]
         prefix = file_hash[:2]
-        dest_dir = objects_dir / prefix
-        dest_path = dest_dir / file_hash
+        dest_dir = os.path.join(OBJECTS_DIR, prefix)
+        dest_path = os.path.join(dest_dir, file_hash)
 
-        dest_path_v = VIRTUAL_BASE / virtual_path
-        if dest_path.exists() and dest_path.is_file():
-            file_bytes = dest_path.read_bytes()
-            file_sha1 = hashlib.sha1(file_bytes).hexdigest()
+        dest_path_v = os.path.join(VIRTUAL_BASE, virtual_path)
+        if os.path.isfile(dest_path):
+            with open(dest_path, "rb") as fb:
+                file_sha1 = hashlib.sha1(fb.read()).hexdigest()
             if file_sha1 != file_hash:
                 asset_index_out["objects"][virtual_path] = info
         else:
@@ -200,9 +225,9 @@ def filter_assets_downloads(
             progress_callback(processed, total)
 
         if map_virtual_assets:
-            if dest_path_v.exists() and dest_path_v.is_file():
-                file_bytes = dest_path_v.read_bytes()
-                file_sha1 = hashlib.sha1(file_bytes).hexdigest()
+            if os.path.isfile(dest_path_v):
+                with open(dest_path_v, "rb") as fb:
+                    file_sha1 = hashlib.sha1(fb.read()).hexdigest()
                 if file_sha1 != file_hash:
                     if virtual_path not in asset_index_out["objects"]:
                         asset_index_out["objects"][virtual_path] = info
@@ -222,10 +247,6 @@ def download_assets(
     objects: dict = asset_index.get("objects", {})
     total = len(objects.keys())
 
-    objects_dir = ASSETS_DIR / "objects"
-    if (not objects_dir.exists()) or (not objects_dir.is_dir()):
-        objects_dir.mkdir(parents=True)
-
     downloaded_count = 0
     processed = 0
 
@@ -233,12 +254,14 @@ def download_assets(
         file_hash: str = info["hash"]
         prefix = file_hash[:2]
 
-        dest_dir = objects_dir / "prefix"
-        dest_dir.mkdir(parents=True, exist_ok=True)
-        dest_path = dest_dir / file_hash
+        dest_dir = os.path.join(OBJECTS_DIR, "prefix")
+        if not os.path.isdir(dest_dir):
+            os.makedirs(dest_dir, exist_ok=True)
+        dest_path = os.path.join(dest_dir, file_hash)
 
-        if dest_path.exists() and dest_path.is_file():
-            existing_hash = hashlib.sha1(dest_path.read_bytes()).hexdigest()
+        if os.path.isfile(dest_path):
+            with open(dest_path, "rb") as fb:
+                existing_hash = hashlib.sha1(fb.read()).hexdigest()
             if existing_hash == file_hash:
                 processed += 1
                 if progress_callback:
@@ -261,7 +284,8 @@ def download_assets(
                 progress_callback(processed, total)
             continue
 
-        dest_path.write_bytes(resp.content)
+        with open(dest_path, "wb") as fb:
+            fb.write(resp.content)
         log.debug("Downloaded '%s' successfully.", virtual_path)
         processed += 1
         downloaded_count += 1
@@ -289,9 +313,6 @@ def download_assets_threaded(
     objects: dict = asset_index.get("objects", {})
     total = len(objects.keys())
 
-    objects_dir = ASSETS_DIR / "objects"
-    objects_dir.mkdir(parents=True, exist_ok=True)
-
     if progress_callback:
 
         def add_number(i: int):
@@ -313,8 +334,8 @@ def download_assets_threaded(
     for virtual_path, info in objects.items():
         file_hash = info["hash"]
         prefix = file_hash[:2]
-        dest_dir = objects_dir / prefix
-        dest_path = dest_dir / file_hash
+        dest_dir = os.path.join(OBJECTS_DIR, prefix)
+        dest_path = os.path.join(dest_dir, file_hash)
         downloader = RunnableDownloader(
             f"{RESOURCES_URL}/{prefix}/{file_hash}",
             dest_path,
@@ -324,7 +345,7 @@ def download_assets_threaded(
         if map_virtual_assets:
             v_downloader = RunnableDownloader(
                 f"{RESOURCES_URL}/{prefix}/{file_hash}",
-                VIRTUAL_BASE / virtual_path,
+                os.path.join(VIRTUAL_BASE, virtual_path),
                 file_hash,
                 callback=add_number,
             )

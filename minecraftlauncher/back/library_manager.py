@@ -6,13 +6,14 @@ JARs, and building the classpath string.
 """
 
 from collections.abc import Callable
-from pathlib import Path
 import logging
 import zipfile
+import os
 
 from PySide6.QtCore import QThreadPool
 from packaging.version import Version, parse
 
+from minecraftlauncher.functions import is_path_valid
 from minecraftlauncher.constants import (
     MINECRAFT_DIR,
     OS,
@@ -32,7 +33,7 @@ from .download_helpers import (
 
 log = logging.getLogger(__name__)
 
-LIBRARIES_BASE = MINECRAFT_DIR / "libraries"
+LIBRARIES_BASE = os.path.join(MINECRAFT_DIR, "libraries")
 
 # Rule evaluation stuff
 
@@ -149,27 +150,31 @@ def filter_libraries(version_json: dict) -> list[dict]:
 
 def _download_file(
     url: str,
-    dest: str | Path,
+    dest: str | os.PathLike,
     expected_sha1: str | None = None,
     expected_size: int = 0,
 ):
     """Download a file with sha1 verification (if present)"""
+    if not isinstance(dest, str):
+        dest = str(dest)
+    if not is_path_valid(dest):
+        raise ValueError(f"Bad file path: {dest!r}")
     if not expected_sha1:
         expected_sha1 = None
-    if isinstance(dest, str):
-        dest = Path(dest)
-    if dest.exists() and dest.is_file() and expected_sha1:
+    if os.path.isfile(dest) and expected_sha1:
         if _check_file_sha1(dest, expected_sha1):
             return False
     if should_download_file(dest, sha=expected_sha1, size=expected_size):
-        dest.parent.mkdir(parents=True, exist_ok=True)
+        parent = os.path.split(dest)[0]
+        if not os.path.isdir(parent):
+            os.makedirs(parent, exist_ok=True)
         try:
             resp = download(url, sha=expected_sha1)
         except:
             return False
 
-        dest.touch()
-        dest.write_bytes(resp.content)
+        with open(dest, "wb") as fb:
+            fb.write(resp.content)
         return True
     return False
 
@@ -220,9 +225,9 @@ def _get_lib_filepath(
             del sha1_url
 
     folders = pkg.split(".")
-    folderpath = Path(LIBRARIES_BASE, *folders, libname, ver)
-    file_target = folderpath / f"{libname}-{ver}.jar"
-    return str(file_target), url, sha1
+    folderpath = os.path.join(LIBRARIES_BASE, *folders, libname, ver)
+    file_target = os.path.join(folderpath, f"{libname}-{ver}.jar")
+    return file_target, url, sha1
 
 
 def parse_lib_path(url: str, name: str) -> tuple[str, str]:
@@ -295,7 +300,7 @@ def download_libraries(
             del path_, url_, sha1_
 
         if url and path:
-            destination = Path(LIBRARIES_BASE, *path.split("/"))
+            destination = os.path.join(LIBRARIES_BASE, *path.split("/"))
             if _download_file(url, destination, sha1, size):
                 downloaded += 1
                 log.info(
@@ -387,8 +392,8 @@ def download_libraries_threaded(
             del path_, url_, sha1_
 
         if url and path:
-            destination = Path(LIBRARIES_BASE, *path.split("/"))
-            if destination.exists() and destination.is_file():
+            destination = os.path.join(LIBRARIES_BASE, *path.split("/"))
+            if os.path.isfile(destination):
                 if not redownload_option:
                     log.info(
                         "Skipping download of library at '%s' "
@@ -464,14 +469,14 @@ def download_natives(libraries: list[dict]):
         size: int = native_info.get("size", 0)
 
         if url and path:
-            destination = Path(LIBRARIES_BASE, *path.split("/"))
+            destination = os.path.join(LIBRARIES_BASE, *path.split("/"))
             if _download_file(url, destination, sha1, size):
                 downloaded += 1
 
     return downloaded
 
 
-def extract_natives(libraries: list[dict], natives_dir: str | Path):
+def extract_natives(libraries: list[dict], natives_dir: str | os.PathLike):
     """
     Extract native libraries into the provided natives directory.
 
@@ -479,9 +484,12 @@ def extract_natives(libraries: list[dict], natives_dir: str | Path):
 
     Returns the natives directory.
     """
-    if isinstance(natives_dir, str):
-        natives_dir = Path(natives_dir)
-    natives_dir.mkdir(parents=True, exist_ok=True)
+    if not isinstance(natives_dir, str):
+        natives_dir = str(natives_dir)
+    if not is_path_valid(natives_dir):
+        raise ValueError(f"Bad directory path: {natives_dir!r}")
+    if not os.path.isdir(natives_dir):
+        os.makedirs(natives_dir, exist_ok=True)
 
     for lib in libraries:
         classifier = _get_natives_classifier(lib)
@@ -497,8 +505,8 @@ def extract_natives(libraries: list[dict], natives_dir: str | Path):
         if not path:
             continue
 
-        jar_path = Path(LIBRARIES_BASE, *path.split("/"))
-        if (not jar_path.exists()) or (not jar_path.is_file()):
+        jar_path = os.path.join(LIBRARIES_BASE, *path.split("/"))
+        if not os.path.isfile(jar_path):
             log.warning("Couldn't find native at '%s'", jar_path)
             continue
 
@@ -522,27 +530,30 @@ def extract_natives(libraries: list[dict], natives_dir: str | Path):
     return natives_dir
 
 
-def build_classpath(libraries: list[dict], client_jar_path: str | Path):
+def build_classpath(libraries: list[dict], client_jar_path: str | os.PathLike):
     """
     Returns the entire JVM classpath string from the libraries and client JAR.
     """
     entries: list[str] = []
-    if isinstance(client_jar_path, Path):
+    if not isinstance(client_jar_path, str):
         client_jar_path = str(client_jar_path)
+    if not is_path_valid(client_jar_path):
+        raise ValueError(f"Bad file path: {client_jar_path!r}")
 
     for lib in libraries:
         artifact: dict = lib.get("downloads", {}).get("artifact")
         if artifact and artifact.get("path"):
-            jar = Path(LIBRARIES_BASE, *artifact["path"].split("/"))
-            if jar.exists() and jar.is_file():
-                jar_str = str(jar)
-                if jar_str not in entries:
-                    entries.append(jar_str)
+            jar_path = os.path.join(
+                LIBRARIES_BASE, *artifact["path"].split("/")
+            )
+            if os.path.isfile(jar_path):
+                if jar_path not in entries:
+                    entries.append(jar_path)
                     continue
                 else:
                     log.warning(
                         "Skipping duplicate library: '%s'",
-                        lib.get("name", "--Unknown Library--"),
+                        lib.get("name", "<unidentified>"),
                     )
                     continue
         classifiers: dict = lib.get("downloads", {}).get("classifiers", {})
@@ -553,21 +564,21 @@ def build_classpath(libraries: list[dict], client_jar_path: str | Path):
                 path = native_info.get("path", "")
                 # name = native_info.get("name", "")
                 if path:
-                    jar = Path(LIBRARIES_BASE, *path.split("/"))
-                    if jar.exists() and jar.is_file():
-                        entries.append(str(jar))
+                    jar_path = os.path.join(LIBRARIES_BASE, *path.split("/"))
+                    if os.path.isfile(jar_path):
+                        entries.append(jar_path)
                         continue
         url, path = parse_lib_path(  # pylint: disable=W0612
             lib.get("url", ""), lib.get("name", "")
         )
-        jar = Path(LIBRARIES_BASE, *path.split("/"))
-        if jar.exists() and jar.is_file():
-            entries.append(str(jar))
+        jar_path = os.path.join(LIBRARIES_BASE, *path.split("/"))
+        if os.path.isfile(jar_path):
+            entries.append(str(jar_path))
         else:
             log.warning(
                 "Couldn't find library '%s', skipping... (tried path '%s')",
-                lib.get("name", "unidentified"),
-                str(jar),
+                lib.get("name", "<unidentified>"),
+                str(jar_path),
             )
 
     entries.append(client_jar_path)

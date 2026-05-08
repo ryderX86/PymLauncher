@@ -3,6 +3,7 @@ from zipfile import ZipFile
 from io import BytesIO
 import logging
 import json
+import os
 
 from minecraftlauncher.constants import LAUNCHER_DATA_DIR, MINECRAFT_DIR
 from minecraftlauncher.back.download_helpers import download
@@ -145,6 +146,8 @@ def get_neoforge_versions(override: bool = False):
 
 
 def install(neoforge_version: str, override: bool = False):
+    inf = neoforge_version.split("-")
+    neoforge_version_id = "-".join([inf[0], "forge", inf[1]])
     if override:
         log.info("User requested re-install for neoforge-%s", neoforge_version)
     else:
@@ -152,16 +155,14 @@ def install(neoforge_version: str, override: bool = False):
 
     if neoforge_version[0:2] != "1.":
         url = DOWNLOAD_URL.replace("VERSION", neoforge_version)
-        dest_dir = VERSION_DIR / f"neoforge-{neoforge_version}"
-        dest_path = dest_dir / f"neoforge-{neoforge_version}.json"
+        dest_dir = os.path.join(VERSION_DIR, f"neoforge-{neoforge_version}")
+        dest_path = os.path.join(dest_dir, f"neoforge-{neoforge_version}.json")
     else:
         url = LEGACY_DOWNLOAD_URL.replace("VERSION", neoforge_version)
-        inf = neoforge_version.split("-")
-        neoforge_version_id = "-".join([inf[0], "forge", inf[1]])
-        dest_dir = VERSION_DIR / neoforge_version_id
-        dest_path = dest_dir / f"{neoforge_version_id}.json"
+        dest_dir = os.path.join(VERSION_DIR, neoforge_version_id)
+        dest_path = os.path.join(dest_dir, f"{neoforge_version_id}.json")
 
-    if dest_path.exists() and not override:
+    if os.path.isfile(dest_path) and not override:
         raise FileExistsError(str(dest_path))
     if neoforge_version not in get_neoforge_versions():
         if neoforge_version not in get_neoforge_versions(True):
@@ -169,27 +170,29 @@ def install(neoforge_version: str, override: bool = False):
                 f"Couldn't find NeoForge version {neoforge_version}"
             )
 
-    if not dest_dir.exists():
-        dest_dir.mkdir(parents=True, exist_ok=True)
+    if not os.path.isdir(dest_dir):
+        os.makedirs(dest_dir, exist_ok=True)
 
     resp = download(url)
     b = BytesIO(resp.content)
 
     with ZipFile(b) as zipf:
-        with zipf.open("version.json") as text:
+        with zipf.open("version.json") as json_file:
             try:
-                ver_info = json.load(text)
+                json.load(json_file)  # lazy check validity
             except json.JSONDecodeError as err:
                 err.add_note(
-                    f"Couldn't read verison.json from '{dest_path.stem}.zip'"
+                    f"Couldn't read verison.json from '{neoforge_version_id}.zip'"
                 )
                 raise
             else:
-                dest_path.write_text(json.dumps(ver_info))
+                json_file.seek(0)
+                with open(dest_path, "wb") as f:
+                    f.write(json_file.read())
 
         # with zipf.open("data/client.lzma") as client:
         #     # TODO: reverse engineer fatjar
         #     pass
 
-    log.info("Installed NeoForge version %s", dest_path.stem)
+    log.info("Installed NeoForge version %s", neoforge_version_id)
     return True

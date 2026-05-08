@@ -7,7 +7,6 @@ substitution, and starts the game process.
 
 from collections.abc import Callable
 from string import Template
-from pathlib import Path
 import subprocess
 import logging
 import os
@@ -28,6 +27,7 @@ from minecraftlauncher.front.window import (
     WarningType,
     ButtonConfig,
 )
+from minecraftlauncher.functions import is_path_valid
 from minecraftlauncher.datatypes import GameProfile
 from minecraftlauncher.back.library_manager import evaluate_rules
 from minecraftlauncher.auth import LauncherAccount
@@ -183,11 +183,11 @@ def _build_legacy_args(
     )
     game_args = _substitute(raw_game_args, values).split()
 
-    jar_path = (
-        MINECRAFT_DIR
-        / "versions"
-        / version_json["id"]
-        / f"{version_json["id"]}.jar"
+    jar_path = os.path.join(
+        MINECRAFT_DIR,
+        "versions",
+        version_json["id"],
+        f"{version_json['id']}.jar",
     )
 
     default_jvm_args = [
@@ -237,7 +237,9 @@ def build_launch_command(
         needed_java_version = java_info.get("component", "")
         java_path = str(find_java_exc(needed_java_version))
 
-    jar_path = MINECRAFT_DIR / "versions" / version_id / f"{version_id}.jar"
+    jar_path = os.path.join(
+        MINECRAFT_DIR, "versions", version_id, f"{version_id}.jar"
+    )
 
     asset_index_id = version_json.get("assetIndex", {}).get("id")
     if not asset_index_id:
@@ -250,18 +252,23 @@ def build_launch_command(
 
     if game_dir:
         if not os.path.isdir(game_dir):
-            try:
-                Path(game_dir).resolve().mkdir(parents=True, exist_ok=True)
-            except Exception as err:
+            if not is_path_valid(game_dir):
                 raise ValueError(
                     f"'game_dir' value '{game_dir}' is an invalid path"
+                )
+            try:
+                os.makedirs(game_dir, exist_ok=True)
+            except Exception as err:
+                raise ValueError(
+                    f"Couldn't create directory at {game_dir!r}, "
+                    "do we have permissions?"
                 ) from err
     else:
         game_dir = str(MINECRAFT_DIR)
 
-    natives_dir = MINECRAFT_DIR / "bin" / version_id
-    if not (natives_dir.exists() and natives_dir.is_dir()):
-        natives_dir.mkdir(parents=True, exist_ok=True)
+    natives_dir = os.path.join(MINECRAFT_DIR, "bin", version_id)
+    if not os.path.isdir(natives_dir):
+        os.makedirs(natives_dir, exist_ok=True)
 
     if not classpath:
         lib_list = filter_libraries(version_json)
@@ -282,19 +289,21 @@ def build_launch_command(
         "user_properties": "{}",
         "user_type": "msa",
         "assets_index_name": asset_index_id,
-        "game_assets": str(MINECRAFT_DIR / "assets" / "virtual" / "legacy"),
-        "assets_root": str(MINECRAFT_DIR / "assets"),
+        "game_assets": os.path.join(
+            MINECRAFT_DIR, "assets", "virtual", "legacy"
+        ),
+        "assets_root": os.path.join(MINECRAFT_DIR, "assets"),
         "game_directory": game_dir,
         "clientid": "0",
         "auth_xuid": xuid,
         "resolution_width": resolution_width,
         "resolution_height": resolution_height,
-        "natives_directory": str(natives_dir),
+        "natives_directory": natives_dir,
         "classpath": classpath,
-        "library_directory": str(MINECRAFT_DIR / "libraries"),
+        "library_directory": os.path.join(MINECRAFT_DIR, "libraries"),
         "launcher_name": LAUNCHER_NAME,
         "launcher_version": LAUNCHER_VERSION,
-        "jar_path": str(jar_path),
+        "jar_path": jar_path,
         **kwargs,
     }
 
@@ -310,9 +319,10 @@ def build_launch_command(
         jvm_args, game_args = _build_legacy_args(version_json, values, features)
 
     if mods_folder:
+        mods_folder = mods_folder.strip()
         if " " in mods_folder:
             if mods_folder[0] != '"' or mods_folder[-1] != '"':
-                mods_folder = f'"{mods_folder.strip('"')}"'
+                mods_folder = f'"{mods_folder}"'
         if not mods_folder_mode:
             mods_folder_mode = "modsFolder"
         jvm_args.insert(-2, f"-Dfabric.{mods_folder_mode}={mods_folder}")
@@ -341,7 +351,7 @@ def build_launch_command(
     return cmd
 
 
-def launch_game(command: list[str], cwd: str | Path | None):
+def launch_game(command: list[str], cwd: str | os.PathLike | None):
     if not cwd:
         cwd = MINECRAFT_DIR
 
@@ -426,22 +436,22 @@ class LaunchWorker(QThread):
         try:
             version_json = version_manager.fetch_version_json(self.version_id)
         except Exception as err:
+            log.error("Failed to get version manifest:", exc_info=err)
             self.finished.emit(
                 False, f"Failed to get version info ({type(err).__name__})"
             )
-            log.error("Failed to get version manifest:", exc_info=err)
             return
         try:
             version_json = version_manager.resolve_inheritence(version_json)
         except Exception as err:
-            self.finished.emit(
-                False,
-                f"Failed to resolve inheritence for version {self.version_id}",
-            )
             log.error(
                 "Inheritence parsing failed for %s:",
                 self.version_id,
                 exc_info=err,
+            )
+            self.finished.emit(
+                False,
+                f"Failed to resolve inheritence for version {self.version_id}",
             )
             return
         self.status.emit("Downloading client JAR...")
@@ -484,6 +494,7 @@ class LaunchWorker(QThread):
                 f"Failed downloading assets for version {self.version_id} "
                 f"({type(err).__name__})",
             )
+            return
 
         self.status.emit("Checking log4j config file...")
         try:
@@ -558,7 +569,7 @@ class LaunchWorker(QThread):
                 f"({type(err).__name__})",
             )
             return
-        natives_dir = MINECRAFT_DIR / "bin" / self.version_id
+        natives_dir = os.path.join(MINECRAFT_DIR, "bin", self.version_id)
         try:
             natives_dir = library_manager.extract_natives(libs, natives_dir)
         except Exception as err:
@@ -694,10 +705,7 @@ class LaunchWorker(QThread):
                     "Failed to authenticate account, aborting launch.",
                     exc_info=err,
                 )
-                if getattr(err, "__notes__", None):
-                    self.finished.emit(False, str(err.__notes__))
-                else:
-                    self.finished.emit(False, str(err))
+                self.finished.emit(False, str(getattr(err, "__notes__", err)))
                 return
             except requests.RequestException as err:
                 self.log.error(
@@ -760,7 +768,7 @@ class LaunchWorker(QThread):
             logged_cmd.replace("", "")
         self.log.info("Launch command: '%s'", logged_cmd)
 
-        sub_logger = logging.getLogger(Path(cmd[0]).name)
+        sub_logger = logging.getLogger(os.path.split(cmd[0])[1])
         self._p = launch_game(cmd, cwd=self.profile_data.game_dir)
         if self._p.poll() is None:
             self.finished.emit(True, "Minecraft launched successfully.")

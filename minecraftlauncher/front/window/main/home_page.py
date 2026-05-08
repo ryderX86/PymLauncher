@@ -4,8 +4,8 @@ minecraftlauncher.front.window.main.home_page
 Home page, play button, profile info, progress bar, all that stuff.
 """
 
-from pathlib import Path
 import logging
+import os
 
 from PySide6.QtCore import Qt, Signal, QUrl, QItemSelection, QSize
 from PySide6.QtGui import QDesktopServices, QIcon, QPalette
@@ -22,7 +22,7 @@ from PySide6.QtWidgets import (
     QListView,
 )
 
-from minecraftlauncher.functions.error_box import error_box
+from minecraftlauncher.functions import error_box, is_path_valid
 from minecraftlauncher.back.profile_manager import GameProfile
 from minecraftlauncher.back.game_launcher import LaunchWorker
 from minecraftlauncher.back import profile_manager
@@ -364,48 +364,59 @@ class HomePage(QWidget):
         self.kill_worker()
 
     def _open_prof_folder(self, folder: str | None = None):
+        p: str | os.PathLike
         prof = profile_manager.get_current_profile()
         if prof.game_dir:
-            p = Path(prof.game_dir)
+            if not is_path_valid(prof.game_dir):
+                error_box(f"Bad game directory: {prof.game_dir!r}")
+            p = prof.game_dir
         else:
             p = MINECRAFT_DIR
 
-        if not p.exists():
+        if not os.path.isdir(p):
             error_box("Profile directory doesn't exist yet!")
             return
 
         match folder:
             case "rp":
-                p = p / "resourcepacks"  # TODO: texturepacks dir for old ver
+                if not os.path.isdir(
+                    os.path.join(p, "resourcepacks")
+                ) and os.path.isdir(os.path.join(p, "texturepacks")):
+                    p = os.path.join(p, "texturepacks")
+                else:
+                    p = os.path.join(p, "resourcepacks")
             case "mods":
                 if prof.mods_folder and prof.mods_folder_mode != "addMods":
-                    p = Path(prof.mods_folder)
+                    if not is_path_valid(prof.mods_folder):
+                        error_box(f"Bad mods folder path: {prof.mods_folder!r}")
+                        return
+                    p = os.path.normpath(prof.mods_folder)
                 else:
-                    p = p / "mods"
+                    p = os.path.join(p, "mods")
             case "world":
-                p = p / "saves"
+                p = os.path.join(p, "saves")
             case "screenshots":
-                p = p / "screenshots"
+                p = os.path.join(p, "screenshots")
             case "versions":
-                p = MINECRAFT_DIR / "versions"
+                p = os.path.join(MINECRAFT_DIR, "versions")
 
         # check again for subfolders
-        if not p.exists():
-            if p.parent.exists():
-                log.debug(
-                    "Folder at '%s' doesn't exist, trying to create it.", str(p)
+        if not os.path.isdir(p):
+            log.debug(
+                "Folder at '%s' doesn't exist, trying to create it.", str(p)
+            )
+            try:
+                os.makedirs(p, exist_ok=True)
+            except Exception as err:
+                log.error(
+                    "Failed to make directory. Notifying user and returning.",
+                    exc_info=err,
                 )
-                try:
-                    p.mkdir(parents=False, exist_ok=True)
-                except Exception as err:
-                    log.error(
-                        "Failed to make directory. Notifying user and "
-                        "returning.",
-                        exc_info=err,
-                    )
-                    error_box("Failed to open folder. Does it exist?")
-                    return
-        qurl = QUrl.fromLocalFile(str(p))
+                error_box(
+                    f"Failed to make folder {p!r}. Do you have permissions?"
+                )
+                return
+        qurl = QUrl.fromLocalFile(p)
         QDesktopServices.openUrl(qurl)
 
     def _on_finished(self, success: bool, message: str):

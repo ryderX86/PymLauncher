@@ -29,8 +29,8 @@ from minecraftlauncher import QAPP
 
 log = logging.getLogger(__name__)
 
-PROFILES_PATH = MINECRAFT_DIR / "launcher_profiles.json"
-PROFILES_META = MINECRAFT_DIR / "launcher_profiles_meta.json"
+PROFILES_PATH = os.path.join(MINECRAFT_DIR, "launcher_profiles.json")
+PROFILES_META = os.path.join(MINECRAFT_DIR, "launcher_profiles_meta.json")
 _DEFAULT_SETTINGS_JSON: dict[str, Any] = {
     "crashAssistance": False,
     "enableAdvanced": True,
@@ -249,8 +249,9 @@ _meta_cache = {}
 def get_launcher_meta():
     if _meta_cache:
         return _meta_cache
-    if PROFILES_META.exists():
-        txt = PROFILES_META.read_text()
+    if os.path.isfile(PROFILES_META):
+        with open(PROFILES_META, "r") as f:
+            txt = f.read()
         try:
             meta = json.loads(txt)
         except Exception as err:

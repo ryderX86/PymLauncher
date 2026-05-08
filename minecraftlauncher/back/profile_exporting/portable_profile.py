@@ -1,10 +1,13 @@
 from pathlib import Path
 from enum import IntEnum, StrEnum
-import json
 import zipfile
 import logging
+import json
+import glob
+import os
 
 from minecraftlauncher.datatypes.launch_profile import GameProfile
+from minecraftlauncher.functions import is_path_valid
 from minecraftlauncher.back import profile_manager
 from minecraftlauncher import constants, args
 
@@ -71,10 +74,10 @@ class PortableProfile:
     def _dir_exists(self, directory: str):
         if constants.OS_PATH_DELIM in directory:
             return False
-        path = self.base / directory
-        if path.exists():
+        path = os.path.join(self.base, directory)
+        if os.path.isdir(path):
             # only return true if it's not a blank dir
-            if path.is_file() or (path.is_dir() and [*path.glob("*")]):
+            if os.path.isdir(path) and [*glob.glob(f"{path}/*")]:
                 return True
         return False
 
@@ -82,12 +85,11 @@ class PortableProfile:
         existing_dirs = []
         b = self.base
         for d in dirs:
-            p = b / d
-            if p.exists():
-                if p.is_file():
-                    existing_dirs.append(p)
-                elif p.is_dir() and [*p.glob("*")]:
-                    existing_dirs.append(p)
+            p = os.path.join(b, d)
+            if os.path.isfile(p):
+                existing_dirs.append(p)
+            elif os.path.isdir(p) and [*glob.glob(f"{p}/*")]:
+                existing_dirs.append(p)
         if existing_dirs:
             return existing_dirs
         return False
@@ -140,12 +142,14 @@ class PortableProfile:
 
     def _get_version_paths(self) -> list[Path]:
         pathlist = []
-        versions_folder = constants.MINECRAFT_DIR / "versions"
-        for path in versions_folder.glob("**/*.json"):
-            if path.parent == versions_folder:
+        versions_folder = os.path.join(constants.MINECRAFT_DIR, "versions")
+        for path in glob.glob(f"{versions_folder}/**/*.json"):
+            if os.path.split(path)[0] == versions_folder:
                 continue
+            with open(path, "r") as f:
+                txt = f.read()
             try:
-                v_json = json.loads(path.read_text())
+                v_json = json.loads(txt)
             except json.JSONDecodeError as err:
                 log.error("Failed reading JSON:", exc_info=err)
             else:
@@ -157,17 +161,22 @@ class PortableProfile:
     def import_profile(
         cls, file: str | Path, target_dir: str | Path, overwrite: bool = False
     ):
-        if isinstance(file, str):
-            file = Path(file)
-        if not file.exists() and not file.is_file():
+        if isinstance(file, Path):
+            file = str(file)
+        if not os.path.isfile(file):
             raise FileNotFoundError(file)
-        if isinstance(target_dir, str):
-            target_dir = Path(target_dir)
-        if not target_dir.exists():
+        if isinstance(target_dir, Path):
+            target_dir = str(target_dir)
+        if not os.path.isdir(target_dir):
+            if not is_path_valid(target_dir):
+                raise ValueError(f"Invalid file path: {target_dir}")
             try:
-                target_dir.mkdir(parents=True, exist_ok=True)
+                os.makedirs(target_dir, exist_ok=True)
             except Exception as err:
-                raise ValueError(f"Invalid file path: {target_dir}") from err
+                raise ValueError(
+                    f"Failed to make directory at {target_dir!r}; "
+                    "do we have permissions?"
+                ) from err
 
         with zipfile.ZipFile(file, "r") as zipf:
             filenames = [f.filename for f in zipf.filelist]
@@ -198,7 +207,7 @@ class PortableProfile:
         cls,
         profile_info: dict,
         zipf: zipfile.ZipFile,
-        target_dir: Path,
+        target_dir: str,
         overwrite: bool,
     ):
         ...
@@ -234,7 +243,7 @@ class PortableProfile:
 
     def export_beachhorse(
         self,
-        output: str | Path,
+        output: str | os.PathLike,
         mods: bool,
         options_txt: bool,
         resource_packs: bool,
@@ -248,17 +257,18 @@ class PortableProfile:
     ):
         b = self.base
 
-        if isinstance(output, str):
-            output = Path(output)
-        if not output.parent.exists():
+        if isinstance(output, Path):
+            output = str(output)
+        if not os.path.isdir(os.path.split(output)[0]):
             raise ValueError("Output path with no parent!")
 
-        if output.exists():
+        if os.path.isfile(output):
             log.warning("Overriding fp object at '%s'", str(output))
-            output.unlink()
+            os.unlink(output)
 
-        if output.suffix == ".json":
-            output.write_text(json.dumps(self.prof.to_dict_compat()))
+        if os.path.splitext(output)[-1] == ".json":
+            with open(output, "w") as f:
+                f.write(json.dumps(self.prof.to_dict_compat()))
             return True
 
         log.debug('Opening "%s" as NEW archive', str(output))

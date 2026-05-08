@@ -27,7 +27,7 @@ from .download_helpers import download
 
 log = logging.getLogger(__name__)
 
-VERSION_DIR = MINECRAFT_DIR / "versions"
+VERSION_DIR = os.path.join(MINECRAFT_DIR, "versions")
 manifest_cache: dict = {"latest": {}, "versions": []}
 
 FABRIC_VER_RE = re.compile(
@@ -121,7 +121,7 @@ def fetch_version_manifest(force_refresh: bool = False):
         else:
             log.info("Existing manifest is too old, getting a new one.")
     log.info("Fetching version manifest from '%s'", VERSION_MANIFEST_URL)
-    VERSION_DIR.mkdir(parents=True, exist_ok=True)
+    os.makedirs(VERSION_DIR, exist_ok=True)
     try:
         resp = session.get(VERSION_MANIFEST_URL, timeout=30)
     except:
@@ -140,7 +140,7 @@ def fetch_version_manifest(force_refresh: bool = False):
 def build_local_version_list(exclude: list[GameVersionStub] | None = None):
     if not exclude:
         exclude = []
-    versions_dir = MINECRAFT_DIR / "versions"
+    versions_dir = os.path.join(MINECRAFT_DIR, "versions")
     ver_list: list[GameVersionStub] = []
     for folder in os.scandir(versions_dir):
         if not folder.is_dir():
@@ -463,12 +463,13 @@ def download_client_jar(
         raise ValueError(f"No download info for version '{ver_id}'")
     expected_sha1 = client_info.get("sha1")
 
-    ver_dir = VERSION_DIR / ver_id
-    jar_path = ver_dir / f"{ver_id}.jar"
+    ver_dir = os.path.join(VERSION_DIR, ver_id)
+    jar_path = os.path.join(ver_dir, f"{ver_id}.jar")
 
     # check for existing file and return if SHA1 matches
-    if jar_path.exists() and jar_path.is_file() and expected_sha1:
-        jar_bytes = jar_path.read_bytes()
+    if os.path.isfile(jar_path) and expected_sha1:
+        with open(jar_path, "rb") as f:
+            jar_bytes = f.read()
         sha1 = hashlib.sha1(jar_bytes).hexdigest()
         if sha1 == expected_sha1:
             log.debug(
@@ -483,7 +484,7 @@ def download_client_jar(
                 sha1,
                 str(expected_sha1),
             )
-    elif jar_path.exists() and jar_path.is_file() and not redownload_option:
+    elif os.path.isfile(jar_path) and not redownload_option:
         log.info(
             "Skipping download for '%s.jar' since it exists and option is"
             "to not redownload",
@@ -495,7 +496,7 @@ def download_client_jar(
     total_size = client_info.get("size", 0)
     log.info("Downloading client JAR for %s (%s bytes)", ver_id, total_size)
 
-    ver_dir.mkdir(parents=True, exist_ok=True)
+    os.makedirs(ver_dir, exist_ok=True)
 
     resp = session.get(url, stream=True, timeout=60)
     resp.raise_for_status()
@@ -512,7 +513,7 @@ def download_client_jar(
 
     if expected_sha1 and sha1.hexdigest() != expected_sha1:
         log.debug("SHA1 mismatch, deleting JAR.")
-        jar_path.unlink()
+        os.unlink(jar_path)
         err = RuntimeError("SHA1 mismatch for client JAR")
         err.add_note(f"Expected '{expected_sha1}', got '{sha1.hexdigest()}'")
         raise err
@@ -532,14 +533,15 @@ def check_client_jar(version_json: dict):
         raise ValueError(f"No download info for version '{ver_id}'")
     expected_sha1: str | None = client_info.get("sha1")
 
-    ver_dir = VERSION_DIR / ver_id
-    jar_path = ver_dir / f"{ver_id}.jar"
+    ver_dir = os.path.join(VERSION_DIR, ver_id)
+    jar_path = os.path.join(ver_dir, f"{ver_id}.jar")
 
-    if jar_path.exists() and jar_path.is_file() and expected_sha1:
-        jar_bytes = jar_path.read_bytes()
+    if os.path.isfile(jar_path) and expected_sha1:
+        with open(jar_path, "rb") as f:
+            jar_bytes = f.read()
         sha1 = hashlib.sha1(jar_bytes).hexdigest()
         return bool(sha1 == expected_sha1)
-    elif jar_path.exists() and jar_path.is_file():
+    elif os.path.isfile(jar_path):
         log.warning("Unable to check SHA1 for JAR at '%s'", str(jar_path))
         return True
     return False
@@ -551,13 +553,27 @@ def version_exists(id_: str):
 
     Returns a bool
     """
+    json_path = os.path.join(VERSION_DIR, id_, f"{id_}.json")
     if id_ in [a.get("id", "") for a in manifest_cache["versions"]]:
         return True
-    elif (VERSION_DIR / id_ / f"{id_}.json").exists():
+    elif os.path.exists(json_path):
+        with open(json_path, "r") as f:
+            txt = f.read()
         try:
-            json.loads((VERSION_DIR / id_ / f"{id_}.json").read_text())
-        except:
+            json.loads(txt)
+        except json.JSONDecodeError as err:
+            log.error(
+                "Reading failed for bad JSON file at %r:",
+                json_path,
+                exc_info=err,
+            )
             return False
+        except Exception as err:
+            log.error(
+                "Unknown error occured reading JSON file at %r:",
+                json_path,
+                exc_info=err,
+            )
         else:
             return True
     return False

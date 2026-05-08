@@ -5,7 +5,6 @@ Handles downloading/retrieving Java versions.
 """
 
 from collections.abc import Callable
-from pathlib import Path
 from datetime import datetime, timedelta
 import hashlib
 import json
@@ -31,7 +30,7 @@ from .download_helpers import download, RunnableDownloader, BulkDownloadManager
 
 log = logging.getLogger(__name__)
 
-JVM_MANIFEST_PATH = MINECRAFT_DIR / "versions" / "jre_manifest.json"
+JVM_MANIFEST_PATH = os.path.join(MINECRAFT_DIR, "versions", "jre_manifest.json")
 
 jvm_manifest = {}
 
@@ -181,16 +180,16 @@ def get_jvm_version_manifest(version: str) -> dict:
 
 
 def java_base_path(name: str):
-    jre_path_default = JAVA_PATH / name
-    jre_path_mojang = MOJANG_JAVA_BASE / name
+    jre_path_default = os.path.join(JAVA_PATH, name)
+    jre_path_mojang = os.path.join(MOJANG_JAVA_BASE, name)
 
     match OS:  # TODO: cross-platform
         case "windows":
             exec_path_def = jre_path_default
-            exec_path_moj = jre_path_mojang / JAVA_OS / name
+            exec_path_moj = os.path.join(jre_path_mojang, JAVA_OS, name)
         case "osx":
-            exec_path_def = (
-                jre_path_default / "jre.bundle" / "Contents" / "Home"
+            exec_path_def = os.path.join(
+                jre_path_default, "jre.bundle", "Contents", "Home"
             )
             exec_path_moj = exec_path_def
         case _:
@@ -266,7 +265,7 @@ def install_java_version(
         case _:
             exc_path = ["bin", "java"]
 
-    if jre_path_mojang.exists():
+    if os.path.isdir(jre_path_mojang):
         # Check mojang launcher's java install
         valid = True
         completed = 0
@@ -306,18 +305,21 @@ def install_java_version(
             if progress_callback:
                 progress_callback(0, total_size)
 
-    jre_path_default.mkdir(exist_ok=True, parents=True)
+    if not os.path.isdir(jre_path_default):
+        os.makedirs(jre_path_default, exist_ok=True)
     completed = 0
     downloaded = 0
 
     for subpath in dirs:
-        dir_ = jre_path_default / subpath
-        dir_.mkdir(parents=True, exist_ok=True)
+        dir_ = os.path.join(jre_path_default, subpath)
+        if not os.path.isdir(dir_):
+            os.makedirs(dir_, exist_ok=True)
     for subpath, finfo in files.items():
-        path = Path(jre_path_default, *subpath.split("/"))
+        path = os.path.join(jre_path_default, *subpath.split("/"))
         e_sha1 = finfo["downloads"]["raw"].get("sha1")  # expected sha1
-        if path.exists() and path.is_file():
-            f_sha1 = hashlib.sha1(path.read_bytes()).hexdigest()
+        if os.path.isfile(path):
+            with open(path, "rb") as f:
+                f_sha1 = hashlib.sha1(f.read()).hexdigest()
             if e_sha1 and e_sha1 == f_sha1:
                 completed += 1
                 continue
@@ -344,18 +346,11 @@ def install_java_version(
         # use the matching hash since we don't load the lzma yet
         resp = download(url, sha=sha1)
 
-        if use_lzma:
-            path.write_bytes(lzma.decompress(resp.content))
-            f_sha1 = hashlib.sha1(path.read_bytes()).hexdigest()
-            # this should be removed after verifying that the lzma
-            # decompression is actually working
-            if f_sha1 != e_sha1:
-                raise RuntimeError(
-                    f"Failed downloading {str(path)} - SHA1 mismatch"
-                    f" (expected value: '{e_sha1}', got '{f_sha1}')"
-                )
-        else:
-            path.write_bytes(resp.content)
+        with open(path, "wb") as fb:
+            if use_lzma:
+                fb.write(lzma.decompress(resp.content))
+            else:
+                fb.write(resp.content)
 
         log.debug("Downloaded '%s'->'%s'", url, subpath)
         completed += 1
@@ -460,11 +455,11 @@ def install_java_version_threaded(
         return os.path.join(jre_path_default, *exc_path)
 
 
-def mark_executable(exe_path: str | Path) -> bool:
+def mark_executable(exe_path: str | os.PathLike) -> bool:
     match OS:
         case "windows":
             log.warning("mark_executable() called from Windows")
-            return Path(exe_path).suffix == ".exe"
+            return os.path.splitext(exe_path)[1] == ".exe"
     if not os.path.isfile(exe_path):
         raise ValueError(f"File at '{exe_path}' doesn't exist")
     perms = stat.S_IXUSR | stat.S_IXOTH | stat.S_IXGRP

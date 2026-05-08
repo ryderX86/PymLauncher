@@ -4,6 +4,7 @@ from pathlib import Path
 from enum import StrEnum
 import logging
 import json
+import os
 
 from minecraftlauncher.back import version_manager
 from minecraftlauncher.constants import MINECRAFT_DIR
@@ -88,7 +89,9 @@ class GameVersionStub:
 
     @property
     def jar_path(self):
-        return MINECRAFT_DIR / "versions" / self.id / f"{self.id}.jar"
+        return os.path.join(
+            MINECRAFT_DIR, "versions", self.id, f"{self.id}.jar"
+        )
 
     def get_json(self) -> dict:
         if self.local:
