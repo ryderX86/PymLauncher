@@ -298,6 +298,7 @@ class HomePage(QWidget):
 
     def _on_play(self):
         """Play button function"""
+        log.info("Preparing to install/launch game...")
         self.play_button.setDisabled(True)
         prof = profile_manager.get_current_profile()
         if prof.check_install():
@@ -313,7 +314,6 @@ class HomePage(QWidget):
         auth_info: LauncherAccount,
     ):
         """Start download/launch process in a background thread"""
-        log.debug("Preparing to install/launch game...")
         self.progress_bar.setValue(0)
         self.progress_frame.setVisible(True)
         show_logs = config.show_logs_on_home
