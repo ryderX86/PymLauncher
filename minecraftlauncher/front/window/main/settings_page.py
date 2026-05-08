@@ -77,6 +77,25 @@ class SettingsPage(QWidget):
 
         behavior.addWidget(post_launch_w)
 
+        profile_selection_w = QWidget()
+        profile_selection_lo = QHBoxLayout(profile_selection_w)
+        profile_selection_lo.setContentsMargins(0, 0, 4, 0)
+        profile_selection_label = QLabel(
+            "Select profile on program open based on:"
+        )
+        profile_selection_lo.addWidget(profile_selection_label)
+        self.profile_selection_option = QComboBox()
+        self.profile_selection_option.setProperty("compact", True)
+        self.mapper.add_mapping(
+            self.profile_selection_option,
+            saver=lambda _: config.set_(
+                "profile_selection_behavior",
+                self.profile_selection_option.currentData(),
+            ),
+        )
+        profile_selection_lo.addWidget(self.profile_selection_option)
+        behavior.addWidget(profile_selection_w)
+
         open_browser_for_login = QCheckBox(
             "Open browser automatically for sign-in"
         )
@@ -301,6 +320,15 @@ class SettingsPage(QWidget):
                 self.redownload_option.setCurrentIndex(0)
             case config.JarRedownloadBehavior.REDOWNLOAD_ONCE:
                 self.redownload_option.setCurrentIndex(1)
+        self.profile_selection_option.addItem(
+            "Last played", config.SetLastProfileBehavior.LAST_PLAYED
+        )
+        self.profile_selection_option.addItem(
+            "Current selected", config.SetLastProfileBehavior.LAST_SELECTED
+        )
+        self.profile_selection_option.setCurrentIndex(
+            config.profile_selection_behavior
+        )
         self.mapper.start()
 
     def _on_post_launch_options_change(self, i: int):

@@ -21,7 +21,11 @@ import os
 
 from PySide6.QtCore import Signal, QObject
 
-from minecraftlauncher.config import enforce_json_spec
+from minecraftlauncher.config import (
+    enforce_json_spec,
+    profile_selection_behavior,
+    SetLastProfileBehavior,
+)
 from minecraftlauncher.constants import MINECRAFT_DIR
 from minecraftlauncher.datatypes import GameProfile
 from minecraftlauncher.functions import reswrite
@@ -207,12 +211,9 @@ def get_profile(idx: str | int) -> GameProfile:
 
 def set_current_profile_uuid(uid: str):
     current_prof: GameProfile | None = None
-    for id_, prof in profiles.items():
-        if uid == id_:
-            current_prof = prof
-            break
-    if not current_prof:
+    if uid not in profiles:
         raise NameError(name=uid)
+    current_prof = profiles[uid]
     return set_current_profile(current_prof)
 
 
@@ -223,6 +224,8 @@ def set_current_profile(prof: GameProfile):
     _current_profile = prof
     for func in _profile_switch_handlers:
         func(prof)
+    if profile_selection_behavior == SetLastProfileBehavior.LAST_SELECTED:
+        prof.set_last_used()
     return
 
 
