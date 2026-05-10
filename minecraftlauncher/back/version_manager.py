@@ -324,16 +324,16 @@ def fetch_version_json(
                 return _version_json_cache[version_id]
             except json.JSONDecodeError as err:
                 log.error(
-                    "JSON decode failed for '%s':",
+                    "JSON decode failed for %r:",
                     str(local_path),
                     exc_info=err,
                 )
                 raise ValueError(
-                    f"Version '{version_id}' has corrupted JSON"
+                    f"Version {version_id!r} has corrupted JSON"
                 ) from err
         else:
             log.warning(
-                "Version info at '%s' doesn't match SHA1 in manifest!",
+                "Version info at %r doesn't match SHA1 in manifest!",
                 str(local_path),
             )
     # no local file + no mf entry = bad bad very bad
@@ -344,12 +344,12 @@ def fetch_version_json(
 
     url = mf_entry["url"]
     sha1 = mf_entry["sha1"]
-    log.info("Downloading version JSON for '%s' from '%s'", version_id, url)
+    log.info("Downloading version JSON for %r from %r", version_id, url)
     try:
         resp = download(url, sha=sha1)
     except Exception as err:
         log.error(
-            "Failed to download version.json for %s!", version_id, exc_info=err
+            "Failed to download version.json for %r!", version_id, exc_info=err
         )
         raise
 
@@ -373,9 +373,7 @@ def _resolve_inheritence(
         return version_json
 
     parent_id: str = version_json["inheritsFrom"]
-    log.info(
-        "Game version '%s' inherits from '%s'", version_json["id"], parent_id
-    )
+    log.info("Game version %r inherits from %r", version_json["id"], parent_id)
 
     parent_json = fetch_version_json(parent_id)
     parent_json = _resolve_inheritence(parent_json, recursion=recursion + 1)

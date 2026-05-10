@@ -232,7 +232,6 @@ class App:
                 self.lb_window.set_text("Reauthenticating")
                 self.lb_window.open()
                 if acc.refresh():
-                    log.debug("Refreshed %s (%s)", acc.gamertag, xuid)
                     self.lb_window.accept()
                     account_manager.save_or_replace_account(acc)
                 else:
@@ -258,7 +257,6 @@ class App:
         assert active_account
         if not active_account.token_valid:
             self.lb_window.set_text("Authenticating")
-            log.info("Refreshing token for %s", active_account.gamertag)
             active_account.minecraft_auth()
             account_manager.save_or_replace_account(active_account)
         self.main_window.account_page.set_account_info(active_account)
