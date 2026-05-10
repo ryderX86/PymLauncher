@@ -1,7 +1,15 @@
 from argparse import ArgumentParser
+from enum import IntFlag
 from pathlib import Path
 import logging
 import tomllib
+
+class BuildFlags(IntFlag):
+    NONE = 0b0000
+    EXECUTABLE = 0b0001
+    INSTALLER = 0b0010
+    RESOURCES = 0b0100
+    ALL = 0b0111
 
 CWD = Path(__file__).parent.parent.parent
 VENV_PATH = CWD / ".venv"
@@ -9,11 +17,29 @@ VENV_PATH = CWD / ".venv"
 _parser = ArgumentParser("Build-script")
 _parser.add_argument("-d", "--debug", action="store_true", default=False)
 _parser.add_argument("-r", "--build-report", action="store_true", default=False)
+_parser.add_argument(
+    "-e", "--exe", "--executable", action="store_true", default=False
+)
+_parser.add_argument("-i", "--installer", action="store_true", default=False)
+_parser.add_argument("-s", "--resources", action="store_true", default=False)
 
 _args = _parser.parse_args()
 
 DEBUG: bool = _args.debug
 MAKE_BUILD_REPORT: bool = _args.build_report
+EXECUTABLE_BUILD: bool = _args.exe
+INSTALLER_BUILD: bool = _args.installer
+RESOURCES_BUILD: bool = _args.resources
+
+FLAGS = BuildFlags.ALL
+if EXECUTABLE_BUILD or INSTALLER_BUILD or RESOURCES_BUILD:
+    FLAGS = BuildFlags.NONE
+    if EXECUTABLE_BUILD:
+        FLAGS |= BuildFlags.EXECUTABLE
+    if INSTALLER_BUILD:
+        FLAGS |= BuildFlags.INSTALLER
+    if RESOURCES_BUILD:
+        FLAGS |= BuildFlags.RESOURCES
 
 if DEBUG:
     logging.basicConfig(level=logging.DEBUG)
