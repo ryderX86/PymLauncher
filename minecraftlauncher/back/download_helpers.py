@@ -2,10 +2,11 @@
 Common functions for downloading files.
 """
 
-from pathlib import Path
 from typing import Literal, Callable, TypeVar, Iterable
-from types import FunctionType
 from datetime import timedelta, datetime
+from collections import Counter
+from types import FunctionType
+from pathlib import Path
 import logging
 import hashlib
 import time
@@ -13,7 +14,7 @@ import lzma
 import os
 
 import requests
-from PySide6.QtCore import QRunnable, QObject, Signal, QThreadPool
+from PySide6.QtCore import QRunnable
 
 from minecraftlauncher import session, offline_mode
 
@@ -203,9 +204,44 @@ class DownloadError(Exception):
         self.url = url
 
 
-class RunnableDownloader(QObject, QRunnable):
-    exception = Signal(Exception)
+class BulkDownloadError(Exception):
+    def __init__(self, *exceptions: Exception):
+        super().__init__("Error(s) occured in bulk download")
+        self.exception_list = [*exceptions]
+        """All exceptions passed to this exception"""
+        self.primary_exception = Counter(
+            self.exception_list
+        ).most_common()[0][0] # fmt: skip
+        """Exception which occured most frequently in the list"""
+        self._iter_idx_ = 0
 
+    def all_messages(self):
+        texts = ["List of exceptions and their messages:"]
+        for err in self.exception_list:
+            texts.append(f"    {type(err).__name__}{err.args!r}: {err!r}")
+        return texts
+
+    def __iter__(self):
+        self._iter_idx_ = 0
+        return self
+
+    def __next__(self):
+        i = self._iter_idx_
+        if i >= len(self.exception_list):
+            raise StopIteration
+        self._iter_idx_ += 1
+        return self.exception_list[i]
+
+    @classmethod
+    def from_runnable_list(cls, dl_list: list[RunnableDownloader]):
+        exc_list = []
+        for dl in dl_list:
+            if not dl.success and dl.last_exception:
+                exc_list.append(dl.last_exception)
+        return cls(*exc_list)
+
+
+class RunnableDownloader(QRunnable):
     threads_quit = False
     sleep_time = 0.0
 
@@ -267,7 +303,8 @@ class RunnableDownloader(QObject, QRunnable):
         self._lzma = use_lzma
         self._callback = callback
         self._check_hash = check_hash
-        self._last_exception: Exception | None = None
+        self.last_exception: Exception | None = None
+        self.success: bool | None = None
 
     def _check_sha1(self):
         if not self._hash:
@@ -295,12 +332,13 @@ class RunnableDownloader(QObject, QRunnable):
             os.unlink(self._path)
         attempts = 0
         resp = None
+        self.success = False
         while attempts < 3:
             try:
                 resp = session.get(self._url, timeout=30)
                 resp.raise_for_status()
             except Exception as err:
-                self._last_exception = err
+                self.last_exception = err
                 self.log.error(
                     "Failed to get file from '%s': %s", self._url, str(err)
                 )
@@ -315,10 +353,8 @@ class RunnableDownloader(QObject, QRunnable):
                     content = resp.content
                 if self._hash:
                     sha1 = hashlib.sha1(content).hexdigest()
-                    if sha1 == self._hash:
-                        break
-                    else:
-                        self._last_exception = RuntimeError(
+                    if sha1 != self._hash:
+                        self.last_exception = RuntimeError(
                             "SHA mismatch occured after download"
                         )
                         self.log.error(
@@ -335,58 +371,26 @@ class RunnableDownloader(QObject, QRunnable):
                     f.write(content)
             finally:
                 attempts += 1
-        if not resp:
-            err = DownloadError(self._url, self._path)
-            self.exception.emit(err)
-            if self._last_exception:
-                raise err from self._last_exception
-            raise err
-        else:
+        if resp:
+            self.success = True
             if self._callback:
                 self._callback(1)
+        else:
+            err = DownloadError(self._url, self._path)
+            if self.last_exception:
+                raise err from self.last_exception
+            self.last_exception = err
+            raise err
         return True
 
     @classmethod
     def kill_all(cls):
         cls.threads_quit = True
 
-
-class BulkDownloadManager:
-    __slots__ = ("_pool", "_failed", "_exceptions")
-
-    @_offline_mode_warning
-    def __init__(self, pool: QThreadPool):
-        self._pool = pool
-        self._failed = False
-        self._exceptions: list[Exception] = []
-
-    def add_runnable(self, runnable: RunnableDownloader):
-        runnable.exception.connect(self.handle_exception)
-
-    def handle_exception(self, err: Exception):
-        self._failed = True
-        log.error("Error occured in RunnableDownloader:", exc_info=err)
-        log.info(
-            "Stopping all RunnableDownloaders and waiting for pool to clear."
-        )
-        self._exceptions.append(err)
-        RunnableDownloader.kill_all()
-        self._pool.waitForDone(2)
-        # restore functionality in case it was a URL/syntax issue
-        RunnableDownloader.threads_quit = False
-
     @property
-    def exceptions(self):
-        return self._exceptions
-
-    def check_for_failures(self):
-        running_threads = self._pool.activeThreadCount()
-        if running_threads > 0:
-            log.warning(
-                "BulkDownloadManager.check_for_failures() called before "
-                "completion! Current running threads: %d",
-                running_threads,
-            )
-            return None
-        log.debug("BulkDownloadManager: Downloads complete")
-        return self._failed
+    def download_successful(self):
+        """
+        If this is `None`, the download either hasn't started or was aborted
+        due to SHA matching
+        """
+        return self.success

@@ -469,8 +469,7 @@ def download_client_jar(
     # check for existing file and return if SHA1 matches
     if os.path.isfile(jar_path) and expected_sha1:
         with open(jar_path, "rb") as f:
-            jar_bytes = f.read()
-        sha1 = hashlib.sha1(jar_bytes).hexdigest()
+            sha1 = hashlib.sha1(f.read()).hexdigest()
         if sha1 == expected_sha1:
             log.debug(
                 "Skipping download for '%s.jar' since it already exists.",
@@ -504,7 +503,7 @@ def download_client_jar(
     downloaded = 0
     sha1 = hashlib.sha1()
     with open(jar_path, "wb") as f:
-        for chunk in resp.iter_content(chunk_size=65536):
+        for chunk in resp.iter_content(chunk_size=None):
             f.write(chunk)
             sha1.update(chunk)
             downloaded += len(chunk)

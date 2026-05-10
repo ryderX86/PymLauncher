@@ -21,6 +21,7 @@ from minecraftlauncher.constants import (
     CLASSPATH_SEPARATOR,
     OS_VER,
     LIBRARIES_URL,
+    CPU_THREADS,
 )
 from minecraftlauncher.config import redownload_option
 from .download_helpers import (
@@ -28,7 +29,7 @@ from .download_helpers import (
     should_download_file,
     _check_file_sha1,
     RunnableDownloader,
-    BulkDownloadManager,
+    BulkDownloadError,
 )
 
 log = logging.getLogger(__name__)
@@ -328,7 +329,7 @@ def download_libraries_threaded(
 ):
     total = len(libraries)
     downloaded = 0
-    download_list: list = []
+    download_list: list[RunnableDownloader] = []
 
     if progress_callback:
 
@@ -337,6 +338,7 @@ def download_libraries_threaded(
             downloaded += i
             progress_callback(downloaded, total)
 
+        progress_callback(0, total)
     else:
 
         def passed_callback(i: int):
@@ -407,17 +409,12 @@ def download_libraries_threaded(
                 )
             )
 
-    pool.setMaxThreadCount(75)
-    pool.setExpiryTimeout(90)
-    mgr = BulkDownloadManager(pool)
+    pool.setMaxThreadCount(CPU_THREADS)
     for dl in download_list:
-        mgr.add_runnable(dl)
         pool.start(dl)
-    timedout = not pool.waitForDone(900)
-    if timedout:
-        raise RuntimeError("Downloads timed out completely")
-    elif mgr.check_for_failures():
-        raise mgr.exceptions[0]
+    pool.waitForDone()
+    if any(not a.success for a in download_list):
+        raise BulkDownloadError.from_runnable_list(download_list)
 
     log.info(
         "Finished downloading libraries: %d new / %d total", downloaded, total

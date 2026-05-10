@@ -26,7 +26,7 @@ from minecraftlauncher.constants import (
     CPU_THREADS,
 )
 from minecraftlauncher.functions.text import indent
-from .download_helpers import download, RunnableDownloader, BulkDownloadManager
+from .download_helpers import download, RunnableDownloader, BulkDownloadError
 
 log = logging.getLogger(__name__)
 
@@ -435,17 +435,14 @@ def install_java_version_threaded(
             )
         )
 
-    pool.setMaxThreadCount(CPU_THREADS * 10)
-    pool.setExpiryTimeout(90)
-    mgr = BulkDownloadManager(pool)
+    pool.setMaxThreadCount(CPU_THREADS)
     for dl in download_workers:
-        mgr.add_runnable(dl)
         pool.start(dl)
-    timed_out = not pool.waitForDone(900)
+    timed_out = not pool.waitForDone(900000)
     if timed_out:
         raise RuntimeError("Downloads completely timed out")
-    elif mgr.check_for_failures():
-        raise mgr.exceptions[0]
+    elif any(not a.success for a in download_workers):
+        raise BulkDownloadError.from_runnable_list(download_workers)
 
     log.info("Download complete, %d/%d new files.", downloaded, total_size)
 

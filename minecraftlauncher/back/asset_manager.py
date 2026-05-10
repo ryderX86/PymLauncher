@@ -24,7 +24,7 @@ from minecraftlauncher.constants import (
 from minecraftlauncher.back.download_helpers import (
     download,
     RunnableDownloader,
-    BulkDownloadManager,
+    BulkDownloadError,
 )
 from minecraftlauncher import session
 
@@ -361,17 +361,16 @@ def download_assets_threaded(
     #     )
     # else:
     #     final_dl_list = BulkDownloadWorker.auto_split(download_list)
-    pool.setExpiryTimeout(90)
-    pool.setMaxThreadCount(CPU_THREADS * 10)
-    mgr = BulkDownloadManager(pool)
+    if progress_callback:
+        progress_callback(0, total)
+    pool.setMaxThreadCount(CPU_THREADS)
     for worker in download_list:
-        mgr.add_runnable(worker)
         pool.start(worker)
-    timedout = not pool.waitForDone(900)  # 15 min
+    timedout = not pool.waitForDone(900000)  # 15 min
     if timedout:
         raise RuntimeError("Downloads timed out completely")
-    if mgr.check_for_failures():
-        raise mgr.exceptions[0]
+    elif any(not a.success for a in download_list):
+        raise BulkDownloadError.from_runnable_list(download_list)
     log.debug("Asset downloads complete")
     return len(download_list)
 
