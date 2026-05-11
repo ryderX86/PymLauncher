@@ -97,9 +97,7 @@ class GameProfile:
         if "  " in self.jvm_args:  # probably not necessary?
             while "  " in self.jvm_args:
                 self.jvm_args = self.jvm_args.replace("  ", " ")
-        # this is definitely necessary or the file will keep getting bigger
-        if self.jvm_args.startswith(" ") or self.jvm_args.endswith(" "):
-            self.jvm_args = self.jvm_args.strip()
+        self.jvm_args = self.jvm_args.strip()
 
     def to_dict(self):
         """
