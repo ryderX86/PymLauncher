@@ -1063,7 +1063,7 @@ class ProfilesPage(QWidget):
 
         if show_debug_options:
             copy_id = QAction(menu)
-            copy_id.setIcon(resources.symbol("copy"))
+            copy_id.setIcon(resources.symbol("clipboard"))
             copy_id.setText("Copy ID")
             copy_id.triggered.connect(lambda c: copy_to_clipboard(prof.uuid))
             menu.addAction(copy_id)
