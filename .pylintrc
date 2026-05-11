@@ -19,4 +19,5 @@ disable=invalid-name,
         useless-return,
         too-many-arguments,
         too-many-positional-arguments,
-        too-many-lines
+        too-many-lines,
+        implicit-flag-alias

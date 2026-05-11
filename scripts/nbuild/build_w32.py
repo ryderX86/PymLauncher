@@ -12,7 +12,7 @@ from . import (
     PROJECT_TOML,
     BASE_ARGS,
     FLAGS,
-    BuildFlags
+    BuildFlags,
 )
 
 log = logging.getLogger(__name__)
@@ -21,14 +21,15 @@ py_exec = VENV_PATH / "Scripts" / "python.exe"
 
 log.debug("Python executable: %s", py_exec)
 
-def read_subprocess_info(logger, debug=True):
+
+def read_subprocess_info(process, logger, debug=True):
     if debug:
         func = logger.debug
     else:
         func = logger.info
-    for line in p.stdout.splitlines():
+    for line in process.stdout.splitlines():
         func(line.decode())
-    for line in p.stderr.splitlines():
+    for line in process.stderr.splitlines():
         func(line.decode())
 
 
@@ -47,11 +48,11 @@ if FLAGS & BuildFlags.RESOURCES:
 
     if p.returncode != 0:
         log.error("Failed to run resources script!")
-        read_subprocess_info(compile_py_logger, False)
+        read_subprocess_info(p, compile_py_logger, False)
         p.check_returncode()
     else:
         log.info("Script finished.")
-        read_subprocess_info(compile_py_logger)
+        read_subprocess_info(p, compile_py_logger)
         del compile_py_logger
 
 args = [
@@ -119,6 +120,6 @@ if FLAGS & BuildFlags.INSTALLER:
         sys.exit(1)
     else:
         nsis_logger = logging.getLogger("makensis.exe")
-        read_subprocess_info(nsis_logger)
+        read_subprocess_info(p, nsis_logger)
 
 log.info("Build successful.")
