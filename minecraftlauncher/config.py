@@ -31,13 +31,6 @@ class JarRedownloadBehavior(IntEnum):
     REDOWNLOAD_ONCE = 2
 
 
-class SetLastProfileBehavior(IntEnum):
-    LAST_PLAYED = 0
-    """Last played"""
-    LAST_SELECTED = 1
-    """Last selected"""
-
-
 class IgnoreMe:
     def __init__(self, value: bool = False):
         self._bool = bool(value)
@@ -71,9 +64,6 @@ show_animation_on_skin_dialog: bool = False
 show_logs_on_home: bool = False
 allow_audio: bool = True
 enforce_json_spec: bool = False
-profile_selection_behavior: SetLastProfileBehavior = (
-    SetLastProfileBehavior.LAST_PLAYED
-)
 # icon_pack: str = ICON_PACK_BOOTSTRAP
 
 __config__ = {
@@ -91,7 +81,6 @@ __config__ = {
     "show_logs_on_home",
     "allow_audio",
     "enforce_json_spec",
-    "profile_selection_behavior",
 }
 
 

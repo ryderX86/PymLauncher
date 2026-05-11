@@ -21,11 +21,7 @@ import os
 
 from PySide6.QtCore import Signal, QObject
 
-from minecraftlauncher.config import (
-    enforce_json_spec,
-    profile_selection_behavior,
-    SetLastProfileBehavior,
-)
+from minecraftlauncher.config import enforce_json_spec
 from minecraftlauncher.constants import MINECRAFT_DIR
 from minecraftlauncher.datatypes import GameProfile
 from minecraftlauncher.functions import reswrite
@@ -68,7 +64,7 @@ def get_row_from_profile(profile: GameProfile):
         else:
             i += 1
     raise IndexError(
-        f"Profile '{profile.name}' (ID: {profile.uuid}) not in cache"
+        f"Profile {profile.name!r} (ID: {profile.uuid!r}) not in cache"
     )
 
 
@@ -81,8 +77,7 @@ def reorder_profiles(new_order: Iterable[str]):
     for profile_id in new_order:
         if profile_id not in profiles:
             raise ValueError(
-                "ID given for profile reordering doesn't exist: "
-                f"'{profile_id}'"
+                f"ID given for profile reordering doesn't exist: {profile_id!r}"
             )
 
         new_profiles[profile_id] = profiles[profile_id]
@@ -136,7 +131,7 @@ def remove_profile_switch_handler(
                 _profile_switch_handlers.index(func_idx)
             )
         case _:
-            raise TypeError(f"Unexpected type: {type(func_idx).__name__}")
+            raise TypeError(f"Unexpected type: {type(func_idx).__name__!r}")
     return
 
 
@@ -205,7 +200,7 @@ def get_profile(idx: str | int) -> GameProfile:
             return [*profiles.values()][idx]
         case _:
             raise TypeError(
-                f"Unexpected type for 'idx': '{type(idx).__name__}'"
+                f"Unexpected type for 'idx': {type(idx).__name__!r}"
             )
 
 
@@ -219,20 +214,17 @@ def set_current_profile_uuid(uid: str):
 
 def set_current_profile(prof: GameProfile):
     global _current_profile
-    # print(inspect.stack()[1].function)
-    log.debug("Switching profile to '%s' (ID: %s)", prof.name, prof.uuid)
-    _current_profile = prof
+    log.debug("Switching profile to %r (ID: %r)", prof.name, prof.uuid)
+    _current_profile = profiles[prof.uuid]
     for func in _profile_switch_handlers:
         func(prof)
-    if profile_selection_behavior == SetLastProfileBehavior.LAST_SELECTED:
-        prof.set_last_used()
     return
 
 
 def current_profile_used():
     prof = get_current_profile()
     log.info(
-        "Setting profile '%s' (ID: %s) last used to now.", prof.name, prof.uuid
+        "Setting profile %r (ID: %r) last used to now.", prof.name, prof.uuid
     )
     prof.last_used = datetime.now().isoformat()
     save_single_profile(prof)
@@ -250,16 +242,18 @@ _meta_cache = {}
 
 
 def get_launcher_meta():
-    if _meta_cache:
+    if _meta_cache or getattr(get_launcher_meta, "ran_once", False):
         return _meta_cache
+    get_launcher_meta.ran_once = True  # type: ignore
     if os.path.isfile(PROFILES_META):
         with open(PROFILES_META, "r") as f:
             txt = f.read()
         try:
             meta = json.loads(txt)
         except Exception as err:
-            log.error("", exc_info=err)
-            log.error("Failed to read launcher_profiles_meta.json")
+            log.error(
+                "Failed to read launcher_profiles_meta.json:", exc_info=err
+            )
             return {}
         else:
             return meta
