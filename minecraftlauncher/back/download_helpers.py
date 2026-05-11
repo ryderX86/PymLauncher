@@ -204,43 +204,6 @@ class DownloadError(Exception):
         self.url = url
 
 
-class BulkDownloadError(Exception):
-    def __init__(self, *exceptions: Exception):
-        super().__init__("Error(s) occured in bulk download")
-        self.exception_list = [*exceptions]
-        """All exceptions passed to this exception"""
-        self.primary_exception = Counter(
-            self.exception_list
-        ).most_common()[0][0] # fmt: skip
-        """Exception which occured most frequently in the list"""
-        self._iter_idx_ = 0
-
-    def all_messages(self):
-        texts = ["List of exceptions and their messages:"]
-        for err in self.exception_list:
-            texts.append(f"    {type(err).__name__}{err.args!r}: {err!r}")
-        return texts
-
-    def __iter__(self):
-        self._iter_idx_ = 0
-        return self
-
-    def __next__(self):
-        i = self._iter_idx_
-        if i >= len(self.exception_list):
-            raise StopIteration
-        self._iter_idx_ += 1
-        return self.exception_list[i]
-
-    @classmethod
-    def from_runnable_list(cls, dl_list: list[RunnableDownloader]):
-        exc_list = []
-        for dl in dl_list:
-            if not dl.success and dl.last_exception:
-                exc_list.append(dl.last_exception)
-        return cls(*exc_list)
-
-
 class RunnableDownloader(QRunnable):
     threads_quit = False
     sleep_time = 0.0
@@ -394,3 +357,40 @@ class RunnableDownloader(QRunnable):
         due to SHA matching
         """
         return self.success
+
+
+class BulkDownloadError(Exception):
+    def __init__(self, *exceptions: Exception):
+        super().__init__("Error(s) occured in bulk download")
+        self.exception_list = [*exceptions]
+        """All exceptions passed to this exception"""
+        self.primary_exception = Counter(
+            self.exception_list
+        ).most_common()[0][0] # fmt: skip
+        """Exception which occured most frequently in the list"""
+        self._iter_idx_ = 0
+
+    def all_messages(self):
+        texts = ["List of exceptions and their messages:"]
+        for err in self.exception_list:
+            texts.append(f"    {type(err).__name__}{err.args!r}: {err!r}")
+        return texts
+
+    def __iter__(self):
+        self._iter_idx_ = 0
+        return self
+
+    def __next__(self):
+        i = self._iter_idx_
+        if i >= len(self.exception_list):
+            raise StopIteration
+        self._iter_idx_ += 1
+        return self.exception_list[i]
+
+    @classmethod
+    def from_runnable_list(cls, dl_list: list[RunnableDownloader]):
+        exc_list = []
+        for dl in dl_list:
+            if not dl.success and dl.last_exception:
+                exc_list.append(dl.last_exception)
+        return cls(*exc_list)
