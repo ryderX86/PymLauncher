@@ -67,7 +67,7 @@ args = [
     f"--product-version={PROJECT_TOML["project"]["version"]}",
     f"--product-name={PROJECT_TOML["project"]["name"]}",
     # this should probably come from pyproject.toml as well?
-    '--file-description="Minecraft Launcher written in Python"',
+    "--file-description=Minecraft Launcher (python)",
     "--user-package-configuration-file=./scripts/nuitka.yaml",
 ]
 
