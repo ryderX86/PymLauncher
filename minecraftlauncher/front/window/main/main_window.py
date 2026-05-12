@@ -80,7 +80,9 @@ class MainWindow(QMainWindow):
                 # is this even a good idea? lol
                 self.home_page.play_button.click()
             else:
-                error_box(f'Couldn\'t find profile by ID: "{launch_profile}"!')
+                error_box(
+                    f'Couldn\'t find any profile with ID "{launch_profile}"!'
+                )
 
     def _on_window_closed(self):
         geo = self.geometry()
