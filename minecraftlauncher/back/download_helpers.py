@@ -190,13 +190,15 @@ class DownloadError(Exception):
     ):
         if isinstance(path, Path):
             path = str(path.resolve().absolute())
+        else:
+            path = os.path.abspath(path)
         if self.__context__ and not msg:
             msg = (
-                f"Failed to download file from URL '{url}' to '{path}' "
+                f"Failed to download file from URL {url!r} to {path!r} "
                 f"(original exception: {type(self.__context__).__name__})"
             )
         elif not msg:
-            msg = f"Failed to download file from URL '{url}' to '{path}'"
+            msg = f"Failed to download file from URL {url!r} to {path!r}"
         super().__init__(msg, url, path)
         if isinstance(self.__context__, Exception):
             self.__traceback__ = self.__context__.__traceback__
@@ -285,12 +287,10 @@ class RunnableDownloader(QRunnable):
         if self.threads_quit:
             self.log.debug("Quitting thread early")
             return
-        self.download()
-
-    def download(self):
         if self._check_hash and self._file_exists:
             if self._check_sha1():
-                return False
+                self.success = True
+                return
             self.log.debug("File exists but SHA1 doesn't match, deleting.")
             os.unlink(self._path)
         attempts = 0
@@ -332,19 +332,24 @@ class RunnableDownloader(QRunnable):
                     )
                 with open(self._path, "wb") as f:
                     f.write(content)
+                print("Download done")
+                self.success = True
+                if self._callback:
+                    self._callback(1)
+                return
             finally:
                 attempts += 1
-        if resp:
-            self.success = True
-            if self._callback:
-                self._callback(1)
-        else:
+        if not resp:
             err = DownloadError(self._url, self._path)
             if self.last_exception:
                 raise err from self.last_exception
             self.last_exception = err
             raise err
-        return True
+        return
+
+    @property
+    def failed(self):
+        return self.success is False
 
     @classmethod
     def kill_all(cls):
@@ -360,20 +365,30 @@ class RunnableDownloader(QRunnable):
 
 
 class BulkDownloadError(Exception):
+    primary_exception: Exception | None
+    """Exception which occured most frequently in the list"""
+
     def __init__(self, *exceptions: Exception):
         super().__init__("Error(s) occured in bulk download")
         self.exception_list = [*exceptions]
         """All exceptions passed to this exception"""
-        self.primary_exception = Counter(
-            self.exception_list
-        ).most_common()[0][0] # fmt: skip
-        """Exception which occured most frequently in the list"""
+
+        if self.exception_list:
+            self.primary_exception = Counter(
+                self.exception_list
+            ).most_common()[0][0] # fmt: skip
+        else:
+            self.primary_exception = None
         self._iter_idx_ = 0
+        for i in self.all_messages():
+            self.add_note(i)
 
     def all_messages(self):
         texts = ["List of exceptions and their messages:"]
         for err in self.exception_list:
             texts.append(f"    {type(err).__name__}{err.args!r}: {err!r}")
+        if not self.exception_list:
+            texts = ["<no exceptions were passed>"]
         return texts
 
     def __iter__(self):
