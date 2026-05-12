@@ -1,6 +1,6 @@
 import logging
 
-from PySide6.QtCore import Qt, Signal, QSize
+from PySide6.QtCore import Signal, QSize
 from PySide6.QtGui import QFocusEvent, QIcon, QMouseEvent, QWheelEvent
 from PySide6.QtWidgets import QPushButton, QLabel, QHBoxLayout
 
@@ -29,6 +29,7 @@ class IconPickerButton(QPushButton):
         self.setFixedSize(QSize(98, 80))
         self._lo = QHBoxLayout(self)
         self._icon = QLabel()
+        self._lo.addStretch()
         self._lo.addWidget(self._icon)
         self._label = QLabel()
         self._lo.addStretch()
@@ -36,12 +37,6 @@ class IconPickerButton(QPushButton):
         self._lo.setContentsMargins(8, 8, 8, 8)
         self._label.setPixmap(
             resources.symbol("dropdown").pixmap(QSize(12, 12))
-        )
-        self._icon.setAlignment(
-            Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft
-        )
-        self._label.setAlignment(
-            Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignRight
         )
 
     def focusInEvent(self, arg__1: QFocusEvent):
@@ -51,14 +46,12 @@ class IconPickerButton(QPushButton):
     def checkStateSet(self):
         if self.isChecked():
             self._label.setPixmap(
-                resources.symbol("dropdown-up").pixmap(QSize(12, 12))
+                resources.symbol("dropdown-up").pixmap(12, 12)
             )
             self.dropdown.show()
             self.setDown(True)
         else:
-            self._label.setPixmap(
-                resources.symbol("dropdown").pixmap(QSize(12, 12))
-            )
+            self._label.setPixmap(resources.symbol("dropdown").pixmap(12, 12))
             self.dropdown.hide()
             self.setDown(False)
         return super().checkStateSet()
@@ -120,11 +113,16 @@ class IconPickerButton(QPushButton):
     def _on_change_icon(self, name: str, ico: QIcon):
         self._icon_name = name
         # wh = int(self.height() / 1.6)
-        pix = ico.pixmap(QSize(64, 64))
+        pix = ico.pixmap(64, 64)
         if pix.isNull():
+            self.setToolTip("No icon selected")
             self._icon.setPixmap(pix)
         else:
             self._icon.setPixmap(pix.scaled(64, 64))
+            if "base64" in self._icon_name or self._icon_name == "<CUSTOM>":
+                self.setToolTip("Custom icon")
+            else:
+                self.setToolTip(self._icon_name.replace("_", " "))
         if not self.dropdown.automated:
             self.icon_changed.emit(name)
 
