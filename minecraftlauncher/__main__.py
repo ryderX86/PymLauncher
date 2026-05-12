@@ -1,15 +1,13 @@
-from logging.handlers import RotatingFileHandler
 from time import sleep
 import logging
 import atexit
 import sys
-import os
 
 from PySide6.QtCore import QFile
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QStyleFactory
 
-from . import constants, FORMATTER, DEV, MEMORY_HANDLER, config, QAPP, args
+from . import constants, DEV, config, QAPP, args
 from .functions.error_box import error_box
 from .front.styles import STYLESHEET, FONT, PALETTE
 from .front.window.loading_blocker import LoadingBlockerWindow
@@ -28,24 +26,6 @@ from .auth import LauncherAccount
 log = logging.getLogger("minecraftlauncher")
 
 clean_exit = False
-
-if not DEV:
-    log_dir = os.path.join(constants.LAUNCHER_DATA_DIR, "logs")
-    log_file = os.path.join(log_dir, "latest.log")
-    if not os.path.isdir(log_dir):
-        os.makedirs(log_dir, exist_ok=True)
-    log.info("Running frozen, we're compiled")
-    fh = RotatingFileHandler(log_file, backupCount=4, maxBytes=1000**3)
-    fh.setLevel(logging.DEBUG)
-    fh.setFormatter(FORMATTER)
-    if os.path.isfile(log_file):
-        fh.doRollover()
-    MEMORY_HANDLER.setTarget(fh)
-    MEMORY_HANDLER.flush()
-    root_logger = logging.getLogger()
-    root_logger.removeHandler(MEMORY_HANDLER)
-    root_logger.addHandler(fh)
-    del root_logger
 
 
 class App:
@@ -109,13 +89,16 @@ class App:
         self.lb_window.set_text("Fetching version list")
         try:
             version_manager.fetch_version_manifest()
+            version_manager.get_version_list()
         except Exception as err:
             self.log.error("Failed to load version manifest:", exc_info=err)
             self.log.info(
                 "Not set up yet to handle offline mode, notify user"
                 " and exit."
             )
-            error_box(f"Failed to get version info: {err}", fatal=True)
+            error_box(
+                f"Failed to get version info (error text: {err!r})", fatal=True
+            )
             return 1
 
         self.log.debug("Attempting to get JRE manifest...")
@@ -129,8 +112,9 @@ class App:
                 " and exit."
             )
             error_box(f"Failed to get JRE manifest: {err}", fatal=True)
-            return 1
+            return 2
 
+        self.lb_window.set_text("Loading UI data...")
         self.buildall()
         self.log.debug("Attempting to load accounts from cache...")
         self.lb_window.set_text("Authenticating")
@@ -165,7 +149,7 @@ class App:
         self._refresh_account_ui()
 
     def show_crash_dialog(self, exit_code: str, stderr: str):
-        log.debug("Showing crash dialog to user")
+        self.log.debug("Showing crash dialog to user")
         dialog = ErrorDisplay(self.main_window, exit_code, stderr)
         dialog.show()
         dialog.exec()
@@ -176,7 +160,6 @@ class App:
         self.lb_window.open()
         self.lb_window.set_text("Loading account details")
         self.lb_window.update()
-        account_manager.load_accounts()
         account_manager.save_or_replace_account(account)
         account_manager.set_active_account(account.xuid)
         self._refresh_account_ui()
@@ -191,7 +174,7 @@ class App:
         self._refresh_account_ui()
 
         if not account_manager.accounts:
-            log.info("No accounts left, showing login window.")
+            self.log.info("No accounts left, showing login window.")
             self.close_if_login_aborted = True
             self.show_login()
 
@@ -235,7 +218,7 @@ class App:
                     self.lb_window.accept()
                     account_manager.save_or_replace_account(acc)
                 else:
-                    log.debug(
+                    self.log.debug(
                         "Couldn't refresh %s, prompting user to relog", xuid
                     )
                     dialog = LoginWindow(self.lb_window)

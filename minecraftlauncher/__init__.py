@@ -1,9 +1,10 @@
-from logging.handlers import MemoryHandler
+from logging.handlers import RotatingFileHandler
 from collections.abc import Callable
 from types import TracebackType
 import logging
 import ctypes
 import sys
+import os
 
 from PySide6.QtCore import (
     qInstallMessageHandler,
@@ -13,7 +14,14 @@ from PySide6.QtCore import (
 from PySide6.QtWidgets import QApplication
 import requests
 
-from .constants import DEV, USER_AGENT, DEBUG_LOGGING, OS, APP_SLUG
+from .constants import (
+    DEV,
+    USER_AGENT,
+    DEBUG_LOGGING,
+    OS,
+    APP_SLUG,
+    LAUNCHER_DATA_DIR,
+)
 
 if not DEV:
     match OS:
@@ -50,25 +58,22 @@ class _LoggingFormatter(logging.Formatter):
                 color = "31"
             case _:
                 color = "96"
-        return "".join(["\033[", color, "m", line, "\033[0m"])
+        return f"\033[{color}m{line}\033[0m"
 
     if DEV:
         format = format_colors
 
 
 root_logger = logging.getLogger()
-MEMORY_HANDLER = MemoryHandler(capacity=1000, flushLevel=logging.DEBUG)
-MEMORY_HANDLER.setLevel(logging.DEBUG)
 if DEBUG_LOGGING:
     FORMATTER = _LoggingFormatter(
-        "%(thread)5d %(asctime)12s %(levelname)7s  %(name)s[%(lineno)s]: "
-        "%(message)s"
+        "{thread:5} {asctime:12} {levelname:>7}  {name}[{lineno}]: {message}",
+        style="{",
     )
 else:
     FORMATTER = _LoggingFormatter(
-        "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+        "{asctime:12} [{levelname}] {name}: {message}", style="{"
     )
-root_logger.addHandler(MEMORY_HANDLER)
 logging.getLogger("urllib3").setLevel(logging.CRITICAL)
 
 root_logger.handlers[0].setFormatter(FORMATTER)
@@ -97,9 +102,20 @@ def _qt_logger(type_: QtMsgType, context: QMessageLogContext, msg: str):
 
 qInstallMessageHandler(_qt_logger)
 
-logging.info("Starting up")
-
 if not DEV:
+    log_dir = os.path.join(LAUNCHER_DATA_DIR, "logs")
+    log_file = os.path.join(log_dir, "latest.log")
+    if not os.path.isdir(log_dir):
+        os.makedirs(log_dir, exist_ok=True)
+    logging.info("Running frozen, we're compiled")
+    fh = RotatingFileHandler(log_file, backupCount=4, maxBytes=1000**3)
+    fh.setLevel(logging.DEBUG)
+    fh.setFormatter(FORMATTER)
+    if os.path.isfile(log_file):
+        fh.doRollover()
+    root_logger = logging.getLogger()
+    root_logger.addHandler(fh)
+    del root_logger
 
     def except_hook(type_: type, err: BaseException, traceback: TracebackType):
         logging.critical("Uncaught %s:", type_.__name__, exc_info=err)
@@ -121,6 +137,8 @@ Used to stop internet-requiring functions before they execute
 """
 
 offline_mode_hooks: list[Callable[[bool], None]] = []
+
+logging_set_up: bool = False
 
 
 def add_offline_mode_hook(hook: Callable[[bool], None]):
@@ -145,3 +163,6 @@ def set_offline_mode(offline: bool):
     logging.debug("Setting offline mode %s", "on" if offline_mode else "off")
     for func in offline_mode_hooks:
         func(offline_mode)
+
+
+logging.info("Starting up")
