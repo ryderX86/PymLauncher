@@ -18,8 +18,8 @@ python -m venv .venv
 ```
 3. Run `pip install -r requirements.txt`
 ### Windows
-4. (optional) Ensure Visual Studio is installed if using MSVC (NOT VSCode):
-https://visualstudio.microsoft.com/
+4. (optional, recommended) Ensure Visual Studio is installed if using MSVC
+(NOT VSCode): https://visualstudio.microsoft.com/
 5. Ensure NSIS is installed: https://nsis.sourceforge.io/Download
 6. Add `makensis` from the NSIS install directory (default:
 `C:\Program Files (x86)\NSIS`) to PATH
