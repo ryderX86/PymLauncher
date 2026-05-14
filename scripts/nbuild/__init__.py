@@ -4,12 +4,15 @@ from pathlib import Path
 import logging
 import tomllib
 
+
 class BuildFlags(IntFlag):
     NONE = 0b0000
+    NO_BUILD_BUMP = 0b1000
     EXECUTABLE = 0b0001
     INSTALLER = 0b0010
     RESOURCES = 0b0100
     ALL = 0b0111
+
 
 CWD = Path(__file__).parent.parent.parent
 VENV_PATH = CWD / ".venv"
@@ -22,6 +25,7 @@ _parser.add_argument(
 )
 _parser.add_argument("-i", "--installer", action="store_true", default=False)
 _parser.add_argument("-s", "--resources", action="store_true", default=False)
+_parser.add_argument("-n", "--no-bump", action="store_true", default=False)
 
 _args = _parser.parse_args()
 
@@ -30,6 +34,7 @@ MAKE_BUILD_REPORT: bool = _args.build_report
 EXECUTABLE_BUILD: bool = _args.exe
 INSTALLER_BUILD: bool = _args.installer
 RESOURCES_BUILD: bool = _args.resources
+BUMP: bool = not _args.no_bump
 
 FLAGS = BuildFlags.ALL
 if EXECUTABLE_BUILD or INSTALLER_BUILD or RESOURCES_BUILD:
@@ -40,6 +45,8 @@ if EXECUTABLE_BUILD or INSTALLER_BUILD or RESOURCES_BUILD:
         FLAGS |= BuildFlags.INSTALLER
     if RESOURCES_BUILD:
         FLAGS |= BuildFlags.RESOURCES
+if not BUMP:
+    FLAGS |= BuildFlags.NO_BUILD_BUMP
 
 if DEBUG:
     logging.basicConfig(level=logging.DEBUG)
@@ -51,6 +58,24 @@ ICO_PATH = CWD / "resources" / "dist" / "icon.ico"
 
 _toml_p = CWD / "pyproject.toml"
 PROJECT_TOML = tomllib.loads(_toml_p.read_text())
+version: str = PROJECT_TOML["project"]["version"]
+
+
+def bump_build_number():
+    txt = _toml_p.read_text()
+    version_nums = version.split(".")
+    bnum = version_nums[-1]
+    if not bnum.isdigit():
+        logging.warning("Bad version number: %r; not bumping", bnum)
+        return
+    version_nums[-1] = str(int(bnum) + 1)
+    version_new = ".".join(version_nums)
+    txt = txt.replace(
+        f'\nversion = "{version}"\n', f'\nversion = "{version_new}"\n'
+    )
+    logging.info("Bumping build number from %r => %r", version, version_new)
+    _toml_p.write_text(txt)
+
 
 NOINCLUDE_DATA = {
     "PySide6/qml/QtWebEngine/*",
