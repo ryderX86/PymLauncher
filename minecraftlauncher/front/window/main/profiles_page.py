@@ -2,6 +2,13 @@
 minecraftlauncher.front.window.main.profiles_page
 
 Profile management page.
+
+TODOs:
+- Rework the editor state check (clean/dirty)
+- Possibly replace the default Qt mapper with the custom one used by
+  settings_page
+- Find a way to make "latest-release" and "latest-snapshot" use friendlier names
+- Are colored save/delete buttons really necessary here?
 """
 
 from pathlib import Path
@@ -9,13 +16,7 @@ import logging
 import time
 import os
 
-from PySide6.QtCore import (
-    Qt,
-    Signal,
-    QThread,
-    QSize,
-    QEvent,
-)
+from PySide6.QtCore import Qt, Signal, QThread, QSize, QEvent
 from PySide6.QtGui import (
     QAction,
     QContextMenuEvent,
@@ -48,10 +49,7 @@ from minecraftlauncher.back.profile_manager import (
     load_launcher_profiles,
     save_single_profile,
 )
-from minecraftlauncher.back import (
-    version_manager,
-    profile_manager,
-)
+from minecraftlauncher.back import version_manager, profile_manager
 from minecraftlauncher.front import styles, resources
 from minecraftlauncher.front.qt.models import (
     ProfileSelectionModel,
@@ -197,7 +195,9 @@ class ProfilesPage(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
 
-        # Profile list
+        #
+        # Left-side layout
+        #
         left = QWidget()
         left.setFixedWidth(250)
         left_layout = QVBoxLayout(left)
@@ -231,6 +231,9 @@ class ProfilesPage(QWidget):
         # may have to relocate
         left_layout.addWidget(button_row_w)
 
+        #
+        # Profile list
+        #
         self.profile_list = QListView()
         self.profile_list.setVerticalScrollMode(
             QListView.ScrollMode.ScrollPerPixel
@@ -272,7 +275,9 @@ class ProfilesPage(QWidget):
         sep.setFixedWidth(1)
         layout.addWidget(sep)
 
-        # editor
+        #
+        # Right-side/editor
+        #
         right = QWidget()
         right_layout = QVBoxLayout(right)
         right_layout.setContentsMargins(12, 16, 12, 16)
@@ -288,6 +293,7 @@ class ProfilesPage(QWidget):
             Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignRight
         )
 
+        # Icon picker
         icon_row_w = QWidget()
         icon_row = QHBoxLayout(icon_row_w)
         icon_row.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -297,15 +303,22 @@ class ProfilesPage(QWidget):
         icon_row.addWidget(self.icon_picker)
         right_layout.addWidget(icon_row_w)
 
+        # Name input
         self.name_input = QLineEdit()
         self.mapper.addMapping(self.name_input, MapIndex.NAME)
         self.name_input.textChanged.connect(self._dirty_check)
 
         self.form.addRow("Name:", self.name_input)
 
+        # Version drop-down/combobox
+        version_combo_area = QVBoxLayout()
+        version_combo_area.setSpacing(8)
+
         self.version_combo = QComboBox(
             insertPolicy=QComboBox.InsertPolicy.NoInsert, editable=True
         )
+        self.version_combo_view = QListView(self.version_combo)
+        self.version_combo.setView(self.version_combo_view)
         self.version_combo.addItems(
             [constants.LATEST_VERSION_TEXT, constants.LATEST_SNAPSHOT_TEXT]
         )
@@ -324,12 +337,29 @@ class ProfilesPage(QWidget):
         version_row = QHBoxLayout()
         version_row.addWidget(self.version_combo, 1)
         version_row.addWidget(refresh_versions_button)
-        self.form.addRow("Version:", version_row)
+        version_row.setSpacing(12)
+        version_combo_area.addItem(version_row)
+        version_combo_checkboxes = QHBoxLayout()
+        self.show_snapshots_chk = QCheckBox("Show snapshots")
+        self.show_snapshots_chk.setChecked(config.show_snapshots)
+        self.show_snapshots_chk.checkStateChanged.connect(
+            self.version_visibility_changed
+        )
+        self.show_old_chk = QCheckBox("Show old releases")
+        self.show_old_chk.setChecked(config.show_snapshots)
+        self.show_old_chk.checkStateChanged.connect(
+            self.version_visibility_changed
+        )
+        version_combo_checkboxes.addWidget(self.show_snapshots_chk)
+        version_combo_checkboxes.addWidget(self.show_old_chk)
+        version_combo_checkboxes.setAlignment(Qt.AlignmentFlag.AlignLeft)
+        version_combo_area.addItem(version_combo_checkboxes)
+        self.form.addRow("Version:", version_combo_area)
 
+        # Game directory
         game_dir_row = QHBoxLayout()
-        self.game_dir_input = QLineEdit()
-        self.game_dir_input.setPlaceholderText(
-            f"...{constants.OS_PATH_DELIM}.minecraft"
+        self.game_dir_input = QLineEdit(
+            placeholderText=f"...{constants.OS_PATH_DELIM}.minecraft"
         )
         self.game_dir_input.textChanged.connect(self._dirty_check)
         self.game_dir_input.setValidator(self._fp_validator)
@@ -344,41 +374,40 @@ class ProfilesPage(QWidget):
         game_dir_row.addWidget(self.game_dir_browse_button)
         self.form.addRow("Game Directory:", game_dir_row)
 
+        # Java directory
         java_row = QHBoxLayout()
-        self.java_input = QLineEdit()
-        self.java_input.setPlaceholderText("Built-in Java")
+        self.java_input = QLineEdit(placeholderText="Built-in Java")
         self.java_input.textChanged.connect(self._dirty_check)
         self.java_input.setValidator(self._fp_validator)
         self.mapper.addMapping(self.java_input, MapIndex.JAVA_PATH)
         java_row.addWidget(self.java_input, 1)
-        self.java_browse_button = QPushButton(
+        java_browse_button = QPushButton(
             resources.symbol("folder-symlink"), "Browse"
         )
-        self.java_browse_button.setProperty("large", True)
-        self.java_browse_button.setFixedWidth(100)
-        self.java_browse_button.clicked.connect(self._browse_java)
-        java_row.addWidget(self.java_browse_button)
+        java_browse_button.setProperty("large", True)
+        java_browse_button.setFixedWidth(100)
+        java_browse_button.clicked.connect(self._browse_java)
+        java_row.addWidget(java_browse_button)
         self.form.addRow("Java Executable:", java_row)
 
-        self.jvm_args_input = QLineEdit()
-        self.jvm_args_input.setPlaceholderText("(Use default arguments)")
+        self.jvm_args_input = QLineEdit(
+            placeholderText="(Use default arguments)"
+        )
         self.jvm_args_input.textChanged.connect(self._dirty_check)
         self.mapper.addMapping(self.jvm_args_input, MapIndex.JAVA_ARGS)
         self.form.addRow("JVM Arguments:", self.jvm_args_input)
 
+        # Min/max RAM
         memory_row = QHBoxLayout()
 
         min_label = QLabel("Minimum:")
 
-        # workaround for the dumb stupid label alignment
         self._ram_validator = ProfileRAMValidator()
+        # workaround for the dumb stupid label alignment
         min_label.setContentsMargins(0, 0, 0, 4)
         memory_row.addWidget(min_label, 0)
-        self.mem_min_input = QLineEdit("512M")
-        self.mem_min_input.setMaxLength(6)
-        self.mem_min_input.setMaximumWidth(
-            max(styles.FONT_INF.pixelSize(), 1) * 6
-        )
+        self.mem_min_input = QLineEdit("512M", maxLength=6)
+        self.mem_min_input.setMaximumWidth(72)
         self.mem_min_input.textChanged.connect(self._dirty_check)
         self.mem_min_input.setValidator(self._ram_validator)
         memory_row.addWidget(self.mem_min_input, 0)
@@ -387,11 +416,8 @@ class ProfilesPage(QWidget):
         max_label = QLabel("Maximum:")
         max_label.setContentsMargins(0, 0, 0, 4)
         memory_row.addWidget(max_label, 0)
-        self.mem_max_input = QLineEdit("4G")
-        self.mem_max_input.setMaxLength(6)
-        self.mem_max_input.setMaximumWidth(
-            max(styles.FONT_INF.pixelSize(), 1) * 6
-        )
+        self.mem_max_input = QLineEdit("4G", maxLength=6)
+        self.mem_max_input.setMaximumWidth(72)
         self.mem_max_input.textChanged.connect(self._dirty_check)
         self.mem_max_input.setValidator(self._ram_validator)
         memory_row.addWidget(self.mem_max_input, 0)
@@ -400,8 +426,8 @@ class ProfilesPage(QWidget):
 
         self.form.addRow("RAM", memory_row)
 
-        self.res_combo_box = QComboBox()
-        self.res_combo_box.setEditable(True)
+        # Game window size
+        self.res_combo_box = QComboBox(editable=True)
         self.res_combo_box.setValidator(ProfileResolutionTextValidator())
         self.res_combo_box.setMask("Nnnn0A900000")
         self.res_combo_box.editTextChanged.connect(self._dirty_check)
@@ -409,8 +435,9 @@ class ProfilesPage(QWidget):
             self.res_combo_box, MapIndex.RESOLUTION, b"currentText"
         )
         self._populate_resolution_combo()
-        self.form.addRow("Resolution:", self.res_combo_box)
+        self.form.addRow("Window size:", self.res_combo_box)
 
+        # Mods folder (visible w/ Fabric versions)
         self.mods_folder_row = QHBoxLayout()
         self.use_mods_folder_input = QCheckBox("Custom folder")
         self.use_mods_folder_input.setToolTip(
@@ -422,9 +449,8 @@ class ProfilesPage(QWidget):
             self._process_mods_folder_checkbox
         )
         self.mods_folder_row.addWidget(self.use_mods_folder_input)
-        self.mods_folder_input = QLineEdit()
-        self.mods_folder_input.setPlaceholderText(
-            f"...{constants.OS_PATH_DELIM}mods"
+        self.mods_folder_input = QLineEdit(
+            placeholderText=f"...{constants.OS_PATH_DELIM}mods",
         )
         self.mods_folder_input.setDisabled(True)
         self.mods_folder_input.setValidator(self._fp_validator)
@@ -583,7 +609,7 @@ class ProfilesPage(QWidget):
         self.save_button.setDisabled(True)
         self.reset_button.setDisabled(True)
 
-    def _dirty_check(self, *args):
+    def _dirty_check(self, *args):  # TODO: rework/remove
         if not self._loaded:
             return False
         profile = profile_manager.get_current_profile()
@@ -776,6 +802,29 @@ class ProfilesPage(QWidget):
         # for name, icon in resources.get_all_default_icons().items():
         #     self.icon_menu.addItem(icon, name, name)
 
+    def version_visibility_changed(self, *args):
+        config.show_snapshots = self.show_snapshots_chk.isChecked()
+        config.show_old_releases = self.show_old_chk.isChecked()
+        self.handle_version_visibility()
+
+    def handle_version_visibility(self):
+        for i in range(self.version_combo.count()):
+            if i < 2:
+                continue
+            version: GameVersionStub = self.version_combo.itemData(i)
+            match version.type:
+                case "release":
+                    continue
+                case "snapshot":
+                    self.version_combo_view.setRowHidden(
+                        i, not config.show_snapshots
+                    )
+                case "old_alpha" | "old_beta":
+                    self.version_combo_view.setRowHidden(
+                        i, not config.show_old_releases
+                    )
+        return
+
     def refresh_version_combo(self):
         click_time = time.time()
         if self._ver_refresh_last_click >= click_time - 1.0:
@@ -794,21 +843,24 @@ class ProfilesPage(QWidget):
         for ver in game_versions:
             id_ = ver.id
             ver_type = ver.type
-            if constants.show_snapshots and constants.show_old_releases:
-                self.version_combo.addItem(id_, ver.local)
+            if config.show_snapshots and config.show_old_releases:
+                self.version_combo.addItem(id_, ver)
                 continue
+            r = self.version_combo.count()
             match ver_type:
                 case "release":
-                    self.version_combo.addItem(id_, ver.local)
+                    self.version_combo.addItem(id_, ver)
                     continue
                 case "snapshot":
-                    if constants.show_snapshots:
-                        self.version_combo.addItem(id_, ver.local)
+                    self.version_combo.addItem(id_, ver)
+                    if not config.show_snapshots:
+                        self.version_combo_view.setRowHidden(r, True)
                 case "old_beta" | "old_alpha":
-                    if constants.show_old_releases:
-                        self.version_combo.addItem(id_, ver.local)
+                    self.version_combo.addItem(id_, ver)
+                    if not config.show_old_releases:
+                        self.version_combo_view.setRowHidden(r, True)
                 case _:
-                    self.version_combo.addItem(id_, ver.local)
+                    self.version_combo.addItem(id_, ver)
         prof = profile_manager.get_current_profile()
         if current_selected_ver in constants.LATEST_VERSIONS_SET:
             self.version_combo.setCurrentText(current_selected_ver)
@@ -836,21 +888,24 @@ class ProfilesPage(QWidget):
         for ver in game_versions:
             id_ = ver.id
             ver_type = ver.type
-            if constants.show_snapshots and constants.show_old_releases:
-                self.version_combo.addItem(id_, ver.local)
+            if config.show_snapshots and config.show_old_releases:
+                self.version_combo.addItem(id_, ver)
                 continue
+            r = self.version_combo.count()
             match ver_type:
                 case "release":
-                    self.version_combo.addItem(id_, ver.local)
+                    self.version_combo.addItem(id_, ver)
                     continue
                 case "snapshot":
-                    if constants.show_snapshots:
-                        self.version_combo.addItem(id_, ver.local)
+                    self.version_combo.addItem(id_, ver)
+                    if not config.show_snapshots:
+                        self.version_combo_view.setRowHidden(r, True)
                 case "old_beta" | "old_alpha":
-                    if constants.show_old_releases:
-                        self.version_combo.addItem(id_, ver.local)
+                    self.version_combo.addItem(id_, ver)
+                    if not config.show_old_releases:
+                        self.version_combo_view.setRowHidden(r, True)
                 case _:
-                    self.version_combo.addItem(id_, ver.local)
+                    self.version_combo.addItem(id_, ver)
 
     def _check_changed_vals(self) -> list[tuple[str, str, str]]:
         profile = profile_manager.get_current_profile()

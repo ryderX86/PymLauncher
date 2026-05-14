@@ -64,6 +64,15 @@ show_animation_on_skin_dialog: bool = False
 show_logs_on_home: bool = False
 allow_audio: bool = True
 enforce_json_spec: bool = False
+show_snapshots: bool = True
+"""
+Whether or not snapshots/pre-releases should be shown in the versions list.
+"""
+show_old_releases: bool = True
+"""
+Whether or not old releases (pre-alpha, alpha, beta, etc.) should be shown in
+the versions list.
+"""
 # icon_pack: str = ICON_PACK_BOOTSTRAP
 
 __config__ = {
@@ -81,6 +90,8 @@ __config__ = {
     "show_logs_on_home",
     "allow_audio",
     "enforce_json_spec",
+    "show_snapshots",
+    "show_old_releases",
 }
 
 

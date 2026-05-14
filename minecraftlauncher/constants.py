@@ -205,16 +205,6 @@ match OS:
 
 JAVA_PATH = MINECRAFT_DIR / "jre"
 
-show_snapshots: bool = True
-"""
-Whether or not snapshots/pre-releases should be shown in the versions list.
-"""
-show_old_releases: bool = True
-"""
-Whether or not old releases (pre-alpha, alpha, beta, etc.) should be shown in
-the versions list.
-"""
-
 # profile stuff
 DEFAULT_JVM_ARGS = (
     "-XX:+UnlockExperimentalVMOptions "
