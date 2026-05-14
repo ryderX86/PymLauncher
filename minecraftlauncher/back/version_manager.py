@@ -276,6 +276,30 @@ def get_latest_snapshot() -> str:
     return manifest_cache["latest"]["snapshot"]
 
 
+def get_latest_release_stub() -> GameVersionStub:
+    id_ = get_latest_release()
+    version = None
+    for v in get_version_list():
+        if v.id == id_:
+            version = v
+            break
+    if not version:
+        raise RuntimeError("Couldn't get the latest version's info")
+    return version
+
+
+def get_latest_snapshot_stub() -> GameVersionStub:
+    id_ = get_latest_snapshot()
+    version = None
+    for v in get_version_list():
+        if v.id == id_:
+            version = v
+            break
+    if not version:
+        raise RuntimeError("Couldn't get the latest snapshot's info")
+    return version
+
+
 def _get_manifest_entry(version_id: str) -> dict[str, Any] | None:
     for ver in manifest_cache["versions"]:
         if ver["id"] == version_id:
