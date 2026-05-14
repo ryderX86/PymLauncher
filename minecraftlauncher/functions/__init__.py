@@ -63,6 +63,16 @@ _detect_set_clipboard()
 
 
 def reswrite(path: str | os.PathLike, content: str | Buffer):
+    """
+    Helper function for saving to a tmp file, then deleting the actual target
+    and renaming the tmp file to the target's name.
+
+    For example, `reswrite('C:\\test.txt', ...)` would create
+    `C:\\test.txt.tmp`, then delete `C:\\test.txt`, then finally rename
+    `C:\\test.txt.tmp` to `C:\\test.txt`.
+
+    This gives the process *some* resiliance to interruptions while writing.
+    """
     if isinstance(content, str):
         content = content.encode("utf-8")
     if not isinstance(path, str):
