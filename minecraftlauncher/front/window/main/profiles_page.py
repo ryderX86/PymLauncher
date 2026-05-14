@@ -827,7 +827,7 @@ class ProfilesPage(QWidget):
 
     def refresh_version_combo(self):
         click_time = time.time()
-        if self._ver_refresh_last_click >= click_time - 1.0:
+        if self._ver_refresh_last_click >= click_time - 0.5:
             log.debug("Refreshing version list (web request)")
             version_manager.fetch_version_manifest(True)
         self._ver_refresh_last_click = click_time
