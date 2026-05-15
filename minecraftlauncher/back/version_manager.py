@@ -138,37 +138,32 @@ def fetch_version_manifest(force_refresh: bool = False):
 
 
 def build_local_version_list(exclude: list[GameVersionStub] | None = None):
-    if not exclude:
+    if exclude is None:
         exclude = []
-    versions_dir = os.path.join(MINECRAFT_DIR, "versions")
     ver_list: list[GameVersionStub] = []
-    for folder in os.scandir(versions_dir):
-        if not folder.is_dir():
+    for folder in os.scandir(VERSION_DIR):
+        if folder.name in exclude or not folder.is_dir():
             continue
-        jar_path = os.path.join(versions_dir, folder.name, f"{folder.name}.jar")
-        json_path = os.path.join(
-            versions_dir, folder.name, f"{folder.name}.json"
-        )
+        jar_path = os.path.join(folder.path, f"{folder.name}.jar")
+        json_path = os.path.join(folder.path, f"{folder.name}.json")
         if not os.path.isfile(json_path):
-            log.warning("Version %s doesn't have a JSON file!", folder.name)
+            log.warning("Version %r doesn't have a JSON file!", folder.name)
             continue
         try:
             with open(json_path, "r") as f:
                 ver_json_text = f.read()
         except Exception as err:
             log.warning(
-                "Failed to read file at '%s' for version %s",
-                str(json_path),
+                "Failed to read file at %r for version %r",
+                json_path,
                 folder.name,
                 exc_info=err,
             )
             continue
         try:
-            ver_json = json.loads(ver_json_text)
+            ver_json: dict = json.loads(ver_json_text)
         except json.JSONDecodeError as err:
-            log.warning(
-                "Failed to parse JSON in '%s':", str(json_path), exc_info=err
-            )
+            log.warning("Failed to parse JSON in %r:", json_path, exc_info=err)
             continue
         if (
             "downloads" not in ver_json
@@ -176,10 +171,11 @@ def build_local_version_list(exclude: list[GameVersionStub] | None = None):
             and not os.path.isfile(jar_path)
         ):
             log.warning(
-                "Version '%s' has no jar file and doesn't inherit from "
+                "Version %r has no jar file and doesn't inherit from "
                 "anything!",
                 folder.name,
             )
+            continue
         version_info = GameVersionStub(
             folder.name,
             ver_json.get("type", "release"),
@@ -188,15 +184,11 @@ def build_local_version_list(exclude: list[GameVersionStub] | None = None):
             ver_json.get("releaseTime"),
             ver_json.get("time"),
         )
-        if version_info in exclude:
-            continue
         ver_list.append(version_info)
     return ver_list
 
 
 def get_version_list(
-    include_snapshots: bool = True,
-    include_old: bool = True,
     override: bool = False,
 ) -> list[GameVersionStub]:
     """
@@ -230,22 +222,10 @@ def get_version_list(
         url = ver.get("url")
         if not url:
             log.warning(
-                "Skipping version '%s' since it has no manifest URL.", id_
+                "Skipping version %r since it has no manifest URL.", id_
             )
             continue
         type_ = ver.get("type", "release")
-        if not include_snapshots or not include_old:
-            match type_:
-                case "snapshot":
-                    if not include_snapshots:
-                        continue
-                case "old_alpha" | "old_beta":
-                    if not include_old:
-                        continue
-                case "release":
-                    pass
-                case _:
-                    log.debug("Unexpected release type: '%s'", type_)
         timestamp = ver.get("releaseTime", ver.get("time"))
         build_ts = ver.get("time", ver.get("releaseTime"))
         stub = GameVersionStub(id_, type_, url, False, timestamp, build_ts)
@@ -255,7 +235,7 @@ def get_version_list(
     # forge is expected to always appear at the bottom unfortuantely, since for
     # some ungodly reason before more recent versions they always set the time
     # to 1 DECADE before unix epoch (also 1 decade before???? WHY)
-    versions.sort(key=lambda v: v.timestamp, reverse=True)
+    versions.sort(reverse=True)
     log.info("Parsed complete versions list successfully.")
     return versions
 
@@ -482,7 +462,7 @@ def download_client_jar(
     ver_id: str = version_json["id"]
     client_info = get_client_jar_info(version_json)
     if not client_info:
-        raise ValueError(f"No download info for version '{ver_id}'")
+        raise ValueError(f"No download info for version {ver_id!r}")
     expected_sha1 = client_info.get("sha1")
 
     ver_dir = os.path.join(VERSION_DIR, ver_id)
@@ -500,7 +480,7 @@ def download_client_jar(
             return jar_path
         else:
             log.warning(
-                "'%s.jar' SHA1 doesn't match expected: '%s' != '%s'",
+                "'%s.jar' SHA1 doesn't match expected: %r != %r",
                 ver_id,
                 sha1,
                 str(expected_sha1),
@@ -515,7 +495,7 @@ def download_client_jar(
 
     url = client_info["url"]
     total_size = client_info.get("size", 0)
-    log.info("Downloading client JAR for %s (%s bytes)", ver_id, total_size)
+    log.info("Downloading client JAR for %r (%d bytes)", ver_id, total_size)
 
     os.makedirs(ver_dir, exist_ok=True)
 
@@ -524,19 +504,20 @@ def download_client_jar(
 
     downloaded = 0
     sha1 = hashlib.sha1()
-    with open(jar_path, "wb") as f:
+    with open(jar_path, "wb") as fb:
         for chunk in resp.iter_content(chunk_size=None):
-            f.write(chunk)
+            fb.write(chunk)
             sha1.update(chunk)
-            downloaded += len(chunk)
             if progress_callback:
+                downloaded += len(chunk)
                 progress_callback(downloaded, total_size)
 
-    if expected_sha1 and sha1.hexdigest() != expected_sha1:
-        log.debug("SHA1 mismatch, deleting JAR.")
+    sha1_final = sha1.hexdigest()
+    if expected_sha1 and sha1_final != expected_sha1:
+        log.warning("SHA1 mismatch, deleting JAR.")
         os.unlink(jar_path)
         err = RuntimeError("SHA1 mismatch for client JAR")
-        err.add_note(f"Expected '{expected_sha1}', got '{sha1.hexdigest()}'")
+        err.add_note(f"Expected {expected_sha1!r}, got {sha1_final!r}")
         raise err
 
     return jar_path
@@ -554,13 +535,11 @@ def check_client_jar(version_json: dict):
         raise ValueError(f"No download info for version '{ver_id}'")
     expected_sha1: str | None = client_info.get("sha1")
 
-    ver_dir = os.path.join(VERSION_DIR, ver_id)
-    jar_path = os.path.join(ver_dir, f"{ver_id}.jar")
+    jar_path = os.path.join(VERSION_DIR, ver_id, f"{ver_id}.jar")
 
     if os.path.isfile(jar_path) and expected_sha1:
         with open(jar_path, "rb") as f:
-            jar_bytes = f.read()
-        sha1 = hashlib.sha1(jar_bytes).hexdigest()
+            sha1 = hashlib.sha1(f.read()).hexdigest()
         return bool(sha1 == expected_sha1)
     elif os.path.isfile(jar_path):
         log.warning("Unable to check SHA1 for JAR at '%s'", str(jar_path))
