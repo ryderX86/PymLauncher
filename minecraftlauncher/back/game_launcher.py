@@ -520,7 +520,7 @@ class LaunchWorker(QThread):
                 log.warning(
                     "User chose to launch game despite Log4J config issue"
                 )
-                log4j_config = ""
+                log4j_config = None
             else:
                 log.info("User aborted launch due to Log4J config issue")
                 self.finished.emit(False, "User aborted launch")

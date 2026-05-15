@@ -8,6 +8,7 @@ for a given Minecraft version.
 from datetime import datetime, timedelta
 from collections.abc import Callable
 from xml.etree import ElementTree
+from warnings import deprecated
 import logging
 import hashlib
 import json
@@ -35,8 +36,7 @@ ASSETS_INDEX_DIR = os.path.join(ASSETS_DIR, "indexes")
 VIRTUAL_BASE = os.path.join(ASSETS_DIR, "virtual", "legacy")
 OBJECTS_DIR = os.path.join(ASSETS_DIR, "objects")
 
-if not os.path.isdir(ASSETS_DIR):
-    os.makedirs(ASSETS_DIR, exist_ok=True)
+# any of these will create ASSETS_DIR anyways so no need for a redundant check
 if not os.path.isdir(ASSETS_INDEX_DIR):
     os.makedirs(ASSETS_INDEX_DIR, exist_ok=True)
 if not os.path.isdir(VIRTUAL_BASE):
@@ -52,7 +52,7 @@ def fetch_asset_index(version_json: dict) -> dict:
     Returns the parsed asset index dict, which has an ``objects`` key
     mapping virtual paths to ``{hash, size}`` dicts.
     """
-    asset_index_info = version_json.get("assetIndex")
+    asset_index_info: dict | None = version_json.get("assetIndex")
     if asset_index_info is None:
         raise ValueError("Version JSON has no 'assetIndex' field")
 
@@ -68,7 +68,7 @@ def fetch_asset_index(version_json: dict) -> dict:
             with open(index_path, "rb") as fb:
                 file_sha = hashlib.sha1(fb.read()).hexdigest()
             if file_sha == expected_sha1:
-                log.debug("Using cached asset index '%s'", str(index_id))
+                log.debug("Using cached asset index %r", index_id)
                 with open(index_path, "r") as f:
                     try:
                         return json.loads(f.read())
@@ -79,13 +79,14 @@ def fetch_asset_index(version_json: dict) -> dict:
                             exc_info=err,
                         )
         else:
-            # using file timestamp to verify
+            log.warning(
+                "Asset index %r has no SHA1! Using timestamp instead", index_id
+            )
+            # using file timestamp to verify; easier/faster to compare floats
             file_time = os.stat(index_path).st_mtime
             compare_time = (datetime.now() - timedelta(days=1)).timestamp()
             if compare_time < file_time:
-                log.debug(
-                    "Using cached asset index '%s' (time-based)", str(index_id)
-                )
+                log.debug("Using cached asset index %r (time-based)", index_id)
                 with open(index_path, "r") as f:
                     txt = f.read()
                 try:
@@ -98,7 +99,7 @@ def fetch_asset_index(version_json: dict) -> dict:
                     )
 
     # download the index and return it
-    log.info("Downloading asset index '%s' from '%s'", str(index_id), index_url)
+    log.info("Downloading asset index %r from %r", index_id, index_url)
     resp = session.get(index_url, timeout=30)
     resp.raise_for_status()
 
@@ -111,56 +112,75 @@ def fetch_asset_index(version_json: dict) -> dict:
 def patch_logging_config(path: str | os.PathLike):
     if not isinstance(path, str):
         path = str(path)
+    # raw string isn't particularly necessary here probably
     PATTERN = r"[%d{HH:mm:ss}] [%t/%level]: %msg{nolookups}%n"
     with open(path, "r") as f:
         txt = f.read()
     xml = ElementTree.fromstring(txt)
     patched = False
+    # find all tags that will output XML in any form (mojang only uses it for
+    # console anyways and there's no guarantee the format will stay the same)
     elements = [*xml.iter("XMLLayout"), *xml.iter("LegacyXMLLayout")]
     for c in elements:
         c.clear()
+
+        # <PatternLayout pattern="..." />
         c.tag = "PatternLayout"
         c.set("pattern", PATTERN)
         patched = True
+        # no break, there should only be one but if there's more there may be
+        # some weird stuff going on anyways, so keep going
     if patched:
-        log.debug("Patched '%r' with non-XML config", os.path.split(path)[1])
+        log.debug("Patched %r with non-XML config", os.path.split(path)[1])
         stem, suffix = os.path.splitext(path)
         new_path = f"{stem}_patched{suffix}"
         with open(new_path, "wb") as fb:
             fb.write(ElementTree.tostring(xml))
         return new_path
     else:
-        log.warning("Couldn't patch logging config")
+        log.warning("Couldn't patch logging config %r", os.path.split(path)[1])
     return path
 
 
-def check_or_download_logging_config(version_json: dict) -> str:
+def check_or_download_logging_config(version_json: dict) -> str | None:
     """
     Check for the client logging info and if it doesn't exist, download it.
 
     Returns the complete argument to add to the JVM args if there's a logging
-    config for the client, or a blank str otherwise.
+    config for the client, or `None` otherwise.
 
     Also tries to patch the config to not use XML layouts
     """
     logging_info: dict = version_json.get("logging", {}).get("client", {})
     # older versions didn't have logging stuff:
     if not logging_info:
-        return ""
+        return None
 
     arg: str = logging_info.get("argument", "-Dlog4j.configurationFile=${path}")
-    file_info: dict = logging_info.get("file", {})
-    if not file_info:
-        raise ValueError("Expected key 'file' in version_json['logging']")
-    name: str = file_info["id"]
-    sha1: str = file_info.get("sha1", "")
+    if "file" not in logging_info:
+        log.warning("No 'file' key in logging config, considering it invalid.")
+        return None
+    file_info: dict = logging_info["file"]
+
+    # check essential keys
+    if "id" not in file_info:
+        log.warning("ID missing from log config! Considering it invalid.")
+        return None
+    elif "sha1" not in file_info:
+        log.warning("SHA1 missing from log config! Considering it invalid.")
+        return None
+    elif "url" not in file_info:
+        log.warning("URL not in logging config! Considering it invalid.")
+        return None
+    id_: str = file_info["id"]
+    sha1: str = file_info["sha1"]
     url: str = file_info["url"]
 
     dest_folder = os.path.join(ASSETS_DIR, "log_configs")
     if not os.path.isdir(dest_folder):
         os.makedirs(dest_folder, exist_ok=True)
 
-    dest_path = os.path.join(dest_folder, name)
+    dest_path = os.path.join(dest_folder, id_)
     stem, suffix = os.path.splitext(dest_path)
     dest_path_patched = f"{stem}_patched{suffix}"
 
@@ -168,23 +188,34 @@ def check_or_download_logging_config(version_json: dict) -> str:
         with open(dest_path, "rb") as fb:
             f_sha1 = hashlib.sha1(fb.read()).hexdigest()
         if f_sha1 != sha1:
+            log.warning(
+                "Logging config %r has a mismatched SHA, redownloading", id_
+            )
             os.unlink(dest_path)
+            if os.path.isfile(dest_path_patched):
+                log.info("Also unlinking patch file for logging config %r", id_)
+                os.unlink(dest_path_patched)
     if not os.path.isfile(dest_path):
+        log.info("Downloading logging config %r", id_)
         try:
             resp = download(url, sha=sha1)
             with open(dest_path, "wb") as fb:
                 fb.write(resp.content)
         except Exception as err:
-            log.error("Failed to download logging config:", exc_info=err)
+            log.error(
+                "Failed to download logging config from %r:", url, exc_info=err
+            )
             raise
 
     if not os.path.isfile(dest_path_patched):
-        path = patch_logging_config(dest_path)
-        return arg.replace("${path}", path)
+        log.info("Patching logging config %r to not use (Legacy)XMLLayout", id_)
+        final_logging_path = patch_logging_config(dest_path)
+        return arg.replace("${path}", final_logging_path)
     else:
         return arg.replace("${path}", dest_path_patched)
 
 
+@deprecated("Don't filter assets before download anymore")
 def filter_assets_downloads(
     asset_index: dict,
     *,
@@ -195,7 +226,7 @@ def filter_assets_downloads(
     downloaded.
     """
     objects: dict = asset_index.get("objects", {})
-    asset_index_out = {**asset_index}
+    asset_index_out = {}
     asset_index_out["objects"] = {}
     total = len(objects.keys())
     map_virtual_assets: bool = asset_index.get("map_to_resources", False)
