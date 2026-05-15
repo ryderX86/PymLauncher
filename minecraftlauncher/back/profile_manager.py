@@ -383,21 +383,23 @@ def load_launcher_profiles():
                 if k not in _DEFAULT_SETTINGS_JSON:
                     log.warning(
                         'Unknown key in launcher_profiles.json["settings"]: '
-                        "'%s'",
+                        "%r",
                         k,
                     )
                     continue
                 elif not isinstance(v, type(_launcher_settings[k])):
                     log.warning(
-                        'Type mismatch for launcher_profiles.json["%s"]; '
-                        "expected '%s', got '%s'",
+                        "Type mismatch for launcher_profiles.json[%r]; "
+                        "expected %r, got %r. Discarding value and ignoring.",
                         k,
                         type(_launcher_settings[k]),
                         type(v),
                     )
                     continue
                 _launcher_settings[k] = v
-            if profile_order:
+            if (
+                profile_order
+            ):  # TODO: change sorting methods to less crappy ones
                 new_order = []
                 keys_leftover = [*profs_raw.keys()]
                 for key in profile_order:
@@ -411,12 +413,12 @@ def load_launcher_profiles():
                 if keys_leftover:
                     log.warning(
                         "Orphaned profiles from sorting list, sorting "
-                        "by creation date... (may be slow!)"
+                        "by last used date... (may be slow!)"
                     )
                     creation_order = []
                     for key in keys_leftover:
                         val = profs_raw[key]
-                        dt_str = val.get("created", "1970-01-01T00:00:00.000Z")
+                        dt_str = val.get("lastUsed", "1970-01-01T00:00:00.000Z")
                         try:
                             dt = datetime.fromisoformat(dt_str)
                         except:
@@ -428,7 +430,7 @@ def load_launcher_profiles():
                             dt = datetime.min
                         idx = 0
                         for id_ in creation_order:
-                            other_dt_str = profs_raw[id_].get("created")
+                            other_dt_str = profs_raw[id_].get("lastUsed")
                             try:
                                 other_dt = datetime.fromisoformat(other_dt_str)
                             except:
