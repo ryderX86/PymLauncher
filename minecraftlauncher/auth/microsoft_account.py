@@ -1,6 +1,6 @@
-from datetime import datetime
-import json
 import logging
+import time
+import json
 
 import requests
 import requests.exceptions
@@ -57,9 +57,7 @@ class MicrosoftAccount:
     acquired_at: float
 
     def __init__(self, msa_info: dict):
-        self.acquired_at = msa_info.get(
-            "acquired_at", datetime.now().timestamp()
-        )
+        self.acquired_at = msa_info.get("acquired_at", time.time())
 
         self.token_type = msa_info["token_type"]
         self.scope = msa_info["scope"]
@@ -73,9 +71,7 @@ class MicrosoftAccount:
 
     @property
     def expires_in(self) -> float:
-        return (
-            self.acquired_at + self._expires_in
-        ) - datetime.now().timestamp()
+        return (self.acquired_at + self._expires_in) - time.time()
 
     @expires_in.setter
     def expires_in(self, new_val: int):
@@ -131,7 +127,12 @@ class MicrosoftAccount:
         if self.scope:
             scope = self.scope
             if scope != AZURE_SCOPE:
-                log.debug("MSA scope differs from default: '%s'", scope)
+                log.warning(
+                    "Current account's MSA scope differs from default! "
+                    "Default: %r; current: %r",
+                    AZURE_SCOPE,
+                    scope,
+                )
         else:
             log.warning(
                 "No scope present in MSA! Trying default but user may have to "
@@ -147,7 +148,6 @@ class MicrosoftAccount:
         # None in place of filename -- `requests.post(files=...)`
         # is currently the way to submit form data with requests.
 
-        response = None
         try:
             response = SESSION.post(MSA_REFRESH_URL, data=form_data)
             response.raise_for_status()
@@ -170,15 +170,19 @@ class MicrosoftAccount:
                 AuthStep.MSA, exc.response.status_code, exc.response.text
             )
 
-        if response is None or len(response.text) < 5:
+        if len(response.text) < 5:
             return AuthError(
                 AuthStep.MSA,
-                "N/A",
-                response.text if response is not None else "No response",
+                (
+                    "N/A"
+                    if response.status_code in {200, 202}
+                    else response.status_code
+                ),
+                response.text or "No response",
             )
 
         new_token = response.json()
-        self.acquired_at = datetime.now().timestamp()
+        self.acquired_at = time.time()
 
         self.access_token = new_token.get("access_token")
         if not self.access_token:
