@@ -1,6 +1,7 @@
 from datetime import datetime
-import json
 import logging
+import json
+import time
 
 import requests
 import requests.exceptions
@@ -126,7 +127,7 @@ class XstsToken:
 
     @property
     def expires_in(self):
-        return self.expires_at - datetime.now().timestamp()
+        return self.expires_at - time.time()
 
     @property
     def user_hash(self):

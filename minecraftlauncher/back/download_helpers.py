@@ -3,8 +3,8 @@ Common functions for downloading files.
 """
 
 from typing import Literal, Callable, TypeVar, Iterable
-from datetime import timedelta, datetime
 from collections import Counter
+from datetime import timedelta
 from types import FunctionType
 from pathlib import Path
 import logging
@@ -119,7 +119,7 @@ def file_exists_or_age(
         return False
     if isinstance(max_age, (int, float)):
         max_age = timedelta(seconds=max_age)
-    real_max_age: float = (datetime.now() - max_age).timestamp()
+    real_max_age: float = time.time() - max_age.total_seconds()
     return os.stat(path).st_mtime > real_max_age
 
 

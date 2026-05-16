@@ -1,6 +1,6 @@
-from datetime import datetime
 import logging
 import random
+import time
 
 import requests
 import requests.exceptions
@@ -82,7 +82,7 @@ class MinecraftToken:
         )
         self.owned_items = {*mc_token.get("owned_items", [])} or None
         self.acquired_at = mc_token.get(
-            "acquired_at", self.jwt.get("iat", datetime.now().timestamp())
+            "acquired_at", self.jwt.get("iat", time.time())
         )
         self.expires_at = self.jwt.get(
             "exp", self.acquired_at + self._expires_in
@@ -90,7 +90,7 @@ class MinecraftToken:
 
     @property
     def expires_in(self):
-        return self.expires_at - datetime.now().timestamp()
+        return self.expires_at - time.time()
 
     @property
     def is_active(self):

@@ -1,6 +1,6 @@
-from datetime import datetime
 import logging
 import json
+import time
 import os
 
 from minecraftlauncher.constants import LAUNCHER_DATA_DIR
@@ -40,7 +40,7 @@ def save_accounts(
     payload_json = {
         "active": active_xuid or active_account,
         "accounts": [acc.serialize() for acc in accounts],
-        "last_saved": datetime.now().timestamp(),
+        "last_saved": time.time(),
     }
 
     if return_unencrypted:

@@ -5,12 +5,13 @@ Handles downloading/retrieving Java versions.
 """
 
 from collections.abc import Callable
-from datetime import datetime, timedelta
+from datetime import timedelta
 import hashlib
-import json
 import logging
+import json
 import lzma
 import stat
+import time
 import os
 
 from PySide6.QtCore import QThreadPool
@@ -48,7 +49,7 @@ def get_jvm_manifest(force_update: bool = False) -> dict:
     elif os.path.isfile(JVM_MANIFEST_PATH):
         log.debug("Checking cached jre_manifest.json...")
         cache_age = os.stat(JVM_MANIFEST_PATH).st_mtime
-        max_age = (datetime.now() - timedelta(days=7)).timestamp()
+        max_age = time.time() - timedelta(days=7).total_seconds()
         if max_age < cache_age:
             with open(JVM_MANIFEST_PATH, "r") as f:
                 mf_text = f.read()
@@ -138,7 +139,7 @@ def get_jvm_version_manifest(version: str) -> dict:
     manifest_path = MINECRAFT_DIR / "jre" / f"{version}.{JAVA_OS}.json"
 
     if manifest_path.exists() and manifest_path.is_file():
-        max_age = (datetime.now() - timedelta(days=7)).timestamp()
+        max_age = time.time() - timedelta(days=7).total_seconds()
         file_ts = manifest_path.stat().st_mtime
         if max_age < file_ts:
             log.info(

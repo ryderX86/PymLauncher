@@ -1,10 +1,11 @@
-from datetime import datetime, timedelta
 from functools import lru_cache
+from datetime import timedelta
 from pathlib import Path
 from enum import StrEnum
 import logging
 import hashlib
 import uuid
+import time
 import os
 
 from PySide6.QtGui import QImage, QIcon, QPixmap
@@ -232,7 +233,7 @@ class MinecraftProfile:
         if response is None:
             raise ValueError("Repsonse shouldn't be none!")
         prof_info_json = response.json()
-        prof_info_json["last_updated"] = datetime.now().timestamp()
+        prof_info_json["last_updated"] = time.time()
 
         return cls(prof_info_json, mc_token)
 
@@ -244,7 +245,7 @@ class MinecraftProfile:
             return True
         elif (
             self.last_updated
-            < (datetime.now() - timedelta(minutes=5)).timestamp()
+            < time.time() - timedelta(minutes=5).total_seconds()
         ):
             return True
         return False
@@ -306,7 +307,7 @@ class MinecraftProfile:
         self.skins = prof_info_json.get("skins", [])
         self.capes = prof_info_json.get("capes", [])
 
-        self.last_updated = datetime.now().timestamp()
+        self.last_updated = time.time()
         self._check_current_skin()
         return self
 

@@ -5,13 +5,14 @@ Handles downloading the asset index and individual asset objects
 for a given Minecraft version.
 """
 
-from datetime import datetime, timedelta
+from datetime import timedelta
 from collections.abc import Callable
 from xml.etree import ElementTree
 from warnings import deprecated
 import logging
 import hashlib
 import json
+import time
 import os
 
 import requests
@@ -84,7 +85,7 @@ def fetch_asset_index(version_json: dict) -> dict:
             )
             # using file timestamp to verify; easier/faster to compare floats
             file_time = os.stat(index_path).st_mtime
-            compare_time = (datetime.now() - timedelta(days=1)).timestamp()
+            compare_time = time.time() - timedelta(days=1).total_seconds()
             if compare_time < file_time:
                 log.debug("Using cached asset index %r (time-based)", index_id)
                 with open(index_path, "r") as f:

@@ -6,11 +6,12 @@ inheritence, and downloading the client JAR file.
 in `os.path` strings as a forward or back slash for OS independant behavior.
 """
 
-from datetime import datetime, timedelta
+from datetime import timedelta
 from typing import Any, Callable
 import hashlib
-import json
 import logging
+import json
+import time
 import os
 import re
 
@@ -94,7 +95,7 @@ def fetch_version_manifest(force_refresh: bool = False):
     )
     if os.path.isfile(mf_path) and not force_refresh:
         log.info("Found it! Checking age...")
-        max_age = (datetime.now() - timedelta(hours=4)).timestamp()
+        max_age = time.time() - timedelta(hours=4).total_seconds()
         if os.lstat(mf_path).st_mtime > max_age:
             with open(mf_path, "r") as f:
                 mf_text = f.read()
