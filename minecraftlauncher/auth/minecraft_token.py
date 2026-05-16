@@ -1,6 +1,5 @@
 from datetime import datetime
 import logging
-import time
 import random
 
 import requests
@@ -13,7 +12,7 @@ from minecraftlauncher.constants import (
     LAUNCH_ENTITLEMENTS_URL,
     MOJ_AUTH_URL_ALT,
 )
-from minecraftlauncher import session, set_offline_mode
+from minecraftlauncher import SESSION, set_offline_mode
 from .auth_error import AuthError, AuthStep
 
 log = logging.getLogger(__name__)
@@ -109,38 +108,32 @@ class MinecraftToken:
         }
 
         response = None
-        attempts = 0
-        while attempts < 3:
-            attempts += 1
-            try:
-                response = session.post(MOJ_AUTH_URL, json=payload)
-                response.raise_for_status()
-            except (
-                requests.exceptions.ConnectionError,
-                requests.exceptions.ConnectTimeout,
-            ) as exc:
-                log.warning(
-                    "%s occured while attempting MSA token refresh",
-                    exc.__qualname__,
-                )
-                if attempts >= 2:
-                    set_offline_mode(True)
-                    break
-                else:
-                    log.info("Waiting 5 seconds before next attempt...")
-                    time.sleep(5)
-                    continue
-            except requests.HTTPError as err:
-                log.error(
-                    "Failed to get Minecraft Token from %s; response code %d\n"
-                    "Full response: %s",
-                    MOJ_AUTH_URL_ALT,
-                    err.response.status_code,
-                    err.response.text,
-                )
-                return AuthError(
-                    AuthStep.MOJ, err.response.status_code, err.response.text
-                )
+        try:
+            response = SESSION.post(MOJ_AUTH_URL, json=payload)
+            response.raise_for_status()
+        except (
+            requests.exceptions.ConnectionError,
+            requests.exceptions.ConnectTimeout,
+        ) as err:
+            log.warning(
+                "%s occured while attempting MSA token refresh",
+                err.__qualname__,
+            )
+            set_offline_mode(True)
+            raise RuntimeError(
+                f"Failed to connect to {MOJ_AUTH_URL!r}"
+            ) from err
+        except requests.HTTPError as err:
+            log.error(
+                "Failed to get Minecraft Token from %r; response code %d\n"
+                "Full response: %r",
+                MOJ_AUTH_URL_ALT,
+                err.response.status_code,
+                err.response.text,
+            )
+            return AuthError(
+                AuthStep.MOJ, err.response.status_code, err.response.text
+            )
 
         if response is None:
             raise ValueError("Failed to get response")
@@ -154,50 +147,36 @@ class MinecraftToken:
             % {"uhs": xsts_token.user_hash, "xsts": xsts_token.token}
         }
 
-        connection_attempts = 0
         response = None
-        while connection_attempts < 3:
-            connection_attempts += 1
-            try:
-                response = session.post(MOJ_AUTH_URL, json=payload)
-                response.raise_for_status()
-                break
-            except (
-                requests.exceptions.ConnectionError,
-                requests.exceptions.ConnectTimeout,
-            ) as exc:
-                log.warning(
-                    "%s occured while attempting MSA token refresh",
-                    exc.__qualname__,
-                )
-                if connection_attempts >= 2:
-                    set_offline_mode(True)
-                    break
-                else:
-                    pass
-                log.info("Waiting 5 seconds before next attempt...")
-                time.sleep(5)
-            except requests.HTTPError as exc:
-                if exc.response.status_code in (400, 401, 402, 403):
-                    log.warning(
-                        "Malformed request err; defaulting to alt auth url"
-                    )
-                    log.debug("returning `cls.auth_alternate(xsts_token)`")
-                    return cls.auth_alternate(xsts_token)
-                log.error(
-                    "Failed to refresh MSA token; response code %d\n"
-                    "Response text: %s",
-                    exc.response.status_code,
-                    exc.response.text,
-                )
-                return AuthError(
-                    AuthStep.MOJ, exc.response.status_code, exc.response.text
-                )
-            # TODO: remove this when verified that the loop won't
-            # infinitely continue
-            if connection_attempts < 4:
-                print("WARNING: Why are we still going?")
-                print("(.datatypes.MicrosoftAccount....refresh())")
+        try:
+            response = SESSION.post(MOJ_AUTH_URL, json=payload)
+            response.raise_for_status()
+        except (
+            requests.exceptions.ConnectionError,
+            requests.exceptions.ConnectTimeout,
+        ) as err:
+            log.warning(
+                "%s occured while attempting MSA token refresh",
+                err.__qualname__,
+            )
+            set_offline_mode(True)
+            raise RuntimeError(
+                f"Failed to connect to {MOJ_AUTH_URL!r}"
+            ) from err
+        except requests.HTTPError as err:
+            if err.response.status_code in (400, 401, 402, 403):
+                log.warning("Malformed request err; defaulting to alt auth url")
+                log.debug("returning `cls.auth_alternate(xsts_token)`")
+                return cls.auth_alternate(xsts_token)
+            log.error(
+                "Failed to refresh MSA token; response code %d\n"
+                "Response text: %s",
+                err.response.status_code,
+                err.response.text,
+            )
+            return AuthError(
+                AuthStep.MOJ, err.response.status_code, err.response.text
+            )
 
         if response is None:
             raise ValueError("response should not be false!")
@@ -236,7 +215,7 @@ class MinecraftToken:
         return
 
     def get_launcher_entitlements(self):
-        resp = session.get(LAUNCH_ENTITLEMENTS_URL, headers=self._req_header)
+        resp = SESSION.get(LAUNCH_ENTITLEMENTS_URL, headers=self._req_header)
         resp.raise_for_status()
 
         game_list = resp.json()

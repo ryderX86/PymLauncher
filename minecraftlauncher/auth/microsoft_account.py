@@ -1,6 +1,5 @@
 from datetime import datetime
 import json
-import time
 import logging
 
 import requests
@@ -11,7 +10,7 @@ from minecraftlauncher.constants import (
     AZURE_SCOPE,
     MSA_REFRESH_URL,
 )
-from minecraftlauncher import session, set_offline_mode
+from minecraftlauncher import SESSION, set_offline_mode
 from .auth_error import AuthError, AuthStep
 
 log = logging.getLogger(__name__)
@@ -148,39 +147,28 @@ class MicrosoftAccount:
         # None in place of filename -- `requests.post(files=...)`
         # is currently the way to submit form data with requests.
 
-        connection_attempts = 0
         response = None
-        while connection_attempts < 3:
-            try:
-                response = session.post(MSA_REFRESH_URL, data=form_data)
-                response.raise_for_status()
-            except (
-                requests.exceptions.ConnectionError,
-                requests.exceptions.ConnectTimeout,
-            ) as exc:
-                log.warning(
-                    "%s occured while attempting MSA token refresh",
-                    exc.__qualname__,
-                )
-                if connection_attempts >= 2:
-                    set_offline_mode(True)
-                    break
-                else:
-                    pass
-                log.info("Waiting 5 seconds before next attempt...")
-                time.sleep(5)
-            except requests.HTTPError as exc:
-                log.error(
-                    "Failed to refresh MSA token; response code %s",
-                    exc.response.status_code,
-                )
-                return AuthError(
-                    AuthStep.MSA, exc.response.status_code, exc.response.text
-                )
-            else:
-                break
-            finally:
-                connection_attempts += 1
+        try:
+            response = SESSION.post(MSA_REFRESH_URL, data=form_data)
+            response.raise_for_status()
+        except (
+            requests.exceptions.ConnectionError,
+            requests.exceptions.ConnectTimeout,
+        ) as exc:
+            log.warning(
+                "%s occured while attempting MSA token refresh",
+                exc.__qualname__,
+            )
+            set_offline_mode(True)
+            return AuthError(AuthStep.MSA, -1, "Connection failed")
+        except requests.HTTPError as exc:
+            log.error(
+                "Failed to refresh MSA token; response code %s",
+                exc.response.status_code,
+            )
+            return AuthError(
+                AuthStep.MSA, exc.response.status_code, exc.response.text
+            )
 
         if response is None or len(response.text) < 5:
             return AuthError(

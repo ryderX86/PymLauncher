@@ -27,7 +27,7 @@ from minecraftlauncher.back.download_helpers import (
     RunnableDownloader,
     BulkDownloadError,
 )
-from minecraftlauncher import session
+from minecraftlauncher import SESSION
 
 log = logging.getLogger(__name__)
 
@@ -100,7 +100,7 @@ def fetch_asset_index(version_json: dict) -> dict:
 
     # download the index and return it
     log.info("Downloading asset index %r from %r", index_id, index_url)
-    resp = session.get(index_url, timeout=30)
+    resp = SESSION.get(index_url, timeout=30)
     resp.raise_for_status()
 
     with open(index_path, "w") as f:

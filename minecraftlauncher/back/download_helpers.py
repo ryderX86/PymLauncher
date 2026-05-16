@@ -16,7 +16,7 @@ import os
 import requests
 from PySide6.QtCore import QRunnable
 
-from minecraftlauncher import session, offline_mode
+from minecraftlauncher import SESSION, offline_mode
 
 log = logging.getLogger(__name__)
 T = TypeVar("T")
@@ -45,46 +45,25 @@ def _download(
     *,
     sha: str | None = None,
 ) -> requests.Response:
-    try:
-        resp = session.get(url, timeout=timeout)
-        resp.raise_for_status()
-    except Exception:
-        if _retries >= max_retries:
-            log.error(
-                "Failed to download '%s' %d/%d times, giving up.",
-                url,
-                _retries,
-                max_retries,
-            )
-            raise
+    if _retries > max_retries:
+        raise RuntimeError(f"Repeatedly failed to download from {url!r}")
+    resp = SESSION.get(url, timeout=timeout)
+    resp.raise_for_status()
+    if isinstance(sha, str):
+        if hashlib.sha1(resp.content).hexdigest() == sha:
+            return resp
         else:
             log.warning(
-                "Downloading '%s' failed. Retrying for %d/%d",
+                "Download from '%s' gave an unexpected hash! "
+                "Retrying for %d/%d",
                 url,
                 _retries + 1,
                 max_retries,
             )
             time.sleep(0.2)
-            # return the same exact thing but bump _retries by 1
             return _download(url, max_retries, timeout, _retries + 1, sha=sha)
     else:
-        if isinstance(sha, str):
-            if hashlib.sha1(resp.content).hexdigest() == sha:
-                return resp
-            else:
-                log.warning(
-                    "Download from '%s' gave an unexpected hash! "
-                    "Retrying for %d/%d",
-                    url,
-                    _retries + 1,
-                    max_retries,
-                )
-                time.sleep(0.2)
-                return _download(
-                    url, max_retries, timeout, _retries + 1, sha=sha
-                )
-        else:
-            return resp
+        return resp
 
 
 @_offline_mode_warning
@@ -293,59 +272,43 @@ class RunnableDownloader(QRunnable):
                 return
             self.log.debug("File exists but SHA1 doesn't match, deleting.")
             os.unlink(self._path)
-        attempts = 0
         resp = None
         self.success = False
-        while attempts < 3:
-            try:
-                resp = session.get(self._url, timeout=30)
-                resp.raise_for_status()
-            except Exception as err:
-                self.last_exception = err
-                self.log.error(
-                    "Failed to get file from '%s': %s", self._url, str(err)
-                )
-                time.sleep(1)
-                self.sleep_time = 2
-                continue
-            else:
-                self.sleep_time = 0
-                if self._lzma:
-                    content = lzma.decompress(resp.content)
-                else:
-                    content = resp.content
-                if self._hash:
-                    sha1 = hashlib.sha1(content).hexdigest()
-                    if sha1 != self._hash:
-                        self.last_exception = RuntimeError(
-                            "SHA mismatch occured after download"
-                        )
-                        self.log.error(
-                            "Download failed, retrying (SHA-1 mismatch)"
-                        )
-                        resp = None
-                        continue
-                else:
-                    log.warning(
-                        "No SHA1 provided for file downloaded at '%s'",
-                        self._path,
-                    )
-                with open(self._path, "wb") as f:
-                    f.write(content)
-                print("Download done")
-                self.success = True
-                if self._callback:
-                    self._callback(1)
-                return
-            finally:
-                attempts += 1
-        if not resp:
-            err = DownloadError(self._url, self._path)
-            if self.last_exception:
-                raise err from self.last_exception
+        try:
+            resp = SESSION.get(self._url, timeout=30)
+            resp.raise_for_status()
+        except Exception as err:
             self.last_exception = err
+            self.log.error(
+                "Failed to get file from %r: %r", self._url, str(err)
+            )
             raise err
-        return
+        else:
+            self.sleep_time = 0
+            if self._lzma:
+                content = lzma.decompress(resp.content)
+            else:
+                content = resp.content
+            if self._hash:
+                sha1 = hashlib.sha1(content).hexdigest()
+                if sha1 != self._hash:
+                    self.last_exception = RuntimeError(
+                        "SHA mismatch occured after download"
+                    )
+                    self.log.error("Download failed, retrying (SHA-1 mismatch)")
+                    resp = None
+            else:
+                log.warning(
+                    "No SHA1 provided for file downloaded at '%s'",
+                    self._path,
+                )
+            with open(self._path, "wb") as f:
+                f.write(content)
+            print("Download done")
+            self.success = True
+            if self._callback:
+                self._callback(1)
+            return
 
     @property
     def failed(self):

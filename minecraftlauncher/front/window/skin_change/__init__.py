@@ -40,7 +40,7 @@ from minecraftlauncher.constants import (
     OS_PATH_DELIM,
     CAPE_URL,
 )
-from minecraftlauncher import session, config
+from minecraftlauncher import SESSION, config
 
 log = logging.getLogger(__name__)
 
@@ -354,8 +354,21 @@ class SkinChange(QDialog):
         if self.current_cape:
             try:
                 payload = {"capeId": self.current_cape}
-                resp = session.put(CAPE_URL, headers=headers, json=payload)
+                resp = SESSION.put(CAPE_URL, headers=headers, json=payload)
                 resp.raise_for_status()
+            except (
+                requests.exceptions.ConnectionError,
+                requests.exceptions.ConnectTimeout,
+            ) as err:
+                log.warning(
+                    "Cape PUT request failed to open connection:", exc_info=err
+                )
+                error_box(
+                    "Failed to connect to server. "
+                    "Check that you are not offline and try again. "
+                    "If the error persists and you are definitely online, "
+                    "please create a bug report."
+                )
             except requests.exceptions.HTTPError as err:
                 log.warning(
                     "Cape PUT request returned HTTP %d:\nDetails: %s",
@@ -376,7 +389,7 @@ class SkinChange(QDialog):
                 return True
         else:
             try:
-                resp = session.delete(CAPE_URL, headers=headers)
+                resp = SESSION.delete(CAPE_URL, headers=headers)
                 resp.raise_for_status()
             except Exception as err:
                 log.error("Failed to remove cape from player:", exc_info=err)
@@ -409,7 +422,7 @@ class SkinChange(QDialog):
             name = "".join([*name, char])
 
         try:
-            resp = session.post(
+            resp = SESSION.post(
                 SKIN_CHANGE_URL,
                 headers=headers,
                 files={

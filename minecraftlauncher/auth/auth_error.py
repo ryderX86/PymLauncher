@@ -13,7 +13,12 @@ class AuthStep(StrEnum):
 class AuthError:
     __slots__ = ("step", "err", "description")
 
-    def __init__(self, failure_step: AuthStep, errno: int | str, err_desc: str):
+    def __init__(
+        self,
+        failure_step: AuthStep,
+        errno: int | str,
+        err_desc: str,
+    ):
         self.step = failure_step
         self.err = errno
         self.description = err_desc
@@ -30,8 +35,8 @@ class AuthError:
         return True
 
     @property
-    def error_code(self) -> str:
-        match self.err:
+    def step_string(self) -> str:
+        match self.step:
             case AuthStep.MSA:
                 return "Microsoft authentication"
             case AuthStep.XBL:
@@ -48,7 +53,7 @@ class AuthError:
     def err_string(self):
         return (
             "Authentication error details:\n"
-            f"  Authentication step: {self.step!r}\n"
-            f"  Error code: {self.error_code!r}\n"
+            f"  Authentication step: {self.step_string}\n"
+            f"  Error code: {self.err!r}\n"
             f"  Error description: {self.description!r}"
         )

@@ -1,7 +1,6 @@
 from datetime import datetime
 import json
 import logging
-import time
 
 import requests
 import requests.exceptions
@@ -10,7 +9,7 @@ from minecraftlauncher.auth.microsoft_account import MicrosoftAccount
 from minecraftlauncher.constants import (
     XBOX_AUTH_URL,
 )
-from minecraftlauncher import session, set_offline_mode
+from minecraftlauncher import SESSION, set_offline_mode
 from .auth_error import AuthError, AuthStep
 
 log = logging.getLogger(__name__)
@@ -81,51 +80,33 @@ class XboxToken:
             "x-xbl-contract-version": "1",
         }
 
-        connection_attempts = 0
-        response = None
-        while connection_attempts < 3:
-            connection_attempts += 1
-            try:
-                response = session.post(
-                    XBOX_AUTH_URL, json=payload, headers=headers
-                )
-                response.raise_for_status()
-                break
-            except (
-                requests.exceptions.ConnectionError,
-                requests.exceptions.ConnectTimeout,
-            ) as exc:
-                log.warning(
-                    "%s occured while attempting MSA token refresh",
-                    exc.__qualname__,
-                )
-                if connection_attempts >= 2:
-                    set_offline_mode(True)
-                    break
-                else:
-                    pass
-                log.info("Waiting 5 seconds before next attempt...")
-                time.sleep(5)
-            except requests.HTTPError as exc:
-                log.error(
-                    "Failed to refresh MSA token; response code %d",
-                    exc.response.status_code,
-                )
-                return AuthError(
-                    AuthStep.XBL, exc.response.status_code, exc.response.text
-                )
-            # TODO: remove this when verified that the loop won't
-            # infinitely continue
-            if connection_attempts < 4:
-                print("WARNING: Why are we still going?")
-                print("(.datatypes.MicrosoftAccount....refresh())")
-
-        if response is None:
-            raise RuntimeError(
-                "Request to XBL unsuccessful? (Response doesn't exist!)"
+        try:
+            response = SESSION.post(
+                XBOX_AUTH_URL, json=payload, headers=headers
             )
-
-        return cls(response.json())
+            response.raise_for_status()
+        except (
+            requests.exceptions.ConnectionError,
+            requests.exceptions.ConnectTimeout,
+        ) as err:
+            log.warning(
+                "%s occured while attempting MSA token refresh",
+                err.__qualname__,
+            )
+            set_offline_mode(True)
+            raise RuntimeError(
+                f"Failed to connect to {XBOX_AUTH_URL!r}"
+            ) from err
+        except requests.HTTPError as err:
+            log.error(
+                "Failed to refresh MSA token; response code %d",
+                err.response.status_code,
+            )
+            return AuthError(
+                AuthStep.XBL, err.response.status_code, err.response.text
+            )
+        else:
+            return cls(response.json())
 
     @property
     def expires_in(self):

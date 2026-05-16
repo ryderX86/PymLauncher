@@ -12,6 +12,7 @@ from PySide6.QtCore import (
     QMessageLogContext,
 )
 from PySide6.QtWidgets import QApplication
+from requests.adapters import HTTPAdapter, Retry
 import requests
 
 from .constants import (
@@ -127,9 +128,20 @@ if not DEV:
 # or spam the functions to get it
 QAPP = QApplication(sys.argv)
 
-session = requests.sessions.Session()
-session.headers["User-Agent"] = USER_AGENT
+SESSION = requests.sessions.Session()
+SESSION.headers["User-Agent"] = USER_AGENT
 logging.debug("User agent: %s", USER_AGENT)
+SESSION.mount(
+    "http",
+    HTTPAdapter(
+        max_retries=Retry(
+            total=3,
+            backoff_factor=0.5,
+            status_forcelist=[500, 502, 503, 504],
+            retry_after_max=15,
+        )
+    ),
+)
 
 offline_mode = False
 """

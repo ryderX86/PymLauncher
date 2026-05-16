@@ -21,7 +21,7 @@ from minecraftlauncher.constants import (
 )
 from minecraftlauncher.datatypes.game_version import GameVersionStub
 from minecraftlauncher.config import redownload_option
-from minecraftlauncher import session
+from minecraftlauncher import SESSION
 from .library_manager import evaluate_rules
 from .download_helpers import download
 
@@ -123,7 +123,7 @@ def fetch_version_manifest(force_refresh: bool = False):
     log.info("Fetching version manifest from '%s'", VERSION_MANIFEST_URL)
     os.makedirs(VERSION_DIR, exist_ok=True)
     try:
-        resp = session.get(VERSION_MANIFEST_URL, timeout=30)
+        resp = SESSION.get(VERSION_MANIFEST_URL, timeout=30)
     except:
         log.error("Failed to get version manifest!")
         return manifest_cache
@@ -499,7 +499,7 @@ def download_client_jar(
 
     os.makedirs(ver_dir, exist_ok=True)
 
-    resp = session.get(url, stream=True, timeout=60)
+    resp = SESSION.get(url, stream=True, timeout=60)
     resp.raise_for_status()
 
     downloaded = 0

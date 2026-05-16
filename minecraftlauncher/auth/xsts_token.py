@@ -1,7 +1,6 @@
 from datetime import datetime
 import json
 import logging
-import time
 
 import requests
 import requests.exceptions
@@ -10,7 +9,7 @@ from minecraftlauncher.auth.xbox_token import XboxToken
 from minecraftlauncher.constants import (
     XSTS_AUTH_URL,
 )
-from minecraftlauncher import session, set_offline_mode
+from minecraftlauncher import SESSION, set_offline_mode
 from .exceptions import XstsAuthError
 from .auth_error import AuthError, AuthStep
 
@@ -86,64 +85,42 @@ class XstsToken:
             "x-xbl-contract-version": "1",
         }
 
-        connection_attempts = 0
-        response = None
-        while connection_attempts < 3:
-            connection_attempts += 1
-            try:
-                response = session.post(
-                    XSTS_AUTH_URL, json=payload, headers=headers
-                )
-                response.raise_for_status()
-                break
-            except (
-                requests.exceptions.ConnectionError,
-                requests.exceptions.ConnectTimeout,
-            ) as exc:
-                log.warning(
-                    "%s occured while attempting MSA token refresh",
-                    exc.__qualname__,
-                )
-                if connection_attempts >= 2:
-                    set_offline_mode(True)
-                    break
-                else:
-                    pass
-                log.info("Waiting 5 seconds before next attempt...")
-                time.sleep(5)
-            except requests.HTTPError as exc:
-                if exc.errno == 401:
-                    if response is None:
-                        raise TypeError(
-                            "Response was given but is still none?"
-                        ) from exc
-                    raise XstsAuthError(response.json()) from exc
-                else:
-                    log.error(
-                        "Failed to refresh MSA token; response code %d\n"
-                        "Response text: %s",
-                        exc.response.status_code,
-                        exc.response.text,
-                    )
-                    return AuthError(
-                        (
-                            AuthStep.XSTS
-                            if relying_party == cls.mojang_uri
-                            else AuthStep.GTG
-                        ),
-                        exc.response.status_code,
-                        exc.response.text,
-                    )
-            # TODO: remove this when verified that the loop won't
-            # infinitely continue
-            if connection_attempts < 4:
-                print("WARNING: Why are we still going?")
-                print("(.datatypes.MicrosoftAccount....refresh())")
-
-        if response is None:
-            raise RuntimeError(
-                "Request to XBL unsuccessful? (Response doesn't exist!)"
+        try:
+            response = SESSION.post(
+                XSTS_AUTH_URL, json=payload, headers=headers
             )
+            response.raise_for_status()
+        except (
+            requests.exceptions.ConnectionError,
+            requests.exceptions.ConnectTimeout,
+        ) as err:
+            log.warning(
+                "%s occured while attempting MSA token refresh",
+                err.__qualname__,
+            )
+            set_offline_mode(True)
+            raise RuntimeError(
+                f"Failed to connect to {XSTS_AUTH_URL!r}"
+            ) from err
+        except requests.HTTPError as err:
+            if err.errno == 401 and "response" in locals():
+                raise XstsAuthError(response.json()) from err  # type: ignore
+            else:
+                log.error(
+                    "Failed to refresh MSA token; response code %d\n"
+                    "Response text: %s",
+                    err.response.status_code,
+                    err.response.text,
+                )
+                return AuthError(
+                    (
+                        AuthStep.XSTS
+                        if relying_party == cls.mojang_uri
+                        else AuthStep.GTG
+                    ),
+                    err.response.status_code,
+                    err.response.text,
+                )
 
         return cls(response.json())
 

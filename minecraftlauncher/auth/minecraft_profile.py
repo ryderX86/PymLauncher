@@ -5,7 +5,6 @@ from enum import StrEnum
 import logging
 import hashlib
 import uuid
-import time
 import os
 
 from PySide6.QtGui import QImage, QIcon, QPixmap
@@ -18,7 +17,7 @@ from minecraftlauncher.constants import (
     STEVE_SKIN_URL,
 )
 from minecraftlauncher.back.download_helpers import download as try_request
-from minecraftlauncher import session, set_offline_mode
+from minecraftlauncher import SESSION, set_offline_mode
 from minecraftlauncher.front import resources
 
 log = logging.getLogger(__name__)
@@ -207,32 +206,28 @@ class MinecraftProfile:
     def from_token(cls, mc_token: MinecraftToken):
         headers = {"Authorization": f"Bearer {mc_token.access_token}"}
 
-        max_retries = 3
         response = None
-        while max_retries > 0:
-            max_retries -= 1
-            try:
-                response = session.get(MOJ_PROF_URL, headers=headers)
-                response.raise_for_status()
-                break
-            except (
-                requests.exceptions.ConnectTimeout,
-                requests.exceptions.ConnectionError,
-            ) as err:
-                log.error(
-                    "Failed to connect to %s:", MOJ_PROF_URL, exc_info=err
-                )
-                log.info("Waiting 5 seconds before next attempt...")
-                time.sleep(5)
-                continue
-            except requests.HTTPError as err:
-                log.error("Failed to fetch profile info!:", exc_info=err)
-                raise
-            except Exception as err:
-                log.error("Unknown error occured while fetching profile info:")
-                raise
-        if max_retries < 1:
+        try:
+            response = SESSION.get(MOJ_PROF_URL, headers=headers)
+            response.raise_for_status()
+        except (
+            requests.exceptions.ConnectTimeout,
+            requests.exceptions.ConnectionError,
+        ) as err:
+            log.error("Failed to connect to %s:", MOJ_PROF_URL, exc_info=err)
             set_offline_mode(True)
+            raise RuntimeError(
+                f"Failed to connect to {MOJ_PROF_URL!r}"
+            ) from err
+        except requests.HTTPError as err:
+            log.error("Failed to fetch profile info!:", exc_info=err)
+            raise
+        except Exception as err:
+            log.error(
+                "Unknown error occured while fetching profile info:",
+                exc_info=err,
+            )
+            raise
 
         if response is None:
             raise ValueError("Repsonse shouldn't be none!")
@@ -271,40 +266,35 @@ class MinecraftProfile:
             raise RuntimeError("No Minecraft token present")
         headers = {"Authorization": f"Bearer {self.token}"}
 
-        max_retries = 3
         response = None
-        while max_retries > 0:
-            max_retries -= 1
-            try:
-                response = session.get(MOJ_PROF_URL, headers=headers)
-                response.raise_for_status()
-                break
-            except (
-                requests.exceptions.ConnectTimeout,
-                requests.exceptions.ConnectionError,
-            ) as exc:
-                log.warning(
-                    "Failed to connect to %s: %s",
-                    MOJ_PROF_URL,
-                    exc.__qualname__,
-                )
-                log.debug("Waiting 5 seconds before next attempt")
-                time.sleep(5)
-                continue
-            except requests.HTTPError as exc:
-                log.error(
-                    "Failed to fetch profile info: HTTP %s",
-                    exc.response.status_code,
-                )
-                raise exc
-            except Exception as exc:
-                log.error(
-                    "Unknown error occured fetching profile info:",
-                    exc_info=True,
-                )
-                raise exc
-        if max_retries < 1:
+        try:
+            response = SESSION.get(MOJ_PROF_URL, headers=headers)
+            response.raise_for_status()
+        except (
+            requests.exceptions.ConnectTimeout,
+            requests.exceptions.ConnectionError,
+        ) as err:
+            log.warning(
+                "Failed to connect to %s: %s",
+                MOJ_PROF_URL,
+                err.__qualname__,
+            )
             set_offline_mode(True)
+            raise RuntimeError(
+                f"Failed to connect to {MOJ_PROF_URL!r}"
+            ) from err
+        except requests.HTTPError as err:
+            log.error(
+                "Failed to fetch profile info: HTTP %s",
+                err.response.status_code,
+            )
+            raise err
+        except Exception as err:
+            log.error(
+                "Unknown error occured fetching profile info:",
+                exc_info=True,
+            )
+            raise err
 
         if response is None:
             raise ValueError("Response shouldn't be none!")
