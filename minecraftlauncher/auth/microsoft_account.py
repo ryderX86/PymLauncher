@@ -151,11 +151,9 @@ class MicrosoftAccount:
         connection_attempts = 0
         response = None
         while connection_attempts < 3:
-            connection_attempts += 1
             try:
                 response = session.post(MSA_REFRESH_URL, data=form_data)
                 response.raise_for_status()
-                break
             except (
                 requests.exceptions.ConnectionError,
                 requests.exceptions.ConnectTimeout,
@@ -179,28 +177,28 @@ class MicrosoftAccount:
                 return AuthError(
                     AuthStep.MSA, exc.response.status_code, exc.response.text
                 )
-            # TODO: remove this when verified that the loop won't
-            # infinitely continue
-            if connection_attempts < 4:
-                print("WARNING: Why are we still going?")
-                print("(.datatypes.MicrosoftAccount....refresh())")
+            else:
+                break
+            finally:
+                connection_attempts += 1
 
-        if response is None:
-            return AuthError(AuthStep.MSA, "N/A", "No response")
-        elif len(response.text) < 5:  # safe number i guess
-            return AuthError(AuthStep.MSA, "N/A", response.text)
+        if response is None or len(response.text) < 5:
+            return AuthError(
+                AuthStep.MSA,
+                "N/A",
+                response.text if response is not None else "No response",
+            )
 
         new_token = response.json()
         self.acquired_at = datetime.now().timestamp()
 
-        if not new_token.get("access_token"):
+        self.access_token = new_token.get("access_token")
+        if not self.access_token:
             return AuthError(
                 AuthStep.MSA,
-                new_token.get("error", "N/A"),
-                new_token.get("error_description", "No description given."),
+                new_token.get("error", "Error code not provided"),
+                new_token.get("error_description", "Description not provided"),
             )
-
-        self.access_token = new_token.get("access_token", self.access_token)
         self.refresh_token = new_token.get("refresh_token", self.refresh_token)
         self.expires_in = new_token.get("expires_in", self._expires_in)
 
