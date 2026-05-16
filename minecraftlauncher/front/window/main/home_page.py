@@ -246,6 +246,7 @@ class HomePage(QWidget):
 
     def _on_dropdown_select(self, index: int):
         prof: GameProfile = self.profile_dropdown.itemData(index)
+        self.profile_dropdown.blockSignals(True)
         current_prof = profile_manager.get_current_profile()
         if prof != current_prof:
             self.selection_model.setCurrentIndex(
@@ -255,12 +256,10 @@ class HomePage(QWidget):
             # handle what happens if the pop-up is cancelled/ignored
             if self.selection_model.currentIndex().row() != index:
                 log.debug("Looks like user aborted the change?")
-                self.profile_dropdown.blockSignals(True)
                 self.profile_dropdown.setCurrentIndex(
                     self.selection_model.currentIndex().row()
                 )
-                self.profile_dropdown.blockSignals(False)
-                return
+        self.profile_dropdown.blockSignals(False)
 
     def _on_global_profile(
         self, current: QItemSelection, previous: QItemSelection
