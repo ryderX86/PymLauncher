@@ -9,3 +9,4 @@ from .label_types import (
     Subheading,
     SectionLabel,
 )
+from .config_checkbox import ConfigCheckbox

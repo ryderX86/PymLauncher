@@ -11,6 +11,8 @@ import logging
 from PySide6.QtCore import Signal, SignalInstance, QObject
 from PySide6.QtWidgets import QWidget, QLineEdit, QComboBox, QCheckBox
 
+from .widgets.config_checkbox import ConfigCheckbox
+
 log = logging.getLogger(__name__)
 
 LiterallyAnyFunction = (
@@ -145,6 +147,9 @@ class CustomMapper(QObject):
                     setter = widget.setChecked
                 if not signal:
                     signal = widget.checkStateChanged
+            case ConfigCheckbox():
+                if not all((getter, setter, signal, saver)):
+                    return self.add_mapping(**widget.mapper_objects())
             case _ if not all((getter, setter, signal)):
                 raise ValueError(
                     "Must be given all of 'getter', 'setter', and 'signal' if "
