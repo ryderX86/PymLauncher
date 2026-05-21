@@ -550,10 +550,10 @@ class ProfilesPage(QWidget):
             self._save()
 
     def _hook(self, prof: GameProfile):
-        self.version_combo.setDisabled(prof.is_default_profile)
-        self.icon_picker.profile_selected(prof)
         if self._dirty:
             self._abandon_changes_dialog()
+        self.version_combo.setDisabled(prof.is_default_profile)
+        self.icon_picker.profile_selected(prof)
         self._set_mods_folder_row_visibility(prof.real_version_id, prof)
 
     def _process_mods_folder_checkbox(self, checked: bool | None = None):
@@ -1011,6 +1011,8 @@ class ProfilesPage(QWidget):
         if not self._loaded:
             return
         prof = profile_manager.get_current_profile()
+        if prof.has_custom_args:  # avoid unnecessary fiddling around
+            return
         if isinstance(version_id, int):
             version_id = self.version_combo.itemText(version_id)
         _bg_worker = VersionJsonBackgroundDownloader(version_id, prof)
@@ -1018,6 +1020,13 @@ class ProfilesPage(QWidget):
 
         def set_args_final(args: str):
             nonlocal prof
+            if self.version_combo.currentData() is not None:
+                current_id = self.version_combo.currentData().id
+            else:
+                current_id = self.version_combo.currentText()
+            if version_id != current_id:
+                log.warning("Version ID changed, not setting JVM args")
+                return
             if args:
                 prof.jvm_args = args
                 self.jvm_args_input.setText(args)
