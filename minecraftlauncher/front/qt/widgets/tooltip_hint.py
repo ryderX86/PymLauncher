@@ -39,6 +39,7 @@ class TooltipHint(QLabel):
             self.setHidden(False)
 
     def setText(self, text: str):
+        """NOT Qt builtin"""
         if not text:
             self.setToolTip("")
         lines = text.splitlines()
