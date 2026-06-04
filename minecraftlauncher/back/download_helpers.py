@@ -75,9 +75,9 @@ def download(
     sha: str | None = None,
 ):
     """
-    Attempts to download a file to memory using `requests.get()`, returning the
-    object if successful, else retrying up to `max_retries:int` (default: `2`)
-    times.
+    Attempts to download a file to memory using
+    `minecraftlauncher.session.get()`, returning the object if successful, else
+    retrying up to `max_retries:int` (default: `2`) times.
 
     If `hash` is `str`, then the SHA1 will be checked upon download completion.
     If it doesn't match, the download will be failed and will retry
