@@ -255,13 +255,6 @@ class RunnableDownloader(QRunnable):
             return True
         return _check_file_sha1(self._path, self._hash)
 
-    @property
-    def needs_download(self) -> bool:
-        if self._hash and os.path.isfile(self._path):
-            if self._check_sha1():
-                return False
-        return True
-
     def run(self):
         if self.threads_quit:
             self.log.debug("Quitting thread early")
@@ -269,6 +262,8 @@ class RunnableDownloader(QRunnable):
         if self._check_hash and self._file_exists:
             if self._check_sha1():
                 self.success = True
+                if self._callback:
+                    self._callback(1)
                 return
             self.log.debug("File exists but SHA1 doesn't match, deleting.")
             os.unlink(self._path)
