@@ -211,6 +211,7 @@ class MainWindow(QMainWindow):
 
         self.home_page.game_open.connect(self._process_game_open)
         self.home_page.game_closed.connect(self._process_game_closed)
+        self.home_page.status_update.connect(self.set_status_tmp)
         self.account_page.skin_upload.connect(self.account_dropdown.refresh)
         self.settings_page.settings_changed.connect(
             self.home_page.config_changed
@@ -240,3 +241,6 @@ class MainWindow(QMainWindow):
 
     def set_status(self, message: str):
         self.status.showMessage(message)
+
+    def set_status_tmp(self, message: str):
+        self.status.showMessage(message, 10)
