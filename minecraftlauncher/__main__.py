@@ -196,7 +196,7 @@ class App:
             assert active.profile
 
         if not active.token:
-            self.log.debug("Can't find account (moj) token, refreshing...")
+            self.log.debug("Can't find account (mojang) token, refreshing...")
             active.minecraft_auth()
             assert active.token
 
