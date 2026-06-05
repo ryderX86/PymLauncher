@@ -214,12 +214,15 @@ class App:
             if not acc.token or not acc.token.is_active:
                 self.lb_window.set_text("Reauthenticating")
                 self.lb_window.open()
-                if acc.refresh():
+                acc_refresh = acc.refresh()
+                if acc_refresh:
                     self.lb_window.accept()
                     account_manager.save_or_replace_account(acc)
-                else:
-                    self.log.debug(
-                        "Couldn't refresh %s, prompting user to relog", xuid
+                else:  # AuthError
+                    self.log.warning(
+                        "Couldn't refresh %s, prompting user to relog. %s",
+                        xuid,
+                        acc_refresh.err_string(),
                     )
                     dialog = LoginWindow(self.lb_window)
                     dialog.rejected.connect(
