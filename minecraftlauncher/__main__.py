@@ -23,8 +23,10 @@ from .back import (
 )
 from .auth import LauncherAccount
 
-log = logging.getLogger("minecraftlauncher")
+LOGGER = logging.getLogger("minecraftlauncher")
 
+# we use this to detect crashes somewhat, allowing us to not write garbage data
+# or whatever
 clean_exit = False
 
 
@@ -33,8 +35,6 @@ class App:
 
     close_if_login_aborted: bool
     """Should we close if the login process is aborted?"""
-
-    log = log.getChild("App")
 
     def __init__(self):
         QAPP.setApplicationName("Minecraft Launcher")
@@ -49,7 +49,7 @@ class App:
         if QFile(":/icon.ico").exists():
             QAPP.setWindowIcon(QIcon(":/icon.ico"))
         else:
-            log.debug("Couldn't set app icon")
+            LOGGER.debug("Couldn't set app icon")
         self.lb_window = LoadingBlockerWindow()
         self.lb_window.rejected.connect(self._close_event)
         self.lb_window.show()
@@ -85,14 +85,14 @@ class App:
             page.build()
 
     def run(self) -> int:
-        self.log.debug("Attempting to get version manifest set up...")
+        LOGGER.debug("Attempting to get version manifest set up...")
         self.lb_window.set_text("Fetching version list")
         try:
             version_manager.fetch_version_manifest()
             version_manager.get_version_list()
         except Exception as err:
-            self.log.error("Failed to load version manifest:", exc_info=err)
-            self.log.info(
+            LOGGER.error("Failed to load version manifest:", exc_info=err)
+            LOGGER.info(
                 "Not set up yet to handle offline mode, notify user"
                 " and exit."
             )
@@ -101,13 +101,13 @@ class App:
             )
             return 1
 
-        self.log.debug("Attempting to get JRE manifest...")
+        LOGGER.debug("Attempting to get JRE manifest...")
         self.lb_window.set_text("Fetching Java version list")
         try:
             java_manager.get_jvm_manifest()
         except Exception as err:
-            self.log.error("Failed to load JRE manifest:", exc_info=err)
-            self.log.info(
+            LOGGER.error("Failed to load JRE manifest:", exc_info=err)
+            LOGGER.info(
                 "Not set up yet to handle offline mode, notify user"
                 " and exit."
             )
@@ -116,7 +116,7 @@ class App:
 
         self.lb_window.set_text("Loading UI data...")
         self.buildall()
-        self.log.debug("Attempting to load accounts from cache...")
+        LOGGER.debug("Attempting to load accounts from cache...")
         self.lb_window.set_text("Authenticating")
         accounts, _ = account_manager.load_accounts()
         if accounts:
@@ -126,7 +126,8 @@ class App:
             self.lb_window.hide()
             self.show_login()
         self._refresh_account_ui()
-        self.log.info("Finished loading. Showing main window")
+
+        LOGGER.info("Finished loading. Showing main window")
         self.main_window.show()
         # self.lb_window.setParent(self.main_window)
         self.lb_window.hide()
@@ -149,7 +150,7 @@ class App:
         self._refresh_account_ui()
 
     def show_crash_dialog(self, exit_code: str, stderr: str):
-        self.log.debug("Showing crash dialog to user")
+        LOGGER.debug("Showing crash dialog to user")
         dialog = ErrorDisplay(self.main_window, exit_code, stderr)
         dialog.show()
         dialog.exec()
@@ -174,7 +175,7 @@ class App:
         self._refresh_account_ui()
 
         if not account_manager.accounts:
-            self.log.info("No accounts left, showing login window.")
+            LOGGER.info("No accounts left, showing login window.")
             self.close_if_login_aborted = True
             self.show_login()
 
@@ -191,12 +192,12 @@ class App:
             return
 
         if not active.profile:
-            self.log.debug("Can't find account profile, fetching manually...")
+            LOGGER.debug("Can't find account profile, fetching manually...")
             active.get_profile_info()
             assert active.profile
 
         if not active.token:
-            self.log.debug("Can't find account (mojang) token, refreshing...")
+            LOGGER.debug("Can't find account (mojang) token, refreshing...")
             active.minecraft_auth()
             assert active.token
 
@@ -219,7 +220,7 @@ class App:
                     self.lb_window.accept()
                     account_manager.save_or_replace_account(acc)
                 else:  # AuthError
-                    self.log.warning(
+                    LOGGER.warning(
                         "Couldn't refresh %s, prompting user to relog. %s",
                         xuid,
                         acc_refresh.err_string(),
@@ -230,7 +231,7 @@ class App:
                     )
                     return dialog.exec()
         else:
-            self.log.warning("Couldn't find the active account in accounts!")
+            LOGGER.warning("Couldn't find the active account in accounts!")
         self._refresh_account_ui()
 
     def _refresh_account_ui(self):
@@ -251,14 +252,15 @@ class App:
         QAPP.exit(0)
 
 
-def exit_():
+@atexit.register
+def on_exit():
     """
     Registered with `atexit` in `main()`.
     """
     if not clean_exit:
-        log.error("Something went very wrong, not doing normal cleanup.")
+        LOGGER.error("Something went very wrong, not doing normal cleanup.")
         return
-    log.info("Cleaning up")
+    LOGGER.info("Cleaning up")
     config.save()
     profile_manager.save_launcher_profiles()
     profile_manager.save_launcher_meta()
@@ -269,9 +271,8 @@ def exit_():
 def main():
     global clean_exit
     if "-m" in sys.argv:
-        log.info("-m specified, not running App().run()")
+        LOGGER.info("-m specified, not running App().run()")
         return
-    atexit.register(exit_)
     app = App()
     code = app.run()
     logging.info("Exiting with code %d", code)
