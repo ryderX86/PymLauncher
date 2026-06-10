@@ -101,6 +101,10 @@ class LauncherAccount:
             xsts = XstsToken.auth(self.xbox)
             if not xsts:
                 return xsts
+            # xbl_meta is used to get the gamertag. we could technically remove
+            # this in the future since we can get the XUID from the JWT within
+            # the mojang token, and from there can get the gamertag, but right
+            # now it's not worth it
             xbl_meta = XstsToken.auth(self.xbox, "http://xboxlive.com")
             if not xbl_meta:
                 return xbl_meta

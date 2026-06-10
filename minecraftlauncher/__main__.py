@@ -50,6 +50,7 @@ class App:
             QAPP.setWindowIcon(QIcon(":/icon.ico"))
         else:
             LOGGER.debug("Couldn't set app icon")
+
         self.lb_window = LoadingBlockerWindow()
         self.lb_window.rejected.connect(self._close_event)
         self.lb_window.show()
