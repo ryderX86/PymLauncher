@@ -139,6 +139,8 @@ class XstsToken:
 
     @property
     def gamertag(self) -> str:
+        if "gtg" not in self.json["DisplayClaims"]["xui"][0]:
+            raise AttributeError("Gamertag not present in this XSTS token")
         return self.json["DisplayClaims"]["xui"][0]["gtg"]
 
     @property
