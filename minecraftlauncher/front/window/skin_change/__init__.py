@@ -48,28 +48,37 @@ log = logging.getLogger(__name__)
 class SkinChange(QDialog):
     skin_changed = Signal()
 
-    def __init__(self, profile: LauncherAccount, parent=None):
+    # instance attributes
+    current_cape: str | None
+    current_cape_cloud_idx: int
+    current_cape_cloud: str | None
+
+    def __init__(self, account: LauncherAccount, parent=None):
         super().__init__(parent)
+        self.current_cape = None
+        self.current_cape_cloud = None
+
         self._current_win_environment = (
             QSurfaceFormat.defaultFormat().__copy__()
         )
-        self.profile = profile
+        self.account = account
+        if account.profile:
+            if account.profile.current_cape:
+                self.current_cape = account.profile.current_cape["id"]
+                self.current_cape_cloud = account.profile.current_cape["id"]
+        if account.profile_needs_update():
+            log.debug("Account has old profile info, updating")
+            account.get_profile_info()
+
         self._build_ui()
         self.current_cloud_hash = hashlib.sha256(
-            profile.skin_bytes()
+            account.skin_bytes()
         ).hexdigest()
         self.current_hash = self.current_cloud_hash
         self.setWindowTitle("Change skin")
-        self.current_texture_path = profile.skin_path()
-        self.current_cape_path = profile.cape_path()
+        self.current_texture_path = account.skin_path()
+        self.current_cape_path = account.cape_path()
         self.variant = "classic"
-        self.current_cape: str | None = None
-        self.current_cape_cloud_idx: int
-        self.current_cape_cloud: str | None = None
-        if profile.profile:
-            if profile.profile.current_cape:
-                self.current_cape = profile.profile.current_cape["id"]
-                self.current_cape_cloud = profile.profile.current_cape["id"]
 
     def _build_ui(self):
         self._root_lo = QVBoxLayout(self)
@@ -117,10 +126,10 @@ class SkinChange(QDialog):
         self.cape_list.addItem(cape_list_none)
         self.cape_list.setProperty("icons", True)
         self.cape_list.setMovement(QListWidget.Movement.Static)
-        if self.profile.profile:
+        if self.account.profile:
             not_found_cape = True
-            if self.profile.profile.capes:
-                for cape in self.profile.profile.get_all_cape_thumbs():
+            if self.account.profile.capes:
+                for cape in self.account.profile.get_all_cape_thumbs():
                     if (
                         "alias" not in cape
                         or "thumb" not in cape
@@ -255,15 +264,15 @@ class SkinChange(QDialog):
         self.file_input.setText(None)
         self.submit_button.setDisabled(True)
         if self.player_model:
-            if self.profile.profile:
-                match self.profile.profile.current_skin_model():
+            if self.account.profile:
+                match self.account.profile.current_skin_model():
                     case SkinModel.CLASSIC:
                         self.classic_sel.click()
                     case SkinModel.SLIM:
                         self.slim_sel.click()
-            p = self.profile.skin_path()
+            p = self.account.skin_path()
             self.current_texture_path = p
-            c = self.profile.cape_path() or ""
+            c = self.account.cape_path() or ""
             self.current_cape_path = c
             self.player_model.setProperty("skin", QUrl.fromLocalFile(p))
             self.player_model.setProperty("cape", QUrl.fromLocalFile(c))
@@ -340,17 +349,17 @@ class SkinChange(QDialog):
         else:
             cape_success = True
 
-        if self.profile.profile:
-            self.profile.profile.refresh_profile_info()
+        if self.account.profile:
+            self.account.profile.refresh_profile_info()
             account_manager.save_accounts()
         if skin_success and cape_success:
             self.accept()
 
     def _set_cape(self):
-        if not self.profile.token:
-            self.profile.refresh()
-        assert self.profile.token
-        headers = {"Authorization": f"Bearer {self.profile.token.access_token}"}
+        if not self.account.token:
+            self.account.refresh()
+        assert self.account.token
+        headers = {"Authorization": f"Bearer {self.account.token.access_token}"}
         if self.current_cape:
             try:
                 payload = {"capeId": self.current_cape}
@@ -399,19 +408,19 @@ class SkinChange(QDialog):
         return False
 
     def _upload_skin(self):
-        if not self.profile.profile:
-            self.profile.get_profile_info()
-        assert self.profile.profile
-        current_skin_hash = self.profile.profile.current_skin["url"].split("/")[
+        if not self.account.profile:
+            self.account.get_profile_info()
+        assert self.account.profile
+        current_skin_hash = self.account.profile.current_skin["url"].split("/")[
             -1
         ]
         if current_skin_hash == self.current_hash:
             error_box("Skin is already set to this!")
             return False
-        if not self.profile.token:
+        if not self.account.token:
             error_box("Invalid access token")
             return False
-        headers = {"Authorization": f"Bearer {self.profile.token.access_token}"}
+        headers = {"Authorization": f"Bearer {self.account.token.access_token}"}
 
         fp = self.file_input.text()
         name = "img_"

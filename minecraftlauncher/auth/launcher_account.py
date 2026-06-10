@@ -79,7 +79,13 @@ class LauncherAccount:
         return True
 
     def refresh(self):
-        if self.token and self.token.is_active and self.msa.is_active:
+        profile_update = self.profile_needs_update()
+        if (
+            self.token
+            and self.token.is_active
+            and self.msa.is_active
+            and not profile_update
+        ):
             return True
         if not self.msa_valid and not self.token_valid:
             log.info("Refreshing tokens for '%s'", self.gamertag)
@@ -103,11 +109,18 @@ class LauncherAccount:
             if not mc:
                 return mc
             self.token = mc
-            return True
-        else:
-            return True
+        if profile_update:
+            self.get_profile_info()
+        return True
 
     minecraft_auth = refresh
+
+    def profile_needs_update(self):
+        if not self.profile:
+            if self.token and self.token.owns_game:
+                return True
+            return False
+        return self.profile.should_refresh
 
     def skin_path(self):
         if self.profile:
