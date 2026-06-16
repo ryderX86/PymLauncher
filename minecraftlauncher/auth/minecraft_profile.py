@@ -8,7 +8,8 @@ import uuid
 import time
 import os
 
-from PySide6.QtGui import QImage, QIcon, QPixmap
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QImage, QIcon, QPixmap, QPainter
 import requests
 import requests.exceptions
 
@@ -356,8 +357,38 @@ class MinecraftProfile:
         img_bytes = self.current_skin_bytes()
         img = QImage()
         img.loadFromData(img_bytes)
-        img.setText("id", uid)
-        ico = resources.icon_from_qimg(img.copy(8, 8, 8, 8), True)
+
+        head = img.copy(8, 8, 8, 8)
+        head_large = head.scaled(
+            240,
+            240,
+            Qt.AspectRatioMode.KeepAspectRatio,
+            Qt.TransformationMode.FastTransformation,
+        )
+        hat = img.copy(40, 8, 8, 8)
+        hat_large = hat.scaled(
+            256,
+            256,
+            Qt.AspectRatioMode.KeepAspectRatio,
+            Qt.TransformationMode.FastTransformation,
+        )
+        result = QImage(8, 8, QImage.Format.Format_ARGB32)
+        result.fill(Qt.GlobalColor.transparent)
+        result_large = result.scaled(256, 256)
+        painter = QPainter(result)
+        painter_large = QPainter(result_large)
+
+        painter.drawImage(0, 0, head)
+        painter.drawImage(0, 0, hat)
+        painter.end()
+        painter_large.drawImage(8, 8, head_large)
+        painter_large.drawImage(0, 0, hat_large)
+        painter_large.end()
+        result.setText("id", uid)
+        result_large.setText("id", uid)
+
+        ico = resources.icon_from_qimg(result, True)
+        ico.addPixmap(QPixmap.fromImage(result_large))
         _cached_skins[uid] = ico
         return _cached_skins[uid]
 
