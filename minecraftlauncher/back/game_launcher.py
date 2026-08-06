@@ -22,11 +22,6 @@ from minecraftlauncher.constants import (
     OS,
     DEV,
 )
-from minecraftlauncher.front.window import (
-    WarningDialog,
-    WarningType,
-    ButtonConfig,
-)
 from minecraftlauncher.functions import is_path_valid
 from minecraftlauncher.datatypes import GameProfile
 from minecraftlauncher.back.library_manager import evaluate_rules
@@ -385,7 +380,7 @@ class LaunchWorker(QThread):
     progress = Signal(
         str, float, float, bool
     )  # step label, current, total, is mb
-    finished = Signal(bool, str)  # successful, message
+    done = Signal(bool, str)  # successful, message
     status = Signal(str)  # status text
     game_closed = Signal(str, str)
     game_log = Signal(str)
@@ -496,24 +491,9 @@ class LaunchWorker(QThread):
                 self.version_id,
                 exc_info=err,
             )
-            launch = WarningDialog.warn(
-                self.parent(),
-                "Warning",
-                "Failed to download Log4J config file. "
-                "Launching is not recommended unless you're playing offline ONLY. "
-                "Launch anyways?",
-                button_config=ButtonConfig.YES_NO,
-                type_=WarningType.LOG4J_CONFIG_FAILED,
-            )
-            if launch:
-                log.warning(
-                    "User chose to launch game despite Log4J config issue"
-                )
-                log4j_config = None
-            else:
-                log.info("User aborted launch due to Log4J config issue")
-                self.finished.emit(False, "User aborted launch")
-                return
+            log.info("Aborting launch")
+            self.finished.emit(False, "Log4J config could not be set up")
+            return
 
         self.status.emit("Downloading libraries...")
         try:
