@@ -249,14 +249,14 @@ class GameProfile:
     @resolution.setter
     def resolution(self, new: str | None):
         if new is None or new == "Auto":
-            self.resolution_height = None
+            self.resolution_width = None
             self.resolution_height = None
             return
         res = new.split("x")
         if len(res) != 2:
             raise ValueError(
                 "Resolution must be in the format of a screen resolution "
-                f"(given input: '{str(new)}')"
+                f'(given input: "{str(new)}")'
             )
         self.resolution_width = int(res[0])
         self.resolution_height = int(res[1])
