@@ -93,6 +93,7 @@ def reswrite(path: str | os.PathLike, content: str | Buffer):
         log.error(
             "Exception occured while writing to '%s':", path, exc_info=err
         )
+        raise err
     if os.path.isfile(path):
         os.unlink(path)
     os.rename(tmp, path)
