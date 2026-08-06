@@ -415,17 +415,6 @@ class LaunchWorker(QThread):
         self._p: subprocess.Popen
 
     def run(self):
-        if offline_mode:
-            allow_run = WarningDialog.warn(
-                self,
-                "Launch in offline mode?",
-                "Offline mode is experimental. Do you want to continue?",
-                WarningType.OFFLINE_MODE_LAUNCH,
-                button_config=ButtonConfig.YES_NO,
-            )
-            if not allow_run:
-                self.finished.emit(False, "User aborted launch")
-                return
         match self.version_id:
             case "latest-release":
                 self.version_id = version_manager.get_latest_release()
