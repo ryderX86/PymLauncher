@@ -271,9 +271,11 @@ def on_exit():
 
 def main():
     global clean_exit
-    if "-m" in sys.argv:
+    if "-m" in sys.argv:  # nuitka multithreading fix
         LOGGER.info("-m specified, not running App().run()")
         return
+    else:
+        args.get_args()
     app = App()
     code = app.run()
     logging.info("Exiting with code %d", code)

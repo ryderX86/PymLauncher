@@ -51,23 +51,47 @@ _parser.add_argument(
     type=str,
     dest="launch_profile",
 )
-_parsed_args = _parser.parse_args()
 
-work_dir: str | None = _parsed_args.work_dir if _parsed_args else None
-resource_debug: bool = _parsed_args.resource_debug if _parsed_args else False
-exporting_debug = _parsed_args.exporting_debug if _parsed_args else False
-debug_logging = _parsed_args.debug_logging if _parsed_args else False
-launch_profile: str | None = _parsed_args.launch_profile
-debug_splash_screen: bool = _parsed_args.debug_splash_screen
-# force_offline: bool = _parsed_args.force_offline
+# defaults
+work_dir = None
+resource_debug = False
+exporting_debug = False
+debug_logging = False
+launch_profile = None
+debug_splash_screen = False
 
-if work_dir is not None:
-    work_dir = os.path.normpath(work_dir)
-    if not os.path.isdir(_parsed_args.work_dir):
-        try:
-            os.makedirs(_parsed_args.work_dir, exist_ok=True)
-        except OSError as err:
-            raise ArgumentError(
-                _work_dir,
-                f"Failed to create path at {_parsed_args.work_dir}",
-            ) from err
+
+def get_args():
+    global work_dir, resource_debug, exporting_debug, debug_logging
+    global launch_profile, debug_splash_screen
+    _parsed_args = _parser.parse_args()
+
+    work_dir: str | None = _parsed_args.work_dir if _parsed_args else None
+    resource_debug: bool = (
+        _parsed_args.resource_debug if _parsed_args else False
+    )
+    exporting_debug = _parsed_args.exporting_debug if _parsed_args else False
+    debug_logging = _parsed_args.debug_logging if _parsed_args else False
+    launch_profile: str | None = _parsed_args.launch_profile
+    debug_splash_screen: bool = _parsed_args.debug_splash_screen
+    # force_offline: bool = _parsed_args.force_offline
+
+    if work_dir is not None:
+        work_dir = os.path.normpath(work_dir)
+        if not os.path.isdir(_parsed_args.work_dir):
+            try:
+                os.makedirs(_parsed_args.work_dir, exist_ok=True)
+            except OSError as err:
+                raise ArgumentError(
+                    _work_dir,
+                    f"Failed to create path at {_parsed_args.work_dir}",
+                ) from err
+
+    return {
+        "work_dir": work_dir,
+        "resource_debug": resource_debug,
+        "exporting_debug": exporting_debug,
+        "debug_logging": debug_logging,
+        "launch_profile": launch_profile,
+        "debug_splash_screen": debug_splash_screen,
+    }
