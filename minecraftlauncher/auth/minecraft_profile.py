@@ -19,20 +19,16 @@ from minecraftlauncher.constants import (
     STEVE_SKIN_URL,
 )
 from minecraftlauncher.back.download_helpers import download as try_request
-from minecraftlauncher import SESSION, set_offline_mode
+from minecraftlauncher import SESSION
+from minecraftlauncher.offline import offline_man
 from minecraftlauncher.front import resources
+from minecraftlauncher.paths import paths
 
 log = logging.getLogger(__name__)
 
 KNOWN_DICT_KEYS = ["id", "name", "skins", "capes", "last_updated"]
 
 _STEVE_UUID = str(uuid.UUID(int=0))
-SKIN_CACHE_PATH = resources.TEXTURE_CACHE_DIR / "skins"
-CAPE_CACHE_PATH = resources.TEXTURE_CACHE_DIR / "capes"
-if not SKIN_CACHE_PATH.exists():
-    SKIN_CACHE_PATH.mkdir(parents=True, exist_ok=True)
-if not CAPE_CACHE_PATH.exists():
-    CAPE_CACHE_PATH.mkdir(parents=True, exist_ok=True)
 
 _cached_skins: dict[str, QIcon] = {}
 _cached_capes: dict[str, QPixmap] = {}
@@ -62,7 +58,7 @@ class SkinModel(StrEnum):
 
 @lru_cache(maxsize=48)
 def check_redownload_skin(
-    p: Path, url: str, sha: str | None = None, name: str | None = None
+    p: str, url: str, sha: str | None = None, name: str | None = None
 ):
     if not sha:
         sha = url.split("/")[-1]
@@ -181,13 +177,19 @@ class MinecraftProfile:
 
     @staticmethod
     def steve_skin_bytes():
-        skin_path = SKIN_CACHE_PATH / (_STEVE_UUID + ".png")
+        skin_path = os.path.join(
+            os.path.join(paths.textures_cache, "skins"), f"{_STEVE_UUID}.png"
+        )
         check_redownload_skin(skin_path, STEVE_SKIN_URL)
-        return skin_path.read_bytes()
+        with open(skin_path, "rb") as file:
+            b = file.read()
+        return b
 
     @staticmethod
     def steve_skin_path():
-        skin_path = SKIN_CACHE_PATH / (_STEVE_UUID + ".png")
+        skin_path = os.path.join(
+            os.path.join(paths.textures_cache, "skins"), f"{_STEVE_UUID}.png"
+        )
         check_redownload_skin(skin_path, STEVE_SKIN_URL)
         return skin_path
 
@@ -217,7 +219,7 @@ class MinecraftProfile:
             requests.exceptions.ConnectionError,
         ) as err:
             log.error("Failed to connect to %s:", MOJ_PROF_URL, exc_info=err)
-            set_offline_mode(True)
+            offline_man.check_requests_error(err)
             raise RuntimeError(
                 f"Failed to connect to {MOJ_PROF_URL!r}"
             ) from err
@@ -281,7 +283,7 @@ class MinecraftProfile:
                 MOJ_PROF_URL,
                 err.__qualname__,
             )
-            set_offline_mode(True)
+            offline_man.check_requests_error(err)
             raise RuntimeError(
                 f"Failed to connect to {MOJ_PROF_URL!r}"
             ) from err
@@ -330,16 +332,24 @@ class MinecraftProfile:
         }
 
     def current_skin_bytes(self):
-        p = SKIN_CACHE_PATH / (str(self.current_skin["textureKey"]) + ".png")
+        p = os.path.join(
+            os.path.join(paths.textures_cache, "skins"),
+            f"{self.current_skin["textureKey"]}.png",
+        )
         check_redownload_skin(
             p,
             self.current_skin["url"],
             name=str(self.current_skin["textureKey"]),
         )
-        return p.read_bytes()
+        with open(p, "rb") as file:
+            b = file.read()
+        return b
 
     def current_skin_path(self):
-        p = SKIN_CACHE_PATH / (str(self.current_skin["textureKey"]) + ".png")
+        p = os.path.join(
+            os.path.join(paths.textures_cache, "skins"),
+            f"{self.current_skin["textureKey"]}.png",
+        )
         check_redownload_skin(
             p,
             self.current_skin["url"],
@@ -397,7 +407,9 @@ class MinecraftProfile:
         for cape in self.capes:
             url: str = cape["url"]
             sha = url.split("/")[-1]
-            p = CAPE_CACHE_PATH / (sha + ".png")
+            p = os.path.join(
+                os.path.join(paths.textures_cache, "capes"), f"{sha}.png"
+            )
             check_redownload_skin(p, url, sha, name=cape["alias"])
             new_cape_obj = {**cape, "path": p}
             capes_out.append(new_cape_obj)
@@ -427,7 +439,9 @@ class MinecraftProfile:
             url: str = self.current_cape["url"]
             assert isinstance(url, str)
             sha = url.split("/")[-1]
-            p = CAPE_CACHE_PATH / (sha + ".png")
+            p = os.path.join(
+                os.path.join(paths.textures_cache, "capes"), f"{sha}.png"
+            )
             check_redownload_skin(p, url, sha)
             return p
         return None

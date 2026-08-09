@@ -22,7 +22,7 @@ from PySide6.QtWidgets import (
 )
 
 from minecraftlauncher.functions import copy_to_clipboard, clipboard_present
-from minecraftlauncher.front.styles import TERMINAL_FONT
+from minecraftlauncher.front.styles import get_fonts
 from minecraftlauncher import constants
 
 log = logging.getLogger(__name__)
@@ -44,6 +44,7 @@ class ErrorDisplay(QDialog):
         `logs` should be a str of the crash report, and `log_path` should be
         the location of the report (if applicable).
         """
+        self.fonts = get_fonts()
         super().__init__(parent)
         self.setWindowTitle("Minecraft Error")
         self.resize(600, 500)
@@ -93,7 +94,7 @@ class ErrorDisplay(QDialog):
             self._log_display.styleSheet() + "font-weight: 600; "
             "font-size: 12;"
         )
-        self._log_display.setFont(TERMINAL_FONT)
+        self._log_display.setFont(self.fonts.terminal)
         self._layout.addWidget(self._log_display)
 
         buttons_parent = QFrame()

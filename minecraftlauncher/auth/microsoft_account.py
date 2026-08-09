@@ -10,7 +10,8 @@ from minecraftlauncher.constants import (
     AZURE_SCOPE,
     MSA_REFRESH_URL,
 )
-from minecraftlauncher import SESSION, set_offline_mode
+from minecraftlauncher import SESSION
+from minecraftlauncher.offline import offline_man
 from .auth_error import AuthError, AuthStep
 
 log = logging.getLogger(__name__)
@@ -154,20 +155,20 @@ class MicrosoftAccount:
         except (
             requests.exceptions.ConnectionError,
             requests.exceptions.ConnectTimeout,
-        ) as exc:
+        ) as err:
             log.warning(
                 "%s occured while attempting MSA token refresh",
-                exc.__qualname__,
+                err.__qualname__,
             )
-            set_offline_mode(True)
+            offline_man.check_requests_error(err)
             return AuthError(AuthStep.MSA, -1, "Connection failed")
-        except requests.HTTPError as exc:
+        except requests.HTTPError as err:
             log.error(
                 "Failed to refresh MSA token; response code %s",
-                exc.response.status_code,
+                err.response.status_code,
             )
             return AuthError(
-                AuthStep.MSA, exc.response.status_code, exc.response.text
+                AuthStep.MSA, err.response.status_code, err.response.text
             )
 
         if len(response.text) < 5:

@@ -9,28 +9,34 @@ import os
 from minecraftlauncher.datatypes.launch_profile import GameProfile
 from minecraftlauncher.functions import is_path_valid
 from minecraftlauncher.back import profile_manager
-from minecraftlauncher import constants, args
+from minecraftlauncher.paths import paths
+from minecraftlauncher import constants, launchargs
 
 log = logging.getLogger(__name__)
-if args.exporting_debug:
+if launchargs.exporting_debug:
     log.setLevel(logging.DEBUG)
 else:
     log.setLevel(logging.INFO)
 
 
-def pack_file(path: Path, stop_at: Path, zipf: zipfile.ZipFile):
+def pack_file(
+    path: str | os.PathLike, stop_at: str | os.PathLike, zipf: zipfile.ZipFile
+):
     """
     Add files deep into an archive without having to parse the directory every
     single time.
+
+    Also supports creating directories
     """
-    if path.is_file():
-        file = path.resolve()
-        path = path.parent
+    # test if we're dealing with a directory or file
+    if os.path.isfile(path):
+        file = os.path.normpath(path)
+        path = os.path.split(path)[0]
     else:
         file = None
-    path = path.resolve()
+    path = os.path.normpath(path)
     # include the creation of the base folder:
-    stop_at = stop_at.parent.resolve()
+    stop_at = os.path.normpath(os.path.split(stop_at)[0])
     if str(stop_at) not in str(path):
         raise ValueError("Paths must match at beginning!")
     dest_dir = str(path).replace(str(stop_at), "")
@@ -38,7 +44,7 @@ def pack_file(path: Path, stop_at: Path, zipf: zipfile.ZipFile):
         dest_dir = dest_dir[1:]
     if file:
         try:
-            zipf.write(file, dest_dir + "/" + file.name)
+            zipf.write(file, dest_dir + "/" + os.path.split(file)[1])
         except Exception as err:
             err.add_note(f'File at "{str(file)}" caused the above error.')
             raise
@@ -69,7 +75,7 @@ class PortableProfile:
         game_dir = self.prof.game_dir
         if game_dir:
             return Path(game_dir)
-        return constants.MINECRAFT_DIR
+        return paths.game
 
     def _dir_exists(self, directory: str):
         if constants.OS_PATH_DELIM in directory:
@@ -142,7 +148,7 @@ class PortableProfile:
 
     def _get_version_paths(self) -> list[Path]:
         pathlist = []
-        versions_folder = os.path.join(constants.MINECRAFT_DIR, "versions")
+        versions_folder = os.path.join(paths.game, "versions")
         for path in glob.glob(f"{versions_folder}/**/*.json"):
             if os.path.split(path)[0] == versions_folder:
                 continue
@@ -274,16 +280,29 @@ class PortableProfile:
         log.debug('Opening "%s" as NEW archive', str(output))
         with zipfile.ZipFile(output, "x", zipfile.ZIP_ZSTANDARD) as zipf:
             if mods and self.mods:
-                p = b / "mods"
+                p = os.path.join(b, "mods")
                 zipf.mkdir("mods")
                 log.info('Taking mods from "%s"', str(p))
-                mod_list = [*p.rglob("*.jar"), *p.rglob("*.zip")]
-                if (b / "coremods").exists() and coremods:
-                    cm = b / "coremods"
-                    mod_list.extend([*cm.rglob("*.zip"), *cm.rglob("*.jar")])
-                for mod in [*p.rglob("*.jar"), *p.rglob("*.zip")]:
-                    mod = mod.resolve()
-                    if mod.parent != p:
+                mod_list = [
+                    *glob.glob("*.jar", root_dir=p, recursive=True),
+                    *glob.glob("*.zip", root_dir=p, recursive=True),
+                ]
+                if os.path.isdir(os.path.join(b, "coremods")) and coremods:
+                    cm = os.path.join(b, "coremods")
+                    mod_list.extend(
+                        {
+                            *glob.glob("*.zip", root_dir=cm, recursive=True),
+                            *glob.glob("*.jar", root_dir=cm, recursive=True),
+                        }
+                    )
+                for mod in {
+                    *glob.glob("*.zip", root_dir=p, recursive=True),
+                    *glob.glob("*.jar", root_dir=p, recursive=True),
+                }:
+                    # TODO: figure out wtf "arc" is supposed to be, i was
+                    # definitely on something writing this
+                    if os.path.split(mod)[0].rstrip("\\/") != p.rstrip("\\/"):
+                        # add recursive folders/files:
                         try:
                             pack_file(mod, p, zipf)
                         except Exception as err:
@@ -291,75 +310,94 @@ class PortableProfile:
                                 f'ZIP file open at time of exception: "{str(output)}"'
                             )
                             raise
-                        arc = f"mods/{mod.parent}/{mod.name}"
+                        # arc = f"mods/{mod.parent}/{mod.name}"
+                        arc = os.path.join("mods", os.path.split(mod)[1])
                     else:
-                        arc = f"mods/{mod.name}"
+                        # we only need to pack it into the mods folder here:
+                        arc = os.path.join("mods", os.path.split(mod)[1])
                     log.debug("Adding '%s' to archive>/%s", str(mod), arc)
                     zipf.write(mod, arc)
 
             if options_txt and self.options_txt:
                 log.info("Including options.txt")
-                zipf.write(b / "options.txt", "options.txt")
+                zipf.write(os.path.join(b, "options.txt"), "options.txt")
 
             if resource_packs and self.resource_packs:
-                p = b / "resourcepacks"
-                if p.exists():
+                r = os.path.join(b, "resourcepacks")
+                t = os.path.join(b, "texturepacks")
+                d: str | None = None
+                if os.path.isdir(r):
+                    d = r
                     zipf.mkdir("resourcepacks")
-                else:
-                    p = b / "texturepacks"
+                elif os.path.isdir(t):
+                    d = t
                     zipf.mkdir("texturepacks")
-                log.info("Taking resource packs from '%s'", str(p))
-                for pack in [*p.glob("*")]:
-                    if pack.is_file():
-                        if pack.suffix != ".zip":
-                            continue
-                        zipf.write(pack, f"{p.name}/{pack.name}")
-                    elif pack.is_dir():
-                        if not (pack / "pack.mcmeta").exists():
-                            continue
-                        zipf.mkdir(f"{p.name}/{pack.name}")
-                        for path in pack.rglob("*"):
-                            pack_file(path, p, zipf)
+                if d:
+                    log.info("Taking resource packs from '%s'", str(d))
+                    rp_root = os.path.split(d)[1]
+                    for pack in [*glob.glob("*", root_dir=d, recursive=False)]:
+                        fname = os.path.split(pack)[1]
+                        if os.path.isfile(pack):
+                            if os.path.splitext(pack)[1] != ".zip":
+                                continue
+                            zipf.write(pack, os.path.join(rp_root, fname))
+                        elif os.path.isdir(pack):
+                            log.debug(
+                                "Attempting to pack non-zipped resource pack "
+                                "from %r",
+                                pack,
+                            )
+                            if not os.path.isfile(
+                                os.path.join(pack, "pack.mcmeta")
+                            ):
+                                log.warning(
+                                    "Directory %r does not have a pack.mcmeta,"
+                                    " skipping it.",
+                                    pack,
+                                )
+                                continue
+                            zipf.mkdir(os.path.join(rp_root, fname))
+                            for path in glob.glob(
+                                "*", root_dir=pack, recursive=True
+                            ):
+                                pack_file(path, d, zipf)
+                else:
+                    log.warning(
+                        "Could not find a directory named either "
+                        "'resourcepacks' or 'texturepacks', skipping RPs.",
+                    )
 
             if saves and self.saves:
-                p = b / "saves"
+                p = os.path.join(b, "saves")
                 log.info("Taking save files from '%s'", str(p))
                 zipf.mkdir("saves")
-                for file in p.rglob("*"):
+                for file in glob.glob("*", root_dir=p, recursive=True):
                     pack_file(file, p, zipf)
 
             if screenshots and self.screenshots:
-                p = b / "screenshots"
+                p = os.path.join(b, "screenshots")
                 log.info("Taking screenshots from '%s'", str(p))
                 zipf.mkdir("screenshots")
-                for file in p.glob("*.png"):
-                    zipf.write(file, f"screenshots/{file.name}")
-
-            if versions and self.versions:
-                log.info("Including versions")
-                p = b / "versions"
-                for file in p.rglob("*.json"):
-                    if file.parent == p:
-                        continue
-                    elif file.parent.name != file.stem:
-                        continue
-                    pack_file(file, p, zipf)
+                for file in glob.glob("*.png", root_dir=p):
+                    zipf.write(file, f"screenshots/{os.path.split(file)[1]}")
 
             if config and self.config:
                 log.info("Including mod config files")
-                p = b / "config"
-                for file in p.rglob("*"):
+                p = os.path.join(b, "config")
+                for file in glob.glob("*", root_dir=p, recursive=True):
                     pack_file(file, p, zipf)
 
-            if menuworlds and self.menuworlds:
+            if menuworlds:
                 log.info("Including menuworlds mod data")
-                p = b / "menuworlds"
-                for file in p.rglob("*"):
+                p = os.path.join(b, "menuworlds")
+                for file in glob.glob("*", root_dir=p, recursive=True):
                     pack_file(file, p, zipf)
 
             if debug_profile and self.debug_profile:
                 log.info("Including debug (F3) profile")
-                zipf.write(b / "debug-profile.json", "debug-profile.json")
+                zipf.write(
+                    os.path.join(b, "debug-profile.json"), "debug-profile.json"
+                )
 
             profile_dump = self.prof.to_dict()
             profile_dump["_FORMAT"] = "beachhorse"

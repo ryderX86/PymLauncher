@@ -22,7 +22,8 @@ from PySide6.QtWidgets import (
 from minecraftlauncher.front.qt.widgets import TooltipHint, Section
 from minecraftlauncher.front.window import TextPopup
 from minecraftlauncher.front.qt import CustomMapper
-from minecraftlauncher import config, constants
+from minecraftlauncher.config import config
+from minecraftlauncher.paths import paths
 
 log = logging.getLogger(__name__)
 
@@ -67,8 +68,10 @@ class SettingsPage(QWidget):
         self.post_launch_options.setProperty("compact", True)
         self.mapper.add_mapping(
             self.post_launch_options,
-            saver=lambda _: config.set_(
-                "post_launch_option", self.post_launch_options.currentData()
+            saver=lambda _: setattr(
+                config,
+                "post_launch_option",
+                self.post_launch_options.currentData(),
             ),
         )
         post_launch_lo.addWidget(self.post_launch_options)
@@ -82,7 +85,7 @@ class SettingsPage(QWidget):
         )
         self.mapper.add_mapping(
             open_browser_for_login,
-            saver=lambda c: config.set_("open_browser_for_login", c),
+            saver=lambda c: setattr(config, "open_browser_for_login", c),
         )
         open_browser_for_login.setChecked(config.open_browser_for_login)
         behavior.addWidget(open_browser_for_login)
@@ -90,7 +93,7 @@ class SettingsPage(QWidget):
         copy_code_for_login = QCheckBox("Copy sign-in code to clipboard")
         self.mapper.add_mapping(
             copy_code_for_login,
-            saver=lambda c: config.set_("copy_code_for_login", c),
+            saver=lambda c: setattr(config, "copy_code_for_login", c),
         )
         copy_code_for_login.setChecked(config.copy_code_for_login)
         behavior.addWidget(copy_code_for_login)
@@ -98,7 +101,7 @@ class SettingsPage(QWidget):
         allow_audio = QCheckBox("Allow warning/error sounds")
         self.mapper.add_mapping(
             allow_audio,
-            saver=lambda c: config.set_("allow_audio", c),
+            saver=lambda c: setattr(config, "allow_audio", c),
         )
         allow_audio.setChecked(config.allow_audio)
         behavior.addWidget(allow_audio)
@@ -143,7 +146,7 @@ class SettingsPage(QWidget):
         tooltips_enabled = QCheckBox("Show Tooltip Icons")
         self.mapper.add_mapping(
             tooltips_enabled,
-            saver=lambda c: config.set_("tooltip_icons_enabled", c),
+            saver=lambda c: setattr(config, "tooltip_icons_enabled", c),
         )
         tooltips_enabled.setChecked(config.tooltip_icons_enabled)
         self.mapper.saved.connect(TooltipHint.refresh_visibility)
@@ -161,7 +164,7 @@ class SettingsPage(QWidget):
         show_logs_check = QCheckBox("Show game logs on home page")
         self.mapper.add_mapping(
             show_logs_check,
-            saver=lambda c: config.set_("show_logs_on_home", c),
+            saver=lambda c: setattr(config, "show_logs_on_home", c),
         )
         show_logs_check.setChecked(config.show_logs_on_home)
         show_logs_lo.addWidget(show_logs_check)
@@ -177,7 +180,7 @@ class SettingsPage(QWidget):
         json_option = QCheckBox("Enforce JSON spec")
         json_option.setChecked(config.enforce_json_spec)
         self.mapper.add_mapping(
-            json_option, saver=lambda b: config.set_("enforce_json_spec", b)
+            json_option, saver=lambda b: setattr(config, "enforce_json_spec", b)
         )
         json_row.addWidget(json_option)
         json_option_tt = TooltipHint(
@@ -254,15 +257,11 @@ class SettingsPage(QWidget):
 
     def _open_settings_file(self):
         log.debug("Opened launcher settings file with default app")
-        QDesktopServices.openUrl(
-            QUrl.fromLocalFile(constants.LAUNCHER_CONFIG_FILE)
-        )
+        QDesktopServices.openUrl(QUrl.fromLocalFile(paths.config_file))
 
     def _open_data_folder(self):
         log.debug("Opened data folder with file explorer")
-        QDesktopServices.openUrl(
-            QUrl.fromLocalFile(constants.LAUNCHER_DATA_DIR)
-        )
+        QDesktopServices.openUrl(QUrl.fromLocalFile(paths.data))
 
     def build(self):
         self.post_launch_options.addItem(

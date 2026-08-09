@@ -42,7 +42,6 @@ from PySide6.QtWidgets import (
     QMenu,
 )
 
-from minecraftlauncher import DEV
 from minecraftlauncher.datatypes.game_version import GameVersionStub
 from minecraftlauncher.back.profile_manager import (
     GameProfile,
@@ -77,7 +76,9 @@ from minecraftlauncher.front.window import (
 )
 from minecraftlauncher.functions import copy_to_clipboard
 from minecraftlauncher.ostools import set_jump_list
-from minecraftlauncher import constants, config
+from minecraftlauncher import constants
+from minecraftlauncher.config import config
+from minecraftlauncher.paths import paths
 
 log = logging.getLogger(__name__)
 
@@ -719,7 +720,7 @@ class ProfilesPage(QWidget):
         self.mapper.revert()
         prof = profile_manager.get_current_profile()
         self.jvm_args_input.setText(prof.jvm_args)
-        if DEV:
+        if constants.DEV:
             self._dirty_check()
         else:
             self._set_undirty()
@@ -769,7 +770,7 @@ class ProfilesPage(QWidget):
         if prof.game_dir and os.path.isdir(prof.game_dir):
             dir_ = prof.game_dir
         else:
-            dir_ = str(constants.MINECRAFT_DIR)
+            dir_ = str(paths.game)
         dialog.setDirectory(dir_)
         dialog.exec()
         sel_files = dialog.selectedFiles()

@@ -12,6 +12,15 @@ _work_dir = _parser.add_argument(
     dest="work_dir",
     default=None,
 )
+_work_dir = _parser.add_argument(
+    "-gd",
+    "--gameDir",
+    "--game_dir",
+    "--game-dir",
+    type=str,
+    dest="game_dir",
+    default=None,
+)
 _parser.add_argument(
     "--resourceDebug",
     action="store_true",
@@ -53,27 +62,29 @@ _parser.add_argument(
 )
 
 # defaults
-work_dir = None
-resource_debug = False
+work_dir: str | None = None
+game_dir: str | None = None
+resource_debug: bool = False
 exporting_debug = False
-debug_logging = False
-launch_profile = None
-debug_splash_screen = False
+debug_logging: bool = False
+launch_profile: str | None = None
+debug_splash_screen: bool = False
+
+ready: bool = False
 
 
 def get_args():
     global work_dir, resource_debug, exporting_debug, debug_logging
-    global launch_profile, debug_splash_screen
+    global launch_profile, debug_splash_screen, game_dir
     _parsed_args = _parser.parse_args()
 
-    work_dir: str | None = _parsed_args.work_dir if _parsed_args else None
-    resource_debug: bool = (
-        _parsed_args.resource_debug if _parsed_args else False
-    )
-    exporting_debug = _parsed_args.exporting_debug if _parsed_args else False
-    debug_logging = _parsed_args.debug_logging if _parsed_args else False
-    launch_profile: str | None = _parsed_args.launch_profile
-    debug_splash_screen: bool = _parsed_args.debug_splash_screen
+    work_dir = _parsed_args.work_dir
+    game_dir = _parsed_args.game_dir
+    resource_debug = _parsed_args.resource_debug
+    exporting_debug = _parsed_args.exporting_debug
+    debug_logging = _parsed_args.debug_logging
+    launch_profile = _parsed_args.launch_profile
+    debug_splash_screen = _parsed_args.debug_splash_screen
     # force_offline: bool = _parsed_args.force_offline
 
     if work_dir is not None:
@@ -87,8 +98,12 @@ def get_args():
                     f"Failed to create path at {_parsed_args.work_dir}",
                 ) from err
 
+    global ready
+    ready = True
+
     return {
         "work_dir": work_dir,
+        "game_dir": game_dir,
         "resource_debug": resource_debug,
         "exporting_debug": exporting_debug,
         "debug_logging": debug_logging,

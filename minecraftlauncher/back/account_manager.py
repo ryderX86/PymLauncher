@@ -3,17 +3,16 @@ import json
 import time
 import os
 
-from minecraftlauncher.constants import LAUNCHER_DATA_DIR
+import requests
+
+from minecraftlauncher import constants
+from minecraftlauncher.paths import paths
 from minecraftlauncher.auth import LauncherAccount
 from minecraftlauncher.auth.encryption import data_load_hook, data_save_hook
 from minecraftlauncher.functions import reswrite
-from minecraftlauncher import DEV, offline_mode
+from minecraftlauncher.offline import offline_man
 
 log = logging.getLogger(__name__)
-
-ACCOUNTS_FILE = LAUNCHER_DATA_DIR / "accounts.bin"
-SKINS_CACHE_DIR = LAUNCHER_DATA_DIR / "skin_cache"
-SKIN_METADATA_PATH = SKINS_CACHE_DIR / "skins_meta.json"
 
 accounts: list[LauncherAccount] = []
 active_account: str | None = None
@@ -35,8 +34,6 @@ def save_accounts(
         log.warning("Overriding accounts cache")
         accounts = accounts_
 
-    LAUNCHER_DATA_DIR.mkdir(parents=True, exist_ok=True)
-
     payload_json = {
         "active": active_xuid or active_account,
         "accounts": [acc.serialize() for acc in accounts],
@@ -45,11 +42,11 @@ def save_accounts(
 
     if return_unencrypted:
         log.warning("Returning unencrypted accounts.bin to var (not saving)")
-        return json.dumps(payload_json, indent=4 if DEV else None)
+        return json.dumps(payload_json, indent=4 if constants.DEV else None)
 
     payload = data_save_hook(payload_json)
 
-    reswrite(ACCOUNTS_FILE, payload)
+    reswrite(paths.accounts_file, payload)
 
     log.info("Saved %d accounts to cache file.", len(accounts))
     return None
@@ -96,13 +93,13 @@ def load_accounts() -> tuple[list[LauncherAccount], str | None]:
     global accounts
     global active_account
 
-    if not os.path.isfile(ACCOUNTS_FILE):
+    if not os.path.isfile(paths.accounts_file):
         return [], None
 
     if accounts and active_account:
         return accounts, active_account
 
-    with open(ACCOUNTS_FILE, "rb") as b:
+    with open(paths.accounts_file, "rb") as b:
         payload_bytes = b.read()
     if payload_bytes[0:1] == b"{":
         payload = payload_bytes.decode("utf-8")
@@ -113,7 +110,7 @@ def load_accounts() -> tuple[list[LauncherAccount], str | None]:
         accounts_file = json.loads(payload)
     except json.JSONDecodeError as err:
         log.error("Failed to load accounts.bin:", exc_info=err)
-        return [], None
+        raise
     accounts = []
     raw_accounts = accounts_file.get("accounts", [])
     refreshed_account = False
@@ -122,9 +119,9 @@ def load_accounts() -> tuple[list[LauncherAccount], str | None]:
     for raw_acc in raw_accounts:
         acc = LauncherAccount.from_json(raw_acc)
         if (
-            acc.gamertag == active_account
+            acc.xuid == active_account
             and (not acc.token_valid or not acc.msa_valid)
-            and not offline_mode
+            and not offline_man.offline
         ):
             success = acc.refresh()
             if success:
@@ -137,6 +134,11 @@ def load_accounts() -> tuple[list[LauncherAccount], str | None]:
                     success,
                 )
                 active_account = None
+        elif acc.gamertag == active_account and offline_man.offline:
+            log.warning(
+                "Skipping account reauthentication for %r since we're offline",
+                acc.gamertag,
+            )
         accounts.append(acc)
         if acc.xuid == active_account:
             found_active = True
@@ -147,23 +149,41 @@ def load_accounts() -> tuple[list[LauncherAccount], str | None]:
                 "No active account set in cache file, setting to %r.",
                 account.gamertag,
             )
-            if account.token_valid:
+            if account.token_valid or offline_man.offline:
                 break
-            elif offline_mode or account.refresh():
-                refreshed_account = True
-                break
-            log.warning(
-                "Couldn't refresh tokens for %r, trying again",
-                account.gamertag,
-            )
-            active_account = None
+            else:
+                try:
+                    account.refresh()
+                except Exception as err:
+                    log.error(
+                        "Failed to refresh account token for %r:",
+                        account.gamertag,
+                        exc_info=err,
+                    )
+                    if isinstance(err, requests.RequestException):
+                        offline_man.check_requests_error(err)
+                        if offline_man.offline:
+                            log.info(
+                                "We're offline, proceeding with %r.",
+                                account.gamertag,
+                            )
+                            break
+                    else:
+                        log.warning(
+                            "Couldn't refresh tokens for %r, trying next",
+                            account.gamertag,
+                        )
+                        active_account = None
+                else:
+                    refreshed_account = True
+                    break
         save_accounts()
     elif refreshed_account:
         save_accounts()
     log.info(
         "Loaded %d account(s) from %r",
         len(accounts),
-        os.path.split(ACCOUNTS_FILE)[-1],
+        os.path.split(paths.accounts_file)[-1],
     )
     return accounts, active_account
 
@@ -217,38 +237,3 @@ def fetch_account(xuid: str) -> LauncherAccount | None:
         if acc.xuid == xuid:
             return acc
     return None
-
-
-def _create_skin_cache_if_not_exists():
-    """
-    Checks if the skin cache directory and metadata .json exist, and if not
-    then this function creates them.
-    """
-    if not SKINS_CACHE_DIR.exists():
-        try:
-            SKINS_CACHE_DIR.mkdir(parents=True)
-        except Exception as err:
-            raise RuntimeError(
-                "Failed to create skin cache directory!"
-            ) from err
-
-    def create_metadata_file():
-        SKIN_METADATA_PATH.touch()
-        SKIN_METADATA_PATH.write_text("{}", "utf-8")
-        return
-
-    if not SKIN_METADATA_PATH.exists():
-        SKIN_METADATA_PATH.touch()
-        create_metadata_file()
-        return True
-    else:
-        md_text = SKIN_METADATA_PATH.read_text("utf-8")
-        try:
-            json.loads(md_text)
-        except json.JSONDecodeError:
-            log.error("Failed to load skin metadata cache, wiping it.")
-            SKIN_METADATA_PATH.unlink()
-            create_metadata_file()
-            return True
-        else:
-            return False

@@ -16,7 +16,8 @@ import os
 import requests
 from PySide6.QtCore import QRunnable
 
-from minecraftlauncher import SESSION, offline_mode
+from minecraftlauncher import SESSION
+from minecraftlauncher.offline import offline_man
 
 log = logging.getLogger(__name__)
 T = TypeVar("T")
@@ -24,7 +25,7 @@ T = TypeVar("T")
 
 def _offline_mode_warning(func: FunctionType):
     def wrapped_func(*args, **kwargs):
-        if offline_mode:
+        if offline_man.offline:
             log.warning(
                 "'%s()' shouldn't have been called during offline mode!",
                 func.__name__,

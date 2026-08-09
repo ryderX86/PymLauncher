@@ -10,7 +10,8 @@ from minecraftlauncher.auth.xbox_token import XboxToken
 from minecraftlauncher.constants import (
     XSTS_AUTH_URL,
 )
-from minecraftlauncher import SESSION, set_offline_mode
+from minecraftlauncher import SESSION
+from minecraftlauncher.offline import offline_man
 from .exceptions import XstsAuthError
 from .auth_error import AuthError, AuthStep
 
@@ -99,7 +100,7 @@ class XstsToken:
                 "%s occured while attempting MSA token refresh",
                 err.__qualname__,
             )
-            set_offline_mode(True)
+            offline_man.check_requests_error(err)
             raise RuntimeError(
                 f"Failed to connect to {XSTS_AUTH_URL!r}"
             ) from err

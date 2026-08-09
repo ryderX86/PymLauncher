@@ -23,8 +23,8 @@ from PySide6.QtWidgets import (
     QListWidgetItem,
 )
 
-from minecraftlauncher import config
-from minecraftlauncher.args import launch_profile
+from minecraftlauncher import set_exiting, launchargs
+from minecraftlauncher.config import config, PostLaunchBehavior
 from minecraftlauncher.front import styles
 from minecraftlauncher.back import profile_manager
 from minecraftlauncher.constants import LAUNCHER_VERSION
@@ -72,16 +72,19 @@ class MainWindow(QMainWindow):
         self._build_ui()
 
     def check_for_launch_arg(self):
-        if launch_profile:
+        if launchargs.launch_profile:
             log.info("We're launching from the jump-list!")
-            if launch_profile in profile_manager.profiles:
-                profile_manager.set_current_profile_uuid(launch_profile)
+            if launchargs.launch_profile in profile_manager.profiles:
+                profile_manager.set_current_profile_uuid(
+                    launchargs.launch_profile
+                )
                 log.debug("Clicking play button")
                 # is this even a good idea? lol
                 self.home_page.play_button.click()
             else:
                 error_box(
-                    f'Couldn\'t find any profile with ID "{launch_profile}"!'
+                    "Couldn't find any profile with ID "
+                    f'"{launchargs.launch_profile}"!'
                 )
 
     def _on_window_closed(self):
@@ -93,6 +96,7 @@ class MainWindow(QMainWindow):
             config.maximized = False
 
     def closeEvent(self, a0):
+        set_exiting()
         self._on_window_closed()
         super().closeEvent(a0)
 
@@ -102,21 +106,18 @@ class MainWindow(QMainWindow):
 
     def _process_game_open(self):
         match config.post_launch_option:
-            case (
-                config.PostLaunchBehavior.HIDE
-                | config.PostLaunchBehavior.CLOSE_WHEN_DONE
-            ):
+            case PostLaunchBehavior.HIDE | PostLaunchBehavior.CLOSE_WHEN_DONE:
                 self.hide()
-            case config.PostLaunchBehavior.CLOSE:
+            case PostLaunchBehavior.CLOSE:
                 self.close()
 
     def _process_game_closed(self, exit_code: str):
         match config.post_launch_option:
-            case config.PostLaunchBehavior.KEEP_OPEN:
+            case PostLaunchBehavior.KEEP_OPEN:
                 return
-            case config.PostLaunchBehavior.HIDE:
+            case PostLaunchBehavior.HIDE:
                 self.show()
-            case config.PostLaunchBehavior.CLOSE_WHEN_DONE:
+            case PostLaunchBehavior.CLOSE_WHEN_DONE:
                 if int(exit_code) == 0:
                     self.close()
                     sys.exit()

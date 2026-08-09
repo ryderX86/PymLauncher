@@ -9,9 +9,8 @@ Supports reading the official Minecraft launcher's
 """
 
 from collections.abc import Callable, Iterable
-from typing import Any
+from typing import Any, Literal
 from datetime import datetime
-from typing import Literal
 from types import FunctionType
 from functools import lru_cache
 import json
@@ -21,16 +20,14 @@ import os
 
 from PySide6.QtCore import Signal, QObject
 
-from minecraftlauncher.config import enforce_json_spec
-from minecraftlauncher.constants import MINECRAFT_DIR
+from minecraftlauncher.config import config
+from minecraftlauncher.paths import paths
 from minecraftlauncher.datatypes import GameProfile
 from minecraftlauncher.functions import reswrite
-from minecraftlauncher import QAPP
+from minecraftlauncher import get_exit_status
 
 log = logging.getLogger(__name__)
 
-PROFILES_PATH = os.path.join(MINECRAFT_DIR, "launcher_profiles.json")
-PROFILES_META = os.path.join(MINECRAFT_DIR, "launcher_profiles_meta.json")
 _DEFAULT_SETTINGS_JSON: dict[str, Any] = {
     "crashAssistance": False,
     "enableAdvanced": True,
@@ -136,24 +133,12 @@ def remove_profile_switch_handler(
 
 
 def _refresh_profiles():
+    if get_exit_status():
+        return
     # something probably changed in the main cache, so clear LRU for row getter
     get_row_from_profile.cache_clear()
     for func in _profile_refresh_handlers:
         func()
-
-
-@QAPP.aboutToQuit.connect
-def _clear_profile_refresh_handlers():
-    """
-    Truthfully I have no idea whether or not using a `Signal`'s connect
-    method as a decorator is good or bad practice but it works I guess?
-
-    OBVIOUSLY don't call this from anywhere else, ever. It'll be a
-    `SyntaxError` or something
-    """
-    global _profile_refresh_handlers
-    _profile_refresh_handlers = []
-    return
 
 
 def add_profile_refresh_handler(func: Callable):
@@ -213,6 +198,8 @@ def set_current_profile_uuid(uid: str):
 
 
 def set_current_profile(prof: GameProfile):
+    if get_exit_status():
+        return
     global _current_profile
     log.debug("Switching profile to %r (ID: %r)", prof.name, prof.uuid)
     _current_profile = profiles[prof.uuid]
@@ -245,8 +232,8 @@ def get_launcher_meta():
     if _meta_cache or getattr(get_launcher_meta, "ran_once", False):
         return _meta_cache
     get_launcher_meta.ran_once = True  # type: ignore
-    if os.path.isfile(PROFILES_META):
-        with open(PROFILES_META, "r") as f:
+    if os.path.isfile(paths.profiles_meta_file):
+        with open(paths.profiles_meta_file, "r") as f:
             txt = f.read()
         try:
             meta = json.loads(txt)
@@ -269,7 +256,7 @@ def save_launcher_meta():
         log.error("Failed to dump _meta_cache JSON!", exc_info=err)
         raise
     else:
-        reswrite(PROFILES_META, meta_json)
+        reswrite(paths.profiles_meta_file, meta_json)
 
 
 def get_profile_sorting():
@@ -366,8 +353,8 @@ def load_launcher_profiles():
     """
     global profiles, _current_profile
     profile_order = get_profile_sorting()
-    if os.path.isfile(PROFILES_PATH):
-        with open(PROFILES_PATH, "r") as f:
+    if os.path.isfile(paths.profiles_file):
+        with open(paths.profiles_file, "r") as f:
             lp_text = f.read()
         try:
             lp_json = json.loads(lp_text)
@@ -523,14 +510,14 @@ def save_launcher_profiles(
     profiles_json = {k: v.to_dict_compat() for k, v in profiles.items()}
     output = {"profiles": profiles_json, "settings": settings, "version": 6}
     _save_sorting_order(profiles_json.keys())
-    if enforce_json_spec:
+    if config.enforce_json_spec:
         separators = None
     else:
         separators = (", ", " : ")
     json_out = json.dumps(
         output, indent=2, sort_keys=True, separators=separators
     )
-    reswrite(PROFILES_PATH, json_out)
+    reswrite(paths.profiles_file, json_out)
     log.info(
         "Saved %s profiles to 'launcher_profiles.json'", len(profiles_json)
     )

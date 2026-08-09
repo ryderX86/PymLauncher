@@ -3,8 +3,8 @@ import logging
 from PySide6.QtCore import Qt, QObject, Signal, QEvent
 from PySide6.QtGui import QKeyEvent
 
-from minecraftlauncher import QAPP
-from minecraftlauncher.front.styles import CSANS, FONT, STYLESHEET
+from minecraftlauncher import get_qapp
+from minecraftlauncher.front.styles import get_fonts, STYLESHEET
 
 log = logging.getLogger(__name__)
 
@@ -13,6 +13,8 @@ class KonamiCode(QObject):
     def __init__(
         self, parent: QObject | None = None, objectName: str | None = None
     ):
+        self.qapp = get_qapp()
+        self.fonts = get_fonts()
         super().__init__(parent, objectName=objectName)
 
     konami_code = [
@@ -43,13 +45,13 @@ class KonamiCode(QObject):
             self.konami_code_idx = 0
             if self.current_font_is_csans:
                 log.debug("Setting font back to normal...")
-                QAPP.setFont(FONT)
-                QAPP.setStyleSheet(STYLESHEET)
+                self.qapp.setFont(self.fonts.main)
+                self.qapp.setStyleSheet(STYLESHEET)
                 self.current_font_is_csans = False
             else:
                 log.debug("Setting font to Comic Sans")
-                QAPP.setFont(CSANS)
-                QAPP.setStyleSheet(STYLESHEET)
+                self.qapp.setFont(self.fonts.csans)
+                self.qapp.setStyleSheet(STYLESHEET)
                 self.current_font_is_csans = True
 
     def konami_code_event(self, event: QKeyEvent) -> None:

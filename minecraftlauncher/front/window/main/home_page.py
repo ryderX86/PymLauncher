@@ -27,13 +27,14 @@ from minecraftlauncher.back.profile_manager import GameProfile
 from minecraftlauncher.back.game_launcher import LaunchWorker
 from minecraftlauncher.back import profile_manager
 from minecraftlauncher.exceptions.datatypes import InvalidVersionIdError
-from minecraftlauncher.constants import MINECRAFT_DIR
+from minecraftlauncher.paths import paths
 from minecraftlauncher.auth import LauncherAccount
 from minecraftlauncher.front import resources
 from minecraftlauncher.front.qt.models import ProfileSelectionModel
 from minecraftlauncher.front.qt.widgets import Header1, SecondaryLabel
-from minecraftlauncher.front.styles import TERMINAL_FONT
-from minecraftlauncher import config, offline_mode
+from minecraftlauncher.front.styles import get_fonts
+from minecraftlauncher.config import config
+from minecraftlauncher.offline import offline_man
 
 log = logging.getLogger(__name__)
 
@@ -53,6 +54,7 @@ class HomePage(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.fonts = get_fonts()
         self.selection_model = ProfileSelectionModel.instance()
         self._worker: LaunchWorker | None = None
         self._no_icon = QIcon().pixmap(QSize(32, 32))
@@ -180,7 +182,7 @@ class HomePage(QWidget):
             centerOnScroll=False,
         )
         self.game_logs.setBackgroundRole(QPalette.ColorRole.Dark)
-        self.game_logs.setFont(TERMINAL_FONT)
+        self.game_logs.setFont(self.fonts.terminal)
         self.game_logs.setMaximumBlockCount(5000)  # change if needed
 
         info_layout.addWidget(self.game_logs)
@@ -283,7 +285,7 @@ class HomePage(QWidget):
             self.play_button.setDisabled(True)
             return
         if prof_exists:
-            if not offline_mode:
+            if not offline_man.offline:
                 self.play_button.setText("Launch Game")
             else:
                 self.play_button.setText("Launch Game (offline)")
@@ -292,7 +294,7 @@ class HomePage(QWidget):
         else:
             self.progress_label.setText("Ready to install.")
             self.play_button.setText(f"Install {profile.real_version_id}")
-            self.play_button.setDisabled(offline_mode)
+            self.play_button.setDisabled(offline_man.offline)
         self.version_label.setText(f"Version: {profile.version_id}")
 
     def _on_play(self):
@@ -370,7 +372,7 @@ class HomePage(QWidget):
                 error_box(f"Bad game directory: {prof.game_dir!r}")
             p = prof.game_dir
         else:
-            p = MINECRAFT_DIR
+            p = paths.game
 
         if not os.path.isdir(p):
             error_box("Profile directory doesn't exist yet!")
@@ -397,7 +399,7 @@ class HomePage(QWidget):
             case "screenshots":
                 p = os.path.join(p, "screenshots")
             case "versions":
-                p = os.path.join(MINECRAFT_DIR, "versions")
+                p = os.path.join(paths.game, "versions")
 
         # check again for subfolders
         if not os.path.isdir(p):

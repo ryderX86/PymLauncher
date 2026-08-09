@@ -19,7 +19,7 @@ from PySide6.QtWidgets import (
 )
 import requests
 
-from minecraftlauncher import config
+from minecraftlauncher.config import config
 from minecraftlauncher.constants import (
     AZURE_CLIENT_ID,
     MS_DEVICE_CODE_URL,

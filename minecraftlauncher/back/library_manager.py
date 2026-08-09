@@ -14,8 +14,8 @@ from PySide6.QtCore import QThreadPool
 from packaging.version import Version, parse
 
 from minecraftlauncher.functions import is_path_valid
+from minecraftlauncher.paths import paths
 from minecraftlauncher.constants import (
-    MINECRAFT_DIR,
     OS,
     ARCH,
     CLASSPATH_SEPARATOR,
@@ -23,7 +23,7 @@ from minecraftlauncher.constants import (
     LIBRARIES_URL,
     CPU_THREADS,
 )
-from minecraftlauncher.config import redownload_option
+from minecraftlauncher.config import config
 from .download_helpers import (
     download,
     should_download_file,
@@ -33,8 +33,6 @@ from .download_helpers import (
 )
 
 log = logging.getLogger(__name__)
-
-LIBRARIES_BASE = os.path.join(MINECRAFT_DIR, "libraries")
 
 # Rule evaluation stuff
 
@@ -226,7 +224,7 @@ def _get_lib_filepath(
             del sha1_url
 
     folders = pkg.split(".")
-    folderpath = os.path.join(LIBRARIES_BASE, *folders, libname, ver)
+    folderpath = os.path.join(paths.libraries, *folders, libname, ver)
     file_target = os.path.join(folderpath, f"{libname}-{ver}.jar")
     return file_target, url, sha1
 
@@ -301,7 +299,7 @@ def download_libraries(
             del path_, url_, sha1_
 
         if url and path:
-            destination = os.path.join(LIBRARIES_BASE, *path.split("/"))
+            destination = os.path.join(paths.libraries, *path.split("/"))
             if _download_file(url, destination, sha1, size):
                 downloaded += 1
                 log.info(
@@ -394,9 +392,9 @@ def download_libraries_threaded(
             del path_, url_, sha1_
 
         if url and path:
-            destination = os.path.join(LIBRARIES_BASE, *path.split("/"))
+            destination = os.path.join(paths.libraries, *path.split("/"))
             if os.path.isfile(destination):
-                if not redownload_option:
+                if not config.redownload_option:
                     log.info(
                         "Skipping download of library at '%s' "
                         "regardless of hash according to options.",
@@ -466,7 +464,7 @@ def download_natives(libraries: list[dict]):
         size: int = native_info.get("size", 0)
 
         if url and path:
-            destination = os.path.join(LIBRARIES_BASE, *path.split("/"))
+            destination = os.path.join(paths.libraries, *path.split("/"))
             if _download_file(url, destination, sha1, size):
                 downloaded += 1
 
@@ -502,7 +500,7 @@ def extract_natives(libraries: list[dict], natives_dir: str | os.PathLike):
         if not path:
             continue
 
-        jar_path = os.path.join(LIBRARIES_BASE, *path.split("/"))
+        jar_path = os.path.join(paths.libraries, *path.split("/"))
         if not os.path.isfile(jar_path):
             log.warning("Couldn't find native at '%s'", jar_path)
             continue
@@ -541,7 +539,7 @@ def build_classpath(libraries: list[dict], client_jar_path: str | os.PathLike):
         artifact: dict = lib.get("downloads", {}).get("artifact")
         if artifact and artifact.get("path"):
             jar_path = os.path.join(
-                LIBRARIES_BASE, *artifact["path"].split("/")
+                paths.libraries, *artifact["path"].split("/")
             )
             if os.path.isfile(jar_path):
                 if jar_path not in entries:
@@ -561,14 +559,14 @@ def build_classpath(libraries: list[dict], client_jar_path: str | os.PathLike):
                 path = native_info.get("path", "")
                 # name = native_info.get("name", "")
                 if path:
-                    jar_path = os.path.join(LIBRARIES_BASE, *path.split("/"))
+                    jar_path = os.path.join(paths.libraries, *path.split("/"))
                     if os.path.isfile(jar_path):
                         entries.append(jar_path)
                         continue
         url, path = parse_lib_path(  # pylint: disable=W0612
             lib.get("url", ""), lib.get("name", "")
         )
-        jar_path = os.path.join(LIBRARIES_BASE, *path.split("/"))
+        jar_path = os.path.join(paths.libraries, *path.split("/"))
         if os.path.isfile(jar_path):
             entries.append(str(jar_path))
         else:

@@ -21,10 +21,10 @@ from PySide6.QtWidgets import (
 from minecraftlauncher.front.resources import symbol
 from minecraftlauncher.auth import LauncherAccount
 from minecraftlauncher.functions.error_box import error_box
-from minecraftlauncher.functions import copy_to_clipboard, clipboard_present
+from minecraftlauncher import functions
 from minecraftlauncher.constants import CHECKMARK_DELAY
 from minecraftlauncher.front.window.skin_change import SkinChange
-from minecraftlauncher import add_offline_mode_hook, offline_mode
+from minecraftlauncher.offline import offline_man
 
 log = logging.getLogger(__name__)
 
@@ -88,7 +88,7 @@ class AccountPage(QWidget):
         self.copy_uuid_button.setFixedWidth(40)
         self.copy_uuid_button.setFixedHeight(40)
         self.copy_uuid_button.clicked.connect(self._copy_uuid)
-        self.copy_uuid_button.setEnabled(clipboard_present)
+        self.copy_uuid_button.setEnabled(functions.clipboard_present)
         uuid_row.addWidget(self.copy_uuid_button)
 
         info_layout.addLayout(uuid_row, 1, 1)
@@ -142,7 +142,7 @@ class AccountPage(QWidget):
         manage.addWidget(logout_button)
 
         layout.addWidget(manage_w)
-        add_offline_mode_hook(self.offline_mode_hook)
+        offline_man.add_hook(self.offline_mode_hook)
 
     def set_account_info(self, info: LauncherAccount):
         """Update account info displayed on page"""
@@ -164,12 +164,11 @@ class AccountPage(QWidget):
     def _copy_uuid(self):
         uuid_text = self.uuid_label.text()
         if uuid_text and uuid_text != "<uuid>":
-            if not clipboard_present:
+            if not functions.clipboard_present:
                 error_box("Failed to get clipboard instance to copy to.")
                 log.warning("Couldn't get clipboard instance!")
                 return
-            copy_to_clipboard(uuid_text)
-            self.log.info("Copied '%s' to clipboard.", uuid_text)
+            functions.copy_to_clipboard(uuid_text)
             self.copy_uuid_button.setIcon(symbol("clipboard-checked"))
 
         def reset_button():
@@ -192,7 +191,7 @@ class AccountPage(QWidget):
             self.log.debug("Logout aborted by user.")
 
     def _change_skin(self):
-        if offline_mode:
+        if offline_man.offline:
             log.warning("_change_skin() shouldn't have been called!")
             return
         log.debug("Showing skin change dialog")

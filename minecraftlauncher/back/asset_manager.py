@@ -20,7 +20,6 @@ from PySide6.QtCore import QThreadPool
 
 from minecraftlauncher.constants import (
     RESOURCES_URL,
-    MINECRAFT_DIR,
     CPU_THREADS,
 )
 from minecraftlauncher.back.download_helpers import (
@@ -29,21 +28,9 @@ from minecraftlauncher.back.download_helpers import (
     BulkDownloadError,
 )
 from minecraftlauncher import SESSION
+from minecraftlauncher.paths import paths
 
 log = logging.getLogger(__name__)
-
-ASSETS_DIR = os.path.join(MINECRAFT_DIR, "assets")
-ASSETS_INDEX_DIR = os.path.join(ASSETS_DIR, "indexes")
-VIRTUAL_BASE = os.path.join(ASSETS_DIR, "virtual", "legacy")
-OBJECTS_DIR = os.path.join(ASSETS_DIR, "objects")
-
-# any of these will create ASSETS_DIR anyways so no need for a redundant check
-if not os.path.isdir(ASSETS_INDEX_DIR):
-    os.makedirs(ASSETS_INDEX_DIR, exist_ok=True)
-if not os.path.isdir(VIRTUAL_BASE):
-    os.makedirs(VIRTUAL_BASE, exist_ok=True)
-if not os.path.isdir(OBJECTS_DIR):
-    os.makedirs(OBJECTS_DIR, exist_ok=True)
 
 
 def fetch_asset_index(version_json: dict) -> dict:
@@ -61,7 +48,7 @@ def fetch_asset_index(version_json: dict) -> dict:
     index_url = asset_index_info["url"]
     expected_sha1 = asset_index_info.get("sha1")
 
-    index_path = os.path.join(ASSETS_INDEX_DIR, f"{index_id}.json")
+    index_path = os.path.join(paths.assets_indexes, f"{index_id}.json")
 
     if os.path.isfile(index_path):
         if isinstance(expected_sha1, str):
@@ -177,7 +164,7 @@ def check_or_download_logging_config(version_json: dict) -> str | None:
     sha1: str = file_info["sha1"]
     url: str = file_info["url"]
 
-    dest_folder = os.path.join(ASSETS_DIR, "log_configs")
+    dest_folder = os.path.join(paths.assets, "log_configs")
     if not os.path.isdir(dest_folder):
         os.makedirs(dest_folder, exist_ok=True)
 
@@ -241,10 +228,10 @@ def filter_assets_downloads(
     for virtual_path, info in objects.items():
         file_hash = info["hash"]
         prefix = file_hash[:2]
-        dest_dir = os.path.join(OBJECTS_DIR, prefix)
+        dest_dir = os.path.join(paths.assets_objects, prefix)
         dest_path = os.path.join(dest_dir, file_hash)
 
-        dest_path_v = os.path.join(VIRTUAL_BASE, virtual_path)
+        dest_path_v = os.path.join(paths.assets_virtual, virtual_path)
         if os.path.isfile(dest_path):
             with open(dest_path, "rb") as fb:
                 file_sha1 = hashlib.sha1(fb.read()).hexdigest()
@@ -286,7 +273,7 @@ def download_assets(
         file_hash: str = info["hash"]
         prefix = file_hash[:2]
 
-        dest_dir = os.path.join(OBJECTS_DIR, "prefix")
+        dest_dir = os.path.join(paths.assets_objects, prefix)
         if not os.path.isdir(dest_dir):
             os.makedirs(dest_dir, exist_ok=True)
         dest_path = os.path.join(dest_dir, file_hash)
@@ -366,7 +353,7 @@ def download_assets_threaded(
     for virtual_path, info in objects.items():
         file_hash = info["hash"]
         prefix = file_hash[:2]
-        dest_dir = os.path.join(OBJECTS_DIR, prefix)
+        dest_dir = os.path.join(paths.assets_objects, prefix)
         dest_path = os.path.join(dest_dir, file_hash)
         downloader = RunnableDownloader(
             f"{RESOURCES_URL}/{prefix}/{file_hash}",
@@ -377,7 +364,7 @@ def download_assets_threaded(
         if map_virtual_assets:
             v_downloader = RunnableDownloader(
                 f"{RESOURCES_URL}/{prefix}/{file_hash}",
-                os.path.join(VIRTUAL_BASE, virtual_path),
+                os.path.join(paths.assets_virtual, virtual_path),
                 file_hash,
                 callback=add_number,
             )

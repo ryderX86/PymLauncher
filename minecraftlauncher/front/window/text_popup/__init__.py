@@ -18,7 +18,7 @@ from PySide6.QtWidgets import (
 )
 
 from minecraftlauncher.functions import copy_to_clipboard, clipboard_present
-from minecraftlauncher.front.styles import TERMINAL_FONT
+from minecraftlauncher.front.styles import get_fonts
 
 log = logging.getLogger(__name__)
 
@@ -35,6 +35,7 @@ class TextPopup(QDialog):
         Text Pop-up
         """
         super().__init__(parent)
+        self.fonts = get_fonts()
         if window_title:
             self.setWindowTitle(window_title)
         self.setMinimumSize(600, 500)
@@ -76,7 +77,7 @@ class TextPopup(QDialog):
             self._text_display.styleSheet() + "font-weight: 600; "
             "font-size: 12;"
         )
-        self._text_display.setFont(TERMINAL_FONT)
+        self._text_display.setFont(self.fonts.terminal)
         pixel_width = len(max(self._text.splitlines())) * 12
         size = self.size()
         size.setWidth(pixel_width + 96)

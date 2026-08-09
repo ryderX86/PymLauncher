@@ -3,7 +3,7 @@ import sys
 
 from PySide6.QtWidgets import QApplication, QMessageBox
 
-from minecraftlauncher import constants, config
+from minecraftlauncher import constants
 
 log = logging.getLogger(__name__)
 
@@ -37,8 +37,7 @@ def error_box(
     else:
         error_win.setWindowTitle("Error")
     error_win.setStandardButtons(QMessageBox.StandardButton.Ok)
-    if config.allow_audio:
-        QApplication.beep()
+    QApplication.beep()
     error_win.exec()
     log.debug("Error dialog dismissed.")
     if fatal:

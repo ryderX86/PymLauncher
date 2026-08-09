@@ -4,7 +4,7 @@ from PySide6.QtCore import Qt, QSize, Signal
 from PySide6.QtWidgets import QLabel
 
 from minecraftlauncher.front import resources
-from minecraftlauncher import config
+from minecraftlauncher.config import config
 
 _instances = []
 

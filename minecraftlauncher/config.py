@@ -1,21 +1,16 @@
 """
-Config module. Badly written, should change to a class and initialize in
-minecraftlauncher.__init__ instead of having this mess.
+Class/instance of a config loader/saver
 """
 
-from typing import Any
-from enum import IntEnum
-import os
+from typing import Any, Callable, get_type_hints
+from enum import IntEnum, EnumType
 import json
 import logging
 
-from .constants import (
-    LAUNCHER_DATA_DIR,
-    LAUNCHER_CONFIG_FILE,
-)
-from .functions import reswrite, error_box
+from .paths import paths
+from .functions import reswrite
 
-_log = logging.getLogger(__name__)
+log = logging.getLogger(__name__)
 
 
 class PostLaunchBehavior(IntEnum):
@@ -31,137 +26,127 @@ class JarRedownloadBehavior(IntEnum):
     REDOWNLOAD_ONCE = 2
 
 
-class IgnoreMe:
-    def __init__(self, value: bool = False):
-        self._bool = bool(value)
+class ConfigHolder:
+    # meta
+    active: bool = False
 
-    def __bool__(self) -> bool:
-        return self._bool
+    PostLaunchBehavior = PostLaunchBehavior
+    JarRedownloadBehavior = JarRedownloadBehavior
 
-    def __eq__(self, a):
-        if isinstance(a, type(self)) or isinstance(self, type(a)):
-            return True
-        elif isinstance(a, bool):
-            return not a
-        return False
+    # config items
+    window_size: list[int]
+    open_browser_for_login: bool
+    copy_code_for_login: bool
+    post_launch_option: PostLaunchBehavior
+    redownload_option: JarRedownloadBehavior
+    maximized: bool
+    tooltip_icons_enabled: bool
+    ignored_messages: set[int]
+    jump_list_items: list[str]
+    """
+    WINDOWS-ONLY: Profiles
+    """
+    dialog_answers: dict[str, bool]
+    show_animation_on_skin_dialog: bool
+    show_logs_on_home: bool
+    allow_audio: bool
+    enforce_json_spec: bool
+    show_snapshots: bool
+    """
+    Whether or not snapshots/pre-releases should be shown in the versions list.
+    """
+    show_old_releases: bool
+    """
+    Whether or not old releases (pre-alpha, alpha, beta, etc.) should be shown in
+    the versions list.
+    """
 
-    def __ne__(self, a):
-        return True
+    def __init__(self):
+        # config items
+        self.window_size = [1100, 700]
+        self.open_browser_for_login = False
+        self.copy_code_for_login = True
+        self.post_launch_option = PostLaunchBehavior.HIDE
+        self.redownload_option = JarRedownloadBehavior.REDOWNLOAD
+        self.maximized = False
+        self.tooltip_icons_enabled = True
+        self.ignored_messages = set()
+        self.jump_list_items = []
+        self.dialog_answers = {}
+        self.show_animation_on_skin_dialog = False
+        self.show_logs_on_home = False
+        self.allow_audio = True
+        self.enforce_json_spec = False
+        self.show_snapshots = True
+        self.show_old_releases = True
 
+    @classmethod
+    def coerce_enum(cls, val: int | str, type_: EnumType):
+        return type_(val)
 
-# default values
-window_size = [1100, 700]
-open_browser_for_login: bool = False
-copy_code_for_login: bool = True
-post_launch_option: PostLaunchBehavior = PostLaunchBehavior.HIDE
-redownload_option: JarRedownloadBehavior = JarRedownloadBehavior.REDOWNLOAD
-maximized: bool = False
-tooltip_icons_enabled: bool = True
-ignored_messages: set[int] = set()
-jump_list_items: list[str] = []  # profiles
-dialog_answers: dict[str, bool] = {}
-show_animation_on_skin_dialog: bool = False
-show_logs_on_home: bool = False
-allow_audio: bool = True
-enforce_json_spec: bool = False
-show_snapshots: bool = True
-"""
-Whether or not snapshots/pre-releases should be shown in the versions list.
-"""
-show_old_releases: bool = True
-"""
-Whether or not old releases (pre-alpha, alpha, beta, etc.) should be shown in
-the versions list.
-"""
-# icon_pack: str = ICON_PACK_BOOTSTRAP
+    def load(self):
+        log.debug("Loading config file from %r...", paths.config_file)
+        with open(paths.config_file) as file:
+            text = file.read()
+        try:
+            obj: dict[str, Any] = json.loads(text)
+        except json.JSONDecodeError as err:
+            log.error("Failed to read config file:", exc_info=err)
+            raise RuntimeError(
+                f"Failed to read config file! ({type(err)!r})"
+            ) from err
 
-__config__ = {
-    "window_size",
-    "open_browser_for_login",
-    "copy_code_for_login",
-    "post_launch_option",
-    "redownload_option",
-    "maximized",
-    "tooltip_icons_enabled",
-    "ignored_messages",
-    "jump_list_items",
-    "dialog_answers",
-    "show_animation_on_skin_dialog",
-    "show_logs_on_home",
-    "allow_audio",
-    "enforce_json_spec",
-    "show_snapshots",
-    "show_old_releases",
-}
-
-
-def set_(val_name: str, new_val: Any):
-    if val_name not in __config__:
-        raise IndexError(f"'{val_name}' not found in config")
-    current = globals().get(val_name)
-    if val_name.startswith("_") or val_name.endswith("_"):
-        raise IndexError("Can't override private var")
-    if not isinstance(new_val, type(current)):
-        _log.warning(
-            "Type of '%s' changed: '%s' -> '%s'",
-            val_name,
-            type(current).__name__,
-            type(new_val).__name__,
-        )
-
-    globals()[val_name] = new_val
-    return
-
-
-def load(config: dict | None = None):
-    if config is None:
-        config = {}
-        if LAUNCHER_CONFIG_FILE.exists():
-            try:
-                config = json.loads(LAUNCHER_CONFIG_FILE.read_text())
-            except json.JSONDecodeError:
-                _log.warning("Failed to open config")
-                config = {}
+        _all = dir(self)
+        issues: int = 0
+        for key, val in obj.items():
+            if key not in _all:
+                log.warning(
+                    "Skipping unknown config entry %r (value: %r)", key, val
+                )
+                issues += 1
+                continue
+            elif isinstance(
+                get_type_hints(type(self))[key], EnumType
+            ):  # enum hack
+                if val in get_type_hints(type(self))[key]:
+                    setattr(
+                        self,
+                        key,
+                        self.coerce_enum(val, get_type_hints(type(self))[key]),
+                    )
+                    continue
+            elif isinstance(getattr(self, key), set) and isinstance(val, list):
+                pass  # set() hack
+            elif not isinstance(val, type(getattr(self, key))):
+                log.warning(
+                    "Skipping config entry %r due to mismatching type: "
+                    "Expected type %r, got %r",
+                    key,
+                    type(getattr(self, key)),
+                    type(val),
+                )
+                issues += 1
+                continue
+            setattr(self, key, val)
+        if issues:
+            log.warning("Loaded config with %s issues", issues)
         else:
-            save()
-            config = {}
-    for key, val in config.items():  # type: ignore
-        if key not in __config__:
-            _log.warning("Ignoring unknown key in config.json: '%s'", key)
-            continue
-        default = globals()[key]
-        if isinstance(default, set) and isinstance(val, list):
-            globals()[key] = set(val)
-        elif not isinstance(default, type(val)):
-            _log.warning("Value in '%s' has conflicting type, ignoring", key)
-            continue
-        else:
-            globals()[key] = val
+            log.debug("Loaded config with no issues")
+        type(self).active = True
+
+    def dump(self):
+        output = {}
+        for key, val in self.__dict__.items():
+            if isinstance(val, Callable):
+                continue
+            elif isinstance(val, set):
+                output[key] = [*val]
+            else:
+                output[key] = val
+        return output
+
+    def save(self):
+        reswrite(paths.config_file, json.dumps(self.dump()))
 
 
-def save():
-    obj_out = {}
-    for key in __config__:
-        val = globals()[key]
-        if val is None:
-            continue
-        elif isinstance(val, (list, dict, set)) and not val:
-            continue  # skip bloat
-        elif isinstance(val, set):
-            obj_out[key] = [*val]
-        else:
-            obj_out[key] = val
-    json_out = json.dumps(obj_out, indent=4, sort_keys=True)
-    if not os.path.isdir(LAUNCHER_DATA_DIR):
-        _log.debug("Creating launcher data directory")
-        os.makedirs(LAUNCHER_DATA_DIR, exist_ok=True)
-    reswrite(LAUNCHER_CONFIG_FILE, json_out)
-    _log.info("Saved config.json.")
-
-
-try:
-    load()
-except Exception as err:
-    error_box(
-        "Failed to initialize config! Please report this.", err, fatal=True
-    )
+config = ConfigHolder()

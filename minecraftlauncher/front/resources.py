@@ -2,6 +2,7 @@ from datetime import datetime, timedelta
 import logging
 import base64
 import binascii
+import os
 
 from PySide6.QtCore import Qt, QFile, QSize
 from PySide6.QtGui import QIcon, QPixmap, QImage
@@ -9,7 +10,7 @@ import qrcode
 import qrcode.constants
 import qrcode.image.svg
 
-from minecraftlauncher.args import resource_debug
+from minecraftlauncher import launchargs
 from minecraftlauncher.front.styles import (
     uses_dark_mode,
     TEXT_PRIMARY,
@@ -19,16 +20,15 @@ from minecraftlauncher.front.styles import (
     ACCENT,
     ACCENT_PRESS,
 )
-from minecraftlauncher.constants import LAUNCHER_DATA_DIR, OS
+from minecraftlauncher.constants import OS
+from minecraftlauncher.paths import paths
 from . import _resources_bundled  # pylint: disable=W0611
 
 _icon_cache: dict[str, QIcon] = {}
 
 log = logging.getLogger(__name__)
-if not resource_debug:
+if not launchargs.resource_debug:
     log.setLevel(logging.INFO)
-
-TEXTURE_CACHE_DIR = LAUNCHER_DATA_DIR / "textures_cache"
 
 
 class BaseIconPath:
@@ -380,13 +380,13 @@ def cache_icon(ico: QIcon | QPixmap, name: str):
 
     Returns the full file path as a string.
     """
-    dir_ = TEXTURE_CACHE_DIR / "icons"
-    if not dir_.exists():
+    dir_ = os.path.join(paths.textures_cache, "icons")
+    if not os.path.isdir(dir_):
         log.debug("Creating icons cache folder: '%s'", dir_)
-        dir_.mkdir(parents=True, exist_ok=True)
-    fp = dir_ / f"{name}.{_ICO_SUFFIX}"
-    if fp.exists():
-        ts = fp.stat().st_mtime
+        os.mkdir(dir_)
+    fp = os.path.join(dir_, f"{name}.{_ICO_SUFFIX}")
+    if os.path.isfile(fp):
+        ts = os.stat(fp).st_mtime
         if ts > (datetime.now() - timedelta(days=7)).timestamp():
             return str(fp)
     if isinstance(ico, QIcon):
@@ -399,7 +399,6 @@ def cache_icon(ico: QIcon | QPixmap, name: str):
 
     # ico should be a QPixmap now
 
-    fp = fp.resolve().absolute()  # unpack, just in case it's not
     log.debug("Saving icon to '%s'", fp)
     ico.save(str(fp), _ICO_FMT)
     return str(fp)

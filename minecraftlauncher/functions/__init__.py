@@ -4,8 +4,9 @@ import os
 
 from PySide6.QtCore import QSize
 from PySide6.QtGui import QClipboard, QImage, QPixmap, QIcon
+from PySide6.QtWidgets import QApplication
 
-from minecraftlauncher import QAPP, config
+from minecraftlauncher import get_qapp
 
 from .text import indent, is_path_valid
 from .error_box import error_box
@@ -17,19 +18,16 @@ _clip: QClipboard | None = None
 clipboard_present: bool = False
 
 
-def _detect_set_clipboard():
+def detect_set_clipboard():
     global _clip, clipboard_present
-    if bool(_clip):
+    if _clip:
         return
-    _clip = QAPP.clipboard()
-    clipboard_present = bool(_clip)
+    _clip = QApplication.clipboard()
+    clipboard_present = _clip is not None
 
 
 def beep():
-    if config.allow_audio:
-        QAPP.beep()
-        return True
-    return False
+    QApplication.beep()
 
 
 def copy_to_clipboard(item: str | int | QPixmap | QIcon | QImage):
@@ -37,7 +35,8 @@ def copy_to_clipboard(item: str | int | QPixmap | QIcon | QImage):
     Easier than typing everything out
     """
     if not _clip:
-        return
+        detect_set_clipboard()
+        assert _clip
     if isinstance(item, int):
         item = str(item)
 
@@ -56,10 +55,7 @@ def copy_to_clipboard(item: str | int | QPixmap | QIcon | QImage):
                 f"Cannot set clipboard with type {type(item).__name__}"
             )
 
-    log.info("Copied %s to clipboard.", type(item).__name__)
-
-
-_detect_set_clipboard()
+    log.debug("Copied %r() to clipboard", type(item).__name__)
 
 
 def reswrite(path: str | os.PathLike, content: str | Buffer):

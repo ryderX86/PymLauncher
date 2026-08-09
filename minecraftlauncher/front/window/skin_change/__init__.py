@@ -8,7 +8,6 @@ from pathlib import Path
 from string import ascii_letters
 import logging
 import hashlib
-import json
 import os
 
 from PySide6.QtCore import QSize, Qt, Signal, QTimer, QUrl, QObject
@@ -40,7 +39,8 @@ from minecraftlauncher.constants import (
     OS_PATH_DELIM,
     CAPE_URL,
 )
-from minecraftlauncher import SESSION, config
+from minecraftlauncher.config import config
+from minecraftlauncher import SESSION
 
 log = logging.getLogger(__name__)
 

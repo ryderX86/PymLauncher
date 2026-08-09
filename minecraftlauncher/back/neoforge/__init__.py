@@ -5,10 +5,9 @@ import logging
 import json
 import os
 
-from minecraftlauncher.constants import LAUNCHER_DATA_DIR, MINECRAFT_DIR
+from minecraftlauncher.paths import paths
 from minecraftlauncher.back.download_helpers import download
 from minecraftlauncher.functions.text import indent
-from ..version_manager import VERSION_DIR
 
 FALLBACK_DOMAIN = "maven.creeperhost.net"
 
@@ -41,8 +40,6 @@ LEGACY_DOWNLOAD_URL = (
     "VERSION/forge-VERSION-installer.jar"
 )
 
-LOADER_MANIFEST_PATH = LAUNCHER_DATA_DIR / "neoforge-versions.json"
-
 log = logging.getLogger(__name__)
 
 _versions_list: dict[str, list] = {}
@@ -53,8 +50,14 @@ def get_master(force_refresh: bool = False):
     global _versions_list
     if _versions_list and not force_refresh:
         return _versions_list
-    elif LOADER_MANIFEST_PATH.exists() and not force_refresh:
-        manifest_text = LOADER_MANIFEST_PATH.read_text()
+    elif (
+        os.path.isfile(os.path.join(paths.data, "neoforge-versions.json"))
+        and not force_refresh
+    ):
+        with open(
+            os.path.join(paths.data, "neoforge-versions.json"), "r"
+        ) as file:
+            manifest_text = file.read()
         try:
             manifest = json.loads(manifest_text)
         except json.JSONDecodeError as err:
@@ -62,7 +65,7 @@ def get_master(force_refresh: bool = False):
                 "Failed to read neoforge-versions.json, redownloading...\n",
                 exc_info=err,
             )
-            LOADER_MANIFEST_PATH.unlink()
+            os.unlink(os.path.join(paths.data, "neoforge-versions.json"))
         else:
             _versions_list = manifest
         finally:
@@ -121,7 +124,8 @@ def get_master(force_refresh: bool = False):
         _versions_list[id_].append(neo)
 
     log.info("Successfully fetched & parsed NeoForge versions, saving to disk")
-    LOADER_MANIFEST_PATH.write_text(json.dumps(_versions_list))
+    with open(os.path.join(paths.data, "neoforge-versions.json"), "w") as file:
+        file.write(json.dumps(_versions_list))
     return _versions_list
 
 
@@ -155,11 +159,11 @@ def install(neoforge_version: str, override: bool = False):
 
     if neoforge_version[0:2] != "1.":
         url = DOWNLOAD_URL.replace("VERSION", neoforge_version)
-        dest_dir = os.path.join(VERSION_DIR, f"neoforge-{neoforge_version}")
+        dest_dir = os.path.join(paths.versions, f"neoforge-{neoforge_version}")
         dest_path = os.path.join(dest_dir, f"neoforge-{neoforge_version}.json")
     else:
         url = LEGACY_DOWNLOAD_URL.replace("VERSION", neoforge_version)
-        dest_dir = os.path.join(VERSION_DIR, neoforge_version_id)
+        dest_dir = os.path.join(paths.versions, neoforge_version_id)
         dest_path = os.path.join(dest_dir, f"{neoforge_version_id}.json")
 
     if os.path.isfile(dest_path) and not override:

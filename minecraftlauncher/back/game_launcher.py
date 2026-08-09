@@ -18,7 +18,6 @@ import requests
 from minecraftlauncher.constants import (
     LAUNCHER_NAME,
     LAUNCHER_VERSION,
-    MINECRAFT_DIR,
     OS,
     DEV,
 )
@@ -26,7 +25,9 @@ from minecraftlauncher.functions import is_path_valid
 from minecraftlauncher.datatypes import GameProfile
 from minecraftlauncher.back.library_manager import evaluate_rules
 from minecraftlauncher.auth import LauncherAccount
-from minecraftlauncher import config, offline_mode
+from minecraftlauncher.config import config, JarRedownloadBehavior
+from minecraftlauncher.offline import offline_man
+from minecraftlauncher.paths import paths
 from .library_manager import build_classpath, filter_libraries
 from .java_manager import find_java_exc
 from . import (
@@ -179,7 +180,7 @@ def _build_legacy_args(
     game_args = _substitute(raw_game_args, values).split()
 
     jar_path = os.path.join(
-        MINECRAFT_DIR,
+        paths.game,
         "versions",
         version_json["id"],
         f"{version_json['id']}.jar",
@@ -233,7 +234,7 @@ def build_launch_command(
         java_path = str(find_java_exc(needed_java_version))
 
     jar_path = os.path.join(
-        MINECRAFT_DIR, "versions", version_id, f"{version_id}.jar"
+        paths.game, "versions", version_id, f"{version_id}.jar"
     )
 
     asset_index_id = version_json.get("assetIndex", {}).get("id")
@@ -259,9 +260,9 @@ def build_launch_command(
                     "do we have permissions?"
                 ) from err
     else:
-        game_dir = str(MINECRAFT_DIR)
+        game_dir = paths.game
 
-    natives_dir = os.path.join(MINECRAFT_DIR, "bin", version_id)
+    natives_dir = os.path.join(paths.game, "bin", version_id)
     if not os.path.isdir(natives_dir):
         os.makedirs(natives_dir, exist_ok=True)
 
@@ -284,10 +285,8 @@ def build_launch_command(
         "user_properties": "{}",
         "user_type": "msa",
         "assets_index_name": asset_index_id,
-        "game_assets": os.path.join(
-            MINECRAFT_DIR, "assets", "virtual", "legacy"
-        ),
-        "assets_root": os.path.join(MINECRAFT_DIR, "assets"),
+        "game_assets": os.path.join(paths.game, "assets", "virtual", "legacy"),
+        "assets_root": os.path.join(paths.game, "assets"),
         "game_directory": game_dir,
         "clientid": "0",
         "auth_xuid": xuid,
@@ -295,7 +294,7 @@ def build_launch_command(
         "resolution_height": resolution_height,
         "natives_directory": natives_dir,
         "classpath": classpath,
-        "library_directory": os.path.join(MINECRAFT_DIR, "libraries"),
+        "library_directory": os.path.join(paths.game, "libraries"),
         "launcher_name": LAUNCHER_NAME,
         "launcher_version": LAUNCHER_VERSION,
         "jar_path": jar_path,
@@ -348,7 +347,7 @@ def build_launch_command(
 
 def launch_game(command: list[str], cwd: str | os.PathLike | None):
     if not cwd:
-        cwd = MINECRAFT_DIR
+        cwd = paths.game
 
     log.info("Launching Minecraft")
     kwargs = {}
@@ -538,7 +537,7 @@ class LaunchWorker(QThread):
                 f"({type(err).__name__})",
             )
             return
-        natives_dir = os.path.join(MINECRAFT_DIR, "bin", self.version_id)
+        natives_dir = os.path.join(paths.game, "bin", self.version_id)
         try:
             natives_dir = library_manager.extract_natives(libs, natives_dir)
         except Exception as err:
@@ -601,7 +600,7 @@ class LaunchWorker(QThread):
                     f"({type(err).__name__})",
                 )
                 return
-            if not offline_mode:
+            if not paths.game:
                 self.status.emit("Downloading Java...")
                 try:
                     java_exc = java_manager.install_java_version_threaded(
@@ -658,7 +657,7 @@ class LaunchWorker(QThread):
 
         if self.auth_info.token_valid:
             reauth = False
-        elif offline_mode:
+        elif offline_man.offline:
             log.debug("User has no valid token, not refreshing (offline mode)")
             reauth = False
         else:
@@ -792,5 +791,5 @@ class LaunchWorker(QThread):
         self.log.info("Game process returned with code %d", self._p.returncode)
         if self._p.returncode == 0:
             if config.redownload_option > 1:
-                config.redownload_option = 0
+                config.redownload_option = JarRedownloadBehavior.NEVER
         self.game_closed.emit(str(self._p.returncode), stdout)

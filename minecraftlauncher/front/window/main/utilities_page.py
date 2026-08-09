@@ -6,6 +6,7 @@ Game management utilities
 
 import logging
 import uuid
+import os
 
 from PySide6.QtCore import Qt, Signal, QTimer, QUrl
 from PySide6.QtGui import QDesktopServices
@@ -17,8 +18,10 @@ from minecraftlauncher.front.window.modloaders import (
 )
 from minecraftlauncher.front.qt.widgets import Section
 from minecraftlauncher.back import account_manager
+from minecraftlauncher.offline import offline_man
 from minecraftlauncher.functions import beep
-from minecraftlauncher import constants, add_offline_mode_hook
+from minecraftlauncher.paths import paths
+from minecraftlauncher import constants
 from . import HRow
 
 log = logging.getLogger(__name__)
@@ -89,7 +92,7 @@ class UtilitiesPage(QWidget):
         layout.addStretch()
 
     def build(self):
-        add_offline_mode_hook(self.offline_mode_hook)
+        offline_man.add_hook(self.offline_mode_hook)
 
     # literally zero reason for this to even take up memory in prod
     if constants.DEV:
@@ -100,11 +103,10 @@ class UtilitiesPage(QWidget):
             )
             assert accounts_list
             b = accounts_list.encode("utf-8")
-            dump_path = (
-                constants.LAUNCHER_DATA_DIR / f"temp-{uuid.uuid4()}.json"
-            )
+            dump_path = os.path.join(paths.data, f"temp-{uuid.uuid4()}.json")
             log.debug("Writing to %s", dump_path)
-            dump_path.write_bytes(b)
+            with open(dump_path, "wb") as file:
+                file.write(b)
             log.debug("Opening with QDesktopServices")
             uri = QUrl.fromLocalFile(dump_path)
             QDesktopServices.openUrl(uri)
@@ -112,7 +114,7 @@ class UtilitiesPage(QWidget):
 
             def delete_temp_file():
                 log.debug("deleting file")
-                dump_path.unlink()
+                os.unlink(dump_path)
 
             QTimer.singleShot(1000, delete_temp_file)
 

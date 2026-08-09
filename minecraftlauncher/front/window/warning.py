@@ -1,4 +1,4 @@
-from enum import IntEnum
+from enum import IntEnum, auto
 import logging
 
 from PySide6.QtGui import QIcon
@@ -8,7 +8,7 @@ from PySide6.QtWidgets import (
     QCheckBox,
 )
 
-from minecraftlauncher import config
+from minecraftlauncher.config import config
 
 log = logging.getLogger(__name__)
 
@@ -24,11 +24,11 @@ class UserReturn(IntEnum):
 
 
 class WarningType(IntEnum):
-    OFFLINE_MODE_LAUNCH = 0
-    ACCOUNTS_BIN_ENCRYPTION = 1
-    DELETE_PROFILE = 2
-    MODLOADER_VERSION_CONFLICT = 3
-    LOG4J_CONFIG_FAILED = 4
+    OFFLINE_MODE_LAUNCH = auto()
+    ACCOUNTS_BIN_ENCRYPTION = auto()
+    DELETE_PROFILE = auto()
+    MODLOADER_VERSION_CONFLICT = auto()
+    LOG4J_CONFIG_FAILED = auto()
 
 
 CHECKBOX_TEXT_OK = "Do not show this message again"

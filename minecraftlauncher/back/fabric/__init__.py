@@ -1,16 +1,16 @@
 import logging
 import json
+import os
 
-from minecraftlauncher.constants import LAUNCHER_DATA_DIR, MINECRAFT_DIR
+from minecraftlauncher.paths import paths
 from minecraftlauncher.back.download_helpers import download, file_exists_or_age
+from minecraftlauncher.functions.text import indent
 
 log = logging.getLogger(__name__)
 
 BASE_URL = "https://meta.fabricmc.net"
 FABRIC_MANIFEST_URL = "https://meta.fabricmc.net/v2/versions"
 FAB_LOAD_MF_URL = "https://meta.fabricmc.net/v2/versions/loader/%s"
-
-LOADER_MANIFEST_PATH = LAUNCHER_DATA_DIR / "fabric-versions.json"
 
 _master_manifest = {}
 
@@ -22,8 +22,13 @@ def _ensure_master(force_refresh: bool = False):
     global _master_manifest
     if force_refresh or not _master_manifest:
         log.debug("Loading Fabric manifest...")
-        if file_exists_or_age(LOADER_MANIFEST_PATH) and not force_refresh:
-            with open(LOADER_MANIFEST_PATH, "r") as f:
+        if (
+            file_exists_or_age(os.path.join(paths.data, "fabric-versions.json"))
+            and not force_refresh
+        ):
+            with open(
+                os.path.join(paths.data, "fabric-versions.json"), "r"
+            ) as f:
                 manifest_cache_text = f.read()
             try:
                 _manifest_cache = json.loads(manifest_cache_text)
@@ -46,7 +51,7 @@ def _ensure_master(force_refresh: bool = False):
         del _master_manifest["installer"]
         if not _master_manifest:
             raise RuntimeError("Couldn't get game versions manifest for Fabric")
-        with open(LOADER_MANIFEST_PATH, "w") as f:
+        with open(os.path.join(paths.data, "fabric-versions.json"), "w") as f:
             f.write(response.text)
     return True
 
@@ -108,12 +113,14 @@ def install(game_ver: str, fabric_ver: str, override: bool = False):
 
     log.debug("Download: %s", URL)
 
-    dir_ = MINECRAFT_DIR / "versions" / f"fabric-loader-{fabric_ver}-{game_ver}"
-    path = dir_ / f"fabric-loader-{fabric_ver}-{game_ver}.json"
+    dir_ = os.path.join(
+        paths.game, "versions", f"fabric-loader{fabric_ver}-{game_ver}"
+    )
+    path = os.path.join(dir_, f"fabric-loader-{fabric_ver}-{game_ver}.json")
 
-    if not dir_.exists():
-        dir_.mkdir(parents=True)
-    if path.exists() and not override:
+    if not os.path.isdir(dir_):
+        os.makedirs(dir_, exist_ok=True)
+    if os.path.isdir(path) and not override:
         log.warning(
             "'fabric-loader-%s-%s' exists already!", fabric_ver, game_ver
         )
@@ -121,5 +128,13 @@ def install(game_ver: str, fabric_ver: str, override: bool = False):
 
     log.info("Installing fabric-loader-%s-%s", fabric_ver, game_ver)
     response = download(URL)
-    path.write_text(response.text)
+    # check JSON data:
+    try:
+        json.loads(response.text)
+    except json.JSONDecodeError as err:
+        new = RuntimeError("Server returned malformed JSON data:")
+        new.add_note("".join(['"', indent(response.text), '"']))
+        raise new from err
+    with open(path, "w") as file:
+        file.write(response.text)
     return True

@@ -13,7 +13,7 @@ from PySide6.QtWidgets import QComboBox, QAbstractItemView
 from minecraftlauncher.back import account_manager
 from minecraftlauncher.front.resources import symbol
 from minecraftlauncher.functions import error_box
-from minecraftlauncher import offline_mode
+from minecraftlauncher.offline import offline_man
 
 log = logging.getLogger(__name__)
 
@@ -52,9 +52,9 @@ class AccountSelect(QComboBox):
             gamertag = acc.gamertag
             xuid = acc.xuid
             username = acc.username
-            display = username if username else f"({gamertag})"
-            face = acc.skin_icon()
-            self.addItem(face, display, userData=xuid)
+            display = username if username else f"No profile ({gamertag})"
+            icon = acc.skin_icon()
+            self.addItem(icon, display, userData=xuid)
             if xuid == active_xuid:
                 active_idx = i
 
@@ -88,7 +88,7 @@ class AccountSelect(QComboBox):
 
         text = self.itemText(index)
         if text == ADD_ACCOUNT_TEXT:
-            if offline_mode:
+            if offline_man.offline:
                 error_box(ADD_ACCOUNT_OFFLINE_ERR_TEXT)
                 return
             self.add_account_requested.emit()

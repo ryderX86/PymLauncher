@@ -5,11 +5,17 @@ import sys
 
 from PySide6.QtCore import QFile
 from PySide6.QtGui import QIcon
-from PySide6.QtWidgets import QStyleFactory
+from PySide6.QtWidgets import QStyleFactory, QApplication
+import requests
 
-from . import constants, DEV, config, QAPP, args
+from .paths import paths
+from .config import config
+from .offline import offline_man
+from . import constants, launchargs, setup_qapp, get_qapp, logs
 from .functions.error_box import error_box
-from .front.styles import STYLESHEET, FONT, PALETTE
+from .functions import detect_set_clipboard
+from .ostools.win32 import setup_app_id
+from .front.styles import STYLESHEET, get_fonts, gen_palette, FontList
 from .front.window.loading_blocker import LoadingBlockerWindow
 from .front.window.main.main_window import MainWindow
 from .front.window.login import LoginWindow
@@ -23,39 +29,47 @@ from .back import (
 )
 from .auth import LauncherAccount
 
-LOGGER = logging.getLogger("minecraftlauncher")
+log = logging.getLogger("minecraftlauncher")
 
 # we use this to detect crashes somewhat, allowing us to not write garbage data
-# or whatever
+# or bad configs, etc.
 clean_exit = False
 
 
-class App:
+class LauncherApp:
     """Controller"""
+
+    qapp: QApplication
 
     close_if_login_aborted: bool
     """Should we close if the login process is aborted?"""
 
+    fonts: FontList
+    """Named tuple containing the fonts"""
+
     def __init__(self):
-        QAPP.setApplicationName("Minecraft Launcher")
+        self.qapp = get_qapp()
+        self.fonts = get_fonts()
+        detect_set_clipboard()
+        self.qapp.setApplicationName("Minecraft Launcher")
         match constants.OS:
             case "windows":
                 pass
             case _:
-                QAPP.setStyle(QStyleFactory.create("Windows"))
-        QAPP.setStyleSheet(STYLESHEET)
-        QAPP.setFont(FONT)
-        QAPP.setPalette(PALETTE)
+                self.qapp.setStyle(QStyleFactory.create("Windows"))
+        self.qapp.setStyleSheet(STYLESHEET)
+        self.qapp.setFont(self.fonts.main)
+        self.qapp.setPalette(gen_palette())
         if QFile(":/icon.ico").exists():
-            QAPP.setWindowIcon(QIcon(":/icon.ico"))
+            self.qapp.setWindowIcon(QIcon(":/icon.ico"))
         else:
-            LOGGER.debug("Couldn't set app icon")
+            log.debug("Couldn't set app icon")
 
         self.lb_window = LoadingBlockerWindow()
         self.lb_window.rejected.connect(self._close_event)
         self.lb_window.show()
         # just in case it doesn't fully run the rest of main():
-        QAPP.aboutToQuit.connect(self._set_clean_exit)
+        self.qapp.aboutToQuit.connect(self._set_clean_exit)
 
         self.main_window = MainWindow()
         self.main_window.login_requested.connect(self.show_login)
@@ -72,8 +86,8 @@ class App:
 
         self.main_window.home_page.game_crash.connect(self.show_crash_dialog)
 
-        if DEV:
-            if args.debug_splash_screen:
+        if constants.DEV:
+            if launchargs.debug_splash_screen:
                 self.lb_window.set_text("Waiting 5s for splash debugging")
                 sleep(5)
 
@@ -86,39 +100,38 @@ class App:
             page.build()
 
     def run(self) -> int:
-        LOGGER.debug("Attempting to get version manifest set up...")
+        log.debug("Attempting to get version manifest set up...")
         self.lb_window.set_text("Fetching version list")
         try:
             version_manager.fetch_version_manifest()
             version_manager.get_version_list()
         except Exception as err:
-            LOGGER.error("Failed to load version manifest:", exc_info=err)
-            LOGGER.info(
-                "Not set up yet to handle offline mode, notify user"
-                " and exit."
-            )
-            error_box(
-                f"Failed to get version info (error text: {err!r})", fatal=True
-            )
-            return 1
+            log.error("Failed to load version manifest:", exc_info=err)
+            if isinstance(err, requests.RequestException):
+                if not offline_man.check_requests_error(err):
+                    error_box(
+                        "Failed to get the version manifest! "
+                        "Relaunch if versions are missing."
+                    )
 
-        LOGGER.debug("Attempting to get JRE manifest...")
+        log.debug("Attempting to get JRE manifest...")
         self.lb_window.set_text("Fetching Java version list")
         try:
             java_manager.get_jvm_manifest()
         except Exception as err:
-            LOGGER.error("Failed to load JRE manifest:", exc_info=err)
-            LOGGER.info(
-                "Not set up yet to handle offline mode, notify user"
-                " and exit."
-            )
-            error_box(f"Failed to get JRE manifest: {err}", fatal=True)
-            return 2
+            log.error("Failed to load JRE manifest:", exc_info=err)
+            if isinstance(err, requests.RequestException):
+                if not offline_man.check_requests_error(err):
+                    error_box(
+                        "Failed to get the Java manifest! "
+                        "Relaunch if you can't install/launch the game."
+                    )
 
         self.lb_window.set_text("Loading UI data...")
         self.buildall()
-        LOGGER.debug("Attempting to load accounts from cache...")
-        self.lb_window.set_text("Authenticating")
+        log.debug("Attempting to load accounts from cache...")
+        if not offline_man.offline:
+            self.lb_window.set_text("Authenticating")
         accounts, _ = account_manager.load_accounts()
         if accounts:
             self.close_if_login_aborted = False
@@ -128,14 +141,17 @@ class App:
             self.show_login()
         self._refresh_account_ui()
 
-        LOGGER.info("Finished loading. Showing main window")
+        log.info("Finished loading. Showing main window")
         self.main_window.show()
         # self.lb_window.setParent(self.main_window)
         self.lb_window.hide()
         self.main_window.check_for_launch_arg()
-        return QAPP.exec()
+        return self.qapp.exec()
 
     def show_login(self):
+        if offline_man.offline:
+            error_box("Cannot log in while offline! Please wait and try again.")
+            return self._on_login_abort()
         dialog = LoginWindow(self.main_window)
         dialog.login_complete.connect(self._on_login_complete)
         dialog.rejected.connect(self._on_login_abort)
@@ -151,7 +167,7 @@ class App:
         self._refresh_account_ui()
 
     def show_crash_dialog(self, exit_code: str, stderr: str):
-        LOGGER.debug("Showing crash dialog to user")
+        log.debug("Showing crash dialog to user")
         dialog = ErrorDisplay(self.main_window, exit_code, stderr)
         dialog.show()
         dialog.exec()
@@ -176,7 +192,7 @@ class App:
         self._refresh_account_ui()
 
         if not account_manager.accounts:
-            LOGGER.info("No accounts left, showing login window.")
+            log.info("No accounts left, showing login window.")
             self.close_if_login_aborted = True
             self.show_login()
 
@@ -193,12 +209,12 @@ class App:
             return
 
         if not active.profile:
-            LOGGER.debug("Can't find account profile, fetching manually...")
+            log.debug("Can't find account profile, fetching manually...")
             active.get_profile_info()
             assert active.profile
 
         if not active.token:
-            LOGGER.debug("Can't find account (mojang) token, refreshing...")
+            log.debug("Can't find account (mojang) token, refreshing...")
             active.minecraft_auth()
             assert active.token
 
@@ -221,7 +237,7 @@ class App:
                     self.lb_window.accept()
                     account_manager.save_or_replace_account(acc)
                 else:  # AuthError
-                    LOGGER.warning(
+                    log.warning(
                         "Couldn't refresh %s, prompting user to relog. %s",
                         xuid,
                         acc_refresh.err_string(),
@@ -232,7 +248,7 @@ class App:
                     )
                     return dialog.exec()
         else:
-            LOGGER.warning("Couldn't find the active account in accounts!")
+            log.warning("Couldn't find the active account in accounts!")
         self._refresh_account_ui()
 
     def _refresh_account_ui(self):
@@ -250,7 +266,7 @@ class App:
         self.main_window.account_page.set_account_info(active_account)
 
     def _close_event(self):
-        QAPP.exit(0)
+        self.qapp.exit(0)
 
 
 @atexit.register
@@ -259,9 +275,9 @@ def on_exit():
     Registered with `atexit` in `main()`.
     """
     if not clean_exit:
-        LOGGER.error("Something went very wrong, not doing normal cleanup.")
+        log.error("Something went very wrong, not doing normal cleanup.")
         return
-    LOGGER.info("Cleaning up")
+    log.info("Cleaning up")
     config.save()
     profile_manager.save_launcher_profiles()
     profile_manager.save_launcher_meta()
@@ -271,12 +287,35 @@ def on_exit():
 
 def main():
     global clean_exit
-    if "-m" in sys.argv:  # nuitka multithreading fix
-        LOGGER.info("-m specified, not running App().run()")
+    if not constants.DEV and "-m" in sys.argv:  # nuitka multithreading fix
+        atexit.unregister(on_exit)
+        log.info("-m specified, not running App().run()")
         return
     else:
-        args.get_args()
-    app = App()
+        launchargs.get_args()
+        setup_qapp()
+        setup_app_id()
+    try:
+        paths.setup()
+    except Exception as err:
+        error_box(str(err))
+        raise
+    try:
+        paths.generate_folder_structure()
+    except Exception as err:
+        error_box(f"Failed to generate folder structure! ({type(err)}: {err})")
+        raise
+    try:
+        logs.setup()
+    except Exception as err:
+        error_box(str(err))
+        raise
+    try:
+        config.load()
+    except Exception as err:
+        log.error("Failed to load config file:", exc_info=err)
+        error_box("Failed to load config file! Config will be regenerated.")
+    app = LauncherApp()
     code = app.run()
     logging.info("Exiting with code %d", code)
     clean_exit = True

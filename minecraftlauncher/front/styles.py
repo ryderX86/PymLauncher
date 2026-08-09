@@ -2,12 +2,12 @@
 QSS stylesheet
 """
 
+from collections import namedtuple
 import sys
 
-from PySide6.QtGui import QFont, QFontInfo, QPalette, QColor
+from PySide6.QtGui import QFont, QFontInfo, QPalette, QColor, QGuiApplication
 
 from minecraftlauncher.front.rgb import hex_to_rgbi
-from minecraftlauncher import QAPP
 
 CRole = QPalette.ColorRole
 CGroup = QPalette.ColorGroup
@@ -15,9 +15,6 @@ CGroup = QPalette.ColorGroup
 
 def hex_to_qrgb(hex_: str):
     return QColor(*hex_to_rgbi(hex_))
-
-
-PALETTE = QAPP.palette()
 
 
 # Colors
@@ -44,23 +41,28 @@ BORDER_LIGHT = "#3a3a3a"
 DANGER = "#e74c3c"
 DANGER_HOVER = "#c0392b"
 
-PALETTE.setColor(CRole.WindowText, hex_to_qrgb(TEXT_PRIMARY))
-PALETTE.setColor(CGroup.Disabled, CRole.WindowText, hex_to_qrgb(TEXT_MUTED))
-PALETTE.setColor(CRole.ButtonText, hex_to_qrgb(TEXT_PRIMARY))
-PALETTE.setColor(CGroup.Disabled, CRole.ButtonText, hex_to_qrgb(TEXT_MUTED))
-PALETTE.setColor(CRole.ToolTipText, hex_to_qrgb(TEXT_PRIMARY))
-PALETTE.setColor(CRole.Window, hex_to_qrgb(BG_DARK))
-PALETTE.setColor(CRole.Base, hex_to_qrgb(BG_DARK))
-PALETTE.setColor(CRole.AlternateBase, hex_to_qrgb(BG_SURFACE))
-PALETTE.setColor(CRole.Button, hex_to_qrgb(BG_SURFACE))
-PALETTE.setColor(CRole.ToolTipBase, hex_to_qrgb(BG_SURFACE))
-PALETTE.setColor(CRole.PlaceholderText, hex_to_qrgb(TEXT_MUTED))
-PALETTE.setColor(CRole.Text, hex_to_qrgb(TEXT_PRIMARY))
-PALETTE.setColor(CRole.Light, hex_to_qrgb(BG_INPUT))
-PALETTE.setColor(CRole.Midlight, hex_to_qrgb(BG_SURFACE_LIGHT))
-PALETTE.setColor(CRole.Mid, hex_to_qrgb(BG_DARKEST))
 
-PALETTE.setColor(QPalette.ColorRole.Accent, hex_to_qrgb(ACCENT))
+def gen_palette():
+    palette = QGuiApplication.palette()
+    palette.setColor(CRole.WindowText, hex_to_qrgb(TEXT_PRIMARY))
+    palette.setColor(CGroup.Disabled, CRole.WindowText, hex_to_qrgb(TEXT_MUTED))
+    palette.setColor(CRole.ButtonText, hex_to_qrgb(TEXT_PRIMARY))
+    palette.setColor(CGroup.Disabled, CRole.ButtonText, hex_to_qrgb(TEXT_MUTED))
+    palette.setColor(CRole.ToolTipText, hex_to_qrgb(TEXT_PRIMARY))
+    palette.setColor(CRole.Window, hex_to_qrgb(BG_DARK))
+    palette.setColor(CRole.Base, hex_to_qrgb(BG_DARK))
+    palette.setColor(CRole.AlternateBase, hex_to_qrgb(BG_SURFACE))
+    palette.setColor(CRole.Button, hex_to_qrgb(BG_SURFACE))
+    palette.setColor(CRole.ToolTipBase, hex_to_qrgb(BG_SURFACE))
+    palette.setColor(CRole.PlaceholderText, hex_to_qrgb(TEXT_MUTED))
+    palette.setColor(CRole.Text, hex_to_qrgb(TEXT_PRIMARY))
+    palette.setColor(CRole.Light, hex_to_qrgb(BG_INPUT))
+    palette.setColor(CRole.Midlight, hex_to_qrgb(BG_SURFACE_LIGHT))
+    palette.setColor(CRole.Mid, hex_to_qrgb(BG_DARKEST))
+
+    palette.setColor(QPalette.ColorRole.Accent, hex_to_qrgb(ACCENT))
+
+    return palette
 
 
 STYLESHEET = f"""
@@ -518,19 +520,55 @@ match sys.platform:
 
 # STYLESHEET = regen_styles()
 
-FONT = QFont()
-FONT.setFamilies(["Segoe UI", "sans-serif"])
-FONT.setPointSize(10)
-FONT_INF = QFontInfo(FONT)
+FontList = namedtuple(
+    "FontList",
+    ("main", "main_inf", "terminal", "terminal_inf", "csans", "csans_inf"),
+)
 
-TERMINAL_FONT = QFont()
-TERMINAL_FONT.setFamilies(["consolas", "hack", "monospace"])
-TERMINAL_FONT.setStyleHint(QFont.StyleHint.Monospace)
-TERMINAL_FONT_INF = QFontInfo(TERMINAL_FONT)
+_FONT = None
+_FONT_INF = None
+_TERMINAL_FONT = None
+_TERMINAL_FONT_INF = None
+_CSANS = None
+_CSANS_INF = None
+_CSANS_AVAILABLE: bool = False
 
-CSANS = QFont("Comic Sans MS")
-CSANS.setPointSize(9)
-CSANS_INF = QFontInfo(CSANS)
-CSANS_AVAILABLE = CSANS_INF.exactMatch()
+_FONTLIST = None
+
+
+def _get_fonts():
+    global _FONT, _FONT_INF, _TERMINAL_FONT, _TERMINAL_FONT_INF
+    global _CSANS, _CSANS_INF, _CSANS_AVAILABLE, _FONTLIST
+    _FONT = QFont()
+    _FONT.setFamilies(["Segoe UI", "sans-serif"])
+    _FONT.setPointSize(10)
+    _FONT_INF = QFontInfo(_FONT)
+
+    _TERMINAL_FONT = QFont()
+    _TERMINAL_FONT.setFamilies(["consolas", "hack", "monospace"])
+    _TERMINAL_FONT.setStyleHint(QFont.StyleHint.Monospace)
+    _TERMINAL_FONT_INF = QFontInfo(_TERMINAL_FONT)
+
+    _CSANS = QFont("Comic Sans MS")
+    _CSANS.setPointSize(9)
+    _CSANS_INF = QFontInfo(_CSANS)
+    _CSANS_AVAILABLE = _CSANS_INF.exactMatch()
+
+    _FONTLIST = FontList(
+        _FONT,
+        _FONT_INF,
+        _TERMINAL_FONT,
+        _TERMINAL_FONT_INF,
+        _CSANS,
+        _CSANS_INF,
+    )
+    return _FONTLIST
+
+
+def get_fonts():
+    if not _FONTLIST:
+        return _get_fonts()
+    return _FONTLIST
+
 
 uses_dark_mode = True

@@ -6,12 +6,11 @@ found in the implemented platform types.
 """
 
 __all__ = ["encrypt", "decrypt", "data_load_hook", "data_save_hook"]
-from collections.abc import Buffer
 import platform
+import warnings
 import logging
-import json
 
-from minecraftlauncher.front.window import WarningDialog, WarningType
+from .exceptions import EncryptionUnavailableWarning
 
 log = logging.getLogger(__name__)
 
@@ -47,23 +46,12 @@ def run_import():
                 log.error(
                     "Failed to load Linux encryption module:", exc_info=err
                 )
-                WarningDialog.warn(
-                    None,
-                    "Failed to load encryption module",
-                    "Failed to load encryption module for your operating system.\n"
-                    "If you would like your accounts.bin file to be encrypted, "
-                    'please install either "gnome-keyring" and "libsecret",\n'
-                    'or "kwallet" (it\'s better to only install kwallet if you '
-                    "use KDE) using your system package manager.\n"
-                    "This warning will only appear once.",
-                    WarningType.ACCOUNTS_BIN_ENCRYPTION,
-                    show_once=True,
-                )
-                from .no_encryption import (
-                    encrypt,
-                    decrypt,
-                    data_save_hook,
-                    data_load_hook,
+                warnings.warn(
+                    EncryptionUnavailableWarning(
+                        f"Failed to load encryption modules ({type(err)}).\n"
+                        "Please make sure either GNOME Keyring or KDE Wallet "
+                        "are installed on your system."
+                    )
                 )
         case _:
 

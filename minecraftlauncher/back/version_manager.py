@@ -15,20 +15,20 @@ import time
 import os
 import re
 
+from minecraftlauncher.offline import offline_man
 from minecraftlauncher.constants import (
     VERSION_MANIFEST_URL,
-    MINECRAFT_DIR,
     DEFAULT_JVM_ARGS,
 )
+from minecraftlauncher.paths import paths
 from minecraftlauncher.datatypes.game_version import GameVersionStub
-from minecraftlauncher.config import redownload_option
+from minecraftlauncher.config import config
 from minecraftlauncher import SESSION
 from .library_manager import evaluate_rules
 from .download_helpers import download
 
 log = logging.getLogger(__name__)
 
-VERSION_DIR = os.path.join(MINECRAFT_DIR, "versions")
 manifest_cache: dict = {"latest": {}, "versions": []}
 
 FABRIC_VER_RE = re.compile(
@@ -90,13 +90,11 @@ def fetch_version_manifest(force_refresh: bool = False):
         return manifest_cache
 
     log.info("Looking for existing version manifest")
-    mf_path = os.path.join(
-        MINECRAFT_DIR, "versions", "version_manifest_v2.json"
-    )
+    mf_path = os.path.join(paths.game, "versions", "version_manifest_v2.json")
     if os.path.isfile(mf_path) and not force_refresh:
         log.info("Found it! Checking age...")
         max_age = time.time() - timedelta(hours=4).total_seconds()
-        if os.lstat(mf_path).st_mtime > max_age:
+        if os.lstat(mf_path).st_mtime > max_age or offline_man.offline:
             with open(mf_path, "r") as f:
                 mf_text = f.read()
             try:
@@ -121,13 +119,25 @@ def fetch_version_manifest(force_refresh: bool = False):
                     return manifest_cache
         else:
             log.info("Existing manifest is too old, getting a new one.")
+    elif offline_man.offline:
+        log.warning("No connection, continuing with a blank manifest.")
+        return manifest_cache
     log.info("Fetching version manifest from '%s'", VERSION_MANIFEST_URL)
-    os.makedirs(VERSION_DIR, exist_ok=True)
+    os.makedirs(paths.versions, exist_ok=True)
     try:
         resp = SESSION.get(VERSION_MANIFEST_URL, timeout=30)
-    except:
-        log.error("Failed to get version manifest!")
-        return manifest_cache
+    except Exception as err:
+        log.error(
+            "Failed to get version manifest: %r",
+            type(err).__name__,
+            exc_info=err,
+        )
+        offline_man.check_requests_error(err)
+        if manifest_cache["latest"] or manifest_cache["versions"]:
+            log.info("Returning cached manfiest despite error")
+            return manifest_cache
+        else:
+            raise err
     manifest_cache = resp.json()
     if "versions" not in manifest_cache:
         manifest_cache["versions"] = []
@@ -142,7 +152,7 @@ def build_local_version_list(exclude: list[GameVersionStub] | None = None):
     if exclude is None:
         exclude = []
     ver_list: list[GameVersionStub] = []
-    for folder in os.scandir(VERSION_DIR):
+    for folder in os.scandir(paths.versions):
         if folder.name in exclude or not folder.is_dir():
             continue
         jar_path = os.path.join(folder.path, f"{folder.name}.jar")
@@ -186,6 +196,29 @@ def build_local_version_list(exclude: list[GameVersionStub] | None = None):
             ver_json.get("time"),
         )
         ver_list.append(version_info)
+    if offline_man.offline and not manifest_cache["latest"]:
+        log.warning(
+            "EXPERIMENTAL: Offline mode w/ no manifest cache, "
+            "populating via installed versions"
+        )
+        _versions_by_date = [*ver_list]
+        _versions_by_date.sort()
+        _versions_by_date.reverse()
+        latest_version: GameVersionStub | None = None
+        latest_snapshot: GameVersionStub | None = None
+        for version in _versions_by_date:
+            match version.type:
+                case "release" if not latest_version:
+                    latest_version = version
+                case "snapshot" if not latest_snapshot:
+                    latest_snapshot = version
+                case "old_beta" if not latest_snapshot:
+                    latest_snapshot = version
+                case "old_alpha" if not latest_snapshot:
+                    latest_snapshot = version
+        if latest_version and latest_snapshot:
+            manifest_cache["latest"]["release"] = latest_version.id
+            manifest_cache["latest"]["snapshot"] = latest_snapshot.id
     return ver_list
 
 
@@ -312,7 +345,7 @@ def fetch_version_json(
     elif override:
         log.debug("Overriding cached version JSON for %r", version_id)
     fetch_version_manifest()
-    ver_dir = os.path.join(VERSION_DIR, version_id)
+    ver_dir = os.path.join(paths.versions, version_id)
     local_path = os.path.join(ver_dir, f"{version_id}.json")
 
     mf_entry = _get_manifest_entry(version_id)
@@ -466,7 +499,7 @@ def download_client_jar(
         raise ValueError(f"No download info for version {ver_id!r}")
     expected_sha1 = client_info.get("sha1")
 
-    ver_dir = os.path.join(VERSION_DIR, ver_id)
+    ver_dir = os.path.join(paths.versions, ver_id)
     jar_path = os.path.join(ver_dir, f"{ver_id}.jar")
 
     # check for existing file and return if SHA1 matches
@@ -486,7 +519,7 @@ def download_client_jar(
                 sha1,
                 str(expected_sha1),
             )
-    elif os.path.isfile(jar_path) and not redownload_option:
+    elif os.path.isfile(jar_path) and not config.redownload_option:
         log.info(
             "Skipping download for '%s.jar' since it exists and option is"
             "to not redownload",
@@ -536,7 +569,7 @@ def check_client_jar(version_json: dict):
         raise ValueError(f"No download info for version '{ver_id}'")
     expected_sha1: str | None = client_info.get("sha1")
 
-    jar_path = os.path.join(VERSION_DIR, ver_id, f"{ver_id}.jar")
+    jar_path = os.path.join(paths.versions, ver_id, f"{ver_id}.jar")
 
     if os.path.isfile(jar_path) and expected_sha1:
         with open(jar_path, "rb") as f:
@@ -554,7 +587,7 @@ def version_exists(id_: str):
 
     Returns a bool
     """
-    json_path = os.path.join(VERSION_DIR, id_, f"{id_}.json")
+    json_path = os.path.join(paths.versions, id_, f"{id_}.json")
     if id_ in [a.get("id", "") for a in manifest_cache["versions"]]:
         return True
     elif os.path.exists(json_path):

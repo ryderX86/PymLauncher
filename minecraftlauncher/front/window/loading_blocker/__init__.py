@@ -8,7 +8,7 @@ from PySide6.QtWidgets import (
 )
 
 from minecraftlauncher.constants import OS
-from minecraftlauncher import QAPP
+from minecraftlauncher import get_qapp
 
 match OS:
     case "linux":
@@ -30,6 +30,7 @@ class LoadingBlockerWindow(QDialog):
         self.resize(500, 360)
         self.setProperty("border", True)
         self._build_layout()
+        self.qapp = get_qapp()
 
     def _build_layout(self):
         _layout = QVBoxLayout(self)
@@ -51,15 +52,15 @@ class LoadingBlockerWindow(QDialog):
         if not text.endswith("..."):
             text = text + "..."
         self.label.setText(text)
-        QAPP.processEvents()
+        self.qapp.processEvents()
 
     def open(self) -> None:
         super().open()
-        QAPP.processEvents()
+        self.qapp.processEvents()
 
     def show(self) -> None:
         super().show()
-        QAPP.processEvents()
+        self.qapp.processEvents()
 
     def hide(self):
         self.set_text()

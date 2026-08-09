@@ -1,4 +1,5 @@
-# pylint: disable=e1101
+# pylint: disable=e1101,e0401
+import ctypes
 import logging
 
 from win32com.shell import shell  # type: ignore
@@ -6,10 +7,10 @@ from win32com.propsys import propsys, pscon  # type: ignore
 import pythoncom
 import win32api
 
-from minecraftlauncher import config
+from minecraftlauncher.config import config
 from minecraftlauncher.front import resources
 from minecraftlauncher.back import profile_manager
-from minecraftlauncher.constants import APP_SLUG
+from minecraftlauncher.constants import APP_SLUG, DEV, OS
 
 log = logging.getLogger(__name__)
 
@@ -120,3 +121,12 @@ def set_jump_list():  # TODO: rename to build_jump_list()
         log.debug("No tasks to add, committing empty list.")
     jump_list.CommitList()  # type: ignore
     return
+
+
+def setup_app_id():
+    if not DEV:
+        match OS:
+            case "windows":
+                ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(
+                    APP_SLUG
+                )

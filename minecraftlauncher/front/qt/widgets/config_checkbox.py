@@ -3,7 +3,7 @@ import logging
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import QWidget, QCheckBox, QHBoxLayout
 
-from minecraftlauncher import config
+from minecraftlauncher.config import config
 
 from .tooltip_hint import TooltipHint
 
@@ -88,7 +88,7 @@ class ConfigCheckbox(QWidget):
 
     def save_(self):
         """Member for CustomMapper to use"""
-        config.set_(self.config_mapping, self.state)
+        setattr(config, self.config_mapping, self.state)
 
     def reset(self):
         self._checkbox.setChecked(getattr(config, self.config_mapping))

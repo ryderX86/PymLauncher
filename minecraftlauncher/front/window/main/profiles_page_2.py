@@ -34,7 +34,7 @@ from PySide6.QtWidgets import (
     QMenu,
 )
 
-from minecraftlauncher import DEV, config, constants
+from minecraftlauncher import config, constants
 from minecraftlauncher.datatypes import GameProfile
 from minecraftlauncher.datatypes.game_version import GameVersionStub
 from minecraftlauncher.back import version_manager, profile_manager

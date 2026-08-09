@@ -7,7 +7,7 @@ import json
 import os
 
 from minecraftlauncher.back import version_manager
-from minecraftlauncher.constants import MINECRAFT_DIR
+from minecraftlauncher.paths import paths
 
 log = logging.getLogger(__name__)
 
@@ -87,9 +87,7 @@ class GameVersionStub:
 
     @property
     def jar_path(self):
-        return os.path.join(
-            MINECRAFT_DIR, "versions", self.id, f"{self.id}.jar"
-        )
+        return os.path.join(paths.game, "versions", self.id, f"{self.id}.jar")
 
     def get_json(self) -> dict:
         if self.local:

@@ -10,7 +10,8 @@ from minecraftlauncher.auth.microsoft_account import MicrosoftAccount
 from minecraftlauncher.constants import (
     XBOX_AUTH_URL,
 )
-from minecraftlauncher import SESSION, set_offline_mode
+from minecraftlauncher import SESSION
+from minecraftlauncher.offline import offline_man
 from .auth_error import AuthError, AuthStep
 
 log = logging.getLogger(__name__)
@@ -94,7 +95,7 @@ class XboxToken:
                 "%s occured while attempting MSA token refresh",
                 err.__qualname__,
             )
-            set_offline_mode(True)
+            offline_man.check_requests_error(err)
             raise RuntimeError(
                 f"Failed to connect to {XBOX_AUTH_URL!r}"
             ) from err

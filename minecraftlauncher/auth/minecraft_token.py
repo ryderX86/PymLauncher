@@ -12,7 +12,8 @@ from minecraftlauncher.constants import (
     LAUNCH_ENTITLEMENTS_URL,
     MOJ_AUTH_URL_ALT,
 )
-from minecraftlauncher import SESSION, set_offline_mode
+from minecraftlauncher import SESSION
+from minecraftlauncher.offline import offline_man
 from .auth_error import AuthError, AuthStep
 
 log = logging.getLogger(__name__)
@@ -119,7 +120,7 @@ class MinecraftToken:
                 "%s occured while attempting MSA token refresh",
                 err.__qualname__,
             )
-            set_offline_mode(True)
+            offline_man.check_requests_error(err)
             raise RuntimeError(
                 f"Failed to connect to {MOJ_AUTH_URL!r}"
             ) from err
@@ -159,7 +160,7 @@ class MinecraftToken:
                 "%s occured while attempting MSA token refresh",
                 err.__qualname__,
             )
-            set_offline_mode(True)
+            offline_man.check_requests_error(err)
             raise RuntimeError(
                 f"Failed to connect to {MOJ_AUTH_URL!r}"
             ) from err

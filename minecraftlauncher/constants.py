@@ -7,20 +7,12 @@ globally referenced will remain (like the
 Azure Client ID)
 """
 
-from pathlib import Path
 from typing import Literal
 import os
 import sys
 import platform
 
-from .args import work_dir, debug_logging as _debug_logging
-
 DEV = not bool(globals().get("__compiled__", False))
-
-if DEV:
-    DEBUG_LOGGING = True
-else:
-    DEBUG_LOGGING = _debug_logging
 
 LAUNCHER_NAME = "minecraftlauncher-python"
 # LAUNCHER_VERSION is replaced at compile-time
@@ -89,60 +81,19 @@ JAVA_MANIFEST_URL = (
     "/2ec0cc96c44e5a76b9c8b7c39df7210883d12871/all.json"
 )
 
-# Default paths
-_plat = platform.system()
-_friendly_plat = " ".join([_plat, platform.version()])
-match _plat:
-    case "Windows":
-        if "APPDATA" in os.environ:
-            APPDATA_STR = "%APPDATA%"
-            APPDATA = Path(os.environ["APPDATA"]).expanduser().resolve()
-        else:
-            APPDATA = Path("~\\AppData\\Roaming").expanduser().resolve()
-            APPDATA_STR = "%USERPROFILE%\\AppData\\Roaming"
-    case "Linux":
-        APPDATA_STR = "~"
-        APPDATA = Path(APPDATA_STR).expanduser().resolve()
-        _friendly_plat = platform.freedesktop_os_release().get(
-            "PRETTY_NAME", _friendly_plat
-        )
-    case "Darwin":
-        APPDATA = Path("~/Library/Application Support").expanduser().resolve()
-    case _:
-        if "XDG_DATA_HOME" in os.environ:
-            APPDATA = Path(os.environ["XDG_DATA_HOME"]).expanduser().resolve()
-            APPDATA_STR = os.environ["XDG_DATA_HOME"]
-        else:
-            APPDATA_STR = "~/.local/share"
-            APPDATA = Path(APPDATA_STR).expanduser().resolve()
-base: Path
-if work_dir:
-    base = Path(work_dir)
-else:
-    base = APPDATA
+PLATFORM = platform.system()
+_friendly_plat = " ".join([PLATFORM, platform.version()])
 
 USER_AGENT = (
     f"{AUTHOR_USR}/{LAUNCHER_NAME} {LAUNCHER_VERSION} ({_friendly_plat}) "
     f"(contact: {EMAIL})"
 )
 
-MINECRAFT_DIR = base / ".minecraft"
-LAUNCHER_DATA_DIR = base / LAUNCHER_NAME
-LAUNCHER_CONFIG_FILE = LAUNCHER_DATA_DIR / "config.json"
-
-if DEV:
-    dev_base = Path(__file__).parent.parent / ".minecraft"
-    if dev_base.exists() and dev_base.is_dir():
-        base = dev_base
-        MINECRAFT_DIR = base
-        LAUNCHER_DATA_DIR = base / LAUNCHER_NAME
-        LAUNCHER_CONFIG_FILE = LAUNCHER_DATA_DIR / "config.json"
-
 # architecture stuff, should get almost all turned into constants by nuitka
 OS: Literal["windows", "osx", "linux", "unknown"]
 OS_PATH_DELIM: Literal["\\", "/"] = "/"
 OS_VER: str = platform.version()
-match _plat:
+match PLATFORM:
     case "Windows":
         OS = "windows"
         OS_PATH_DELIM = "\\"
@@ -190,20 +141,6 @@ match OS, ARCH:
 
 
 CLASSPATH_SEPARATOR = ";" if OS == "windows" else ":"
-
-# TODO: cross-os compat
-match OS:
-    case "windows":
-        if ARCH == "x86":
-            pf = "Program Files (x86)"
-        else:
-            pf = "Program Files"
-        MOJANG_JAVA_BASE = Path(f"C:\\{pf}\\Minecraft Launcher\\runtime")
-        del pf
-    case _:
-        MOJANG_JAVA_BASE = Path()
-
-JAVA_PATH = MINECRAFT_DIR / "jre"
 
 # profile stuff
 DEFAULT_JVM_ARGS = (
