@@ -12,7 +12,7 @@ from minecraftlauncher.constants import (
 )
 from minecraftlauncher import SESSION
 from minecraftlauncher.offline import offline_man
-from .auth_error import AuthError, AuthStep
+from .exceptions import MSABaseAuthenticationException
 
 log = logging.getLogger(__name__)
 
@@ -158,40 +158,29 @@ class MicrosoftAccount:
         ) as err:
             log.warning(
                 "%s occured while attempting MSA token refresh",
-                err.__qualname__,
+                type(err).__qualname__,
             )
             offline_man.check_requests_error(err)
-            return AuthError(AuthStep.MSA, -1, "Connection failed")
+            raise err
         except requests.HTTPError as err:
             log.error(
                 "Failed to refresh MSA token; response code %s",
                 err.response.status_code,
             )
-            return AuthError(
-                AuthStep.MSA, err.response.status_code, err.response.text
-            )
+            raise err
 
         if len(response.text) < 5:
-            return AuthError(
-                AuthStep.MSA,
-                (
-                    "N/A"
-                    if response.status_code in {200, 202}
-                    else response.status_code
-                ),
-                response.text or "No response",
-            )
+            raise RuntimeError
 
         new_token = response.json()
         self.acquired_at = time.time()
 
         self.access_token = new_token.get("access_token")
         if not self.access_token:
-            return AuthError(
-                AuthStep.MSA,
-                new_token.get("error", "Error code not provided"),
-                new_token.get("error_description", "Description not provided"),
+            errtype = MSABaseAuthenticationException.get_exception_type(
+                response
             )
+            raise errtype(response, "no access token in response")
         self.refresh_token = new_token.get("refresh_token", self.refresh_token)
         self.expires_in = new_token.get("expires_in", self._expires_in)
 

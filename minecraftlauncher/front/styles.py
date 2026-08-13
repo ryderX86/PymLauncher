@@ -5,7 +5,7 @@ QSS stylesheet
 from collections import namedtuple
 import sys
 
-from PySide6.QtGui import QFont, QFontInfo, QPalette, QColor, QGuiApplication
+from PySide6.QtGui import QFont, QFontInfo, QPalette, QColor
 
 from minecraftlauncher.front.rgb import hex_to_rgbi
 
@@ -43,7 +43,7 @@ DANGER_HOVER = "#c0392b"
 
 
 def gen_palette():
-    palette = QGuiApplication.palette()
+    palette = QPalette()
     palette.setColor(CRole.WindowText, hex_to_qrgb(TEXT_PRIMARY))
     palette.setColor(CGroup.Disabled, CRole.WindowText, hex_to_qrgb(TEXT_MUTED))
     palette.setColor(CRole.ButtonText, hex_to_qrgb(TEXT_PRIMARY))

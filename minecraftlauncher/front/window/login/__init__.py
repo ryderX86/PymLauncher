@@ -26,8 +26,16 @@ from minecraftlauncher.constants import (
     MS_TOKEN_URL,
     AZURE_SCOPE,
 )
-from minecraftlauncher.functions import copy_to_clipboard, clipboard_present
+from minecraftlauncher.functions import (
+    copy_to_clipboard,
+    clipboard_present,
+    error_box,
+)
 from minecraftlauncher.auth import MicrosoftAccount, auth_flow
+from minecraftlauncher.auth.exceptions import (
+    BaseAuthenticationException,
+    NoConnectionError,
+)
 from minecraftlauncher.front.styles import ACCENT, TEXT_SECONDARY
 from minecraftlauncher.front.resources import link_to_qrcode
 
@@ -133,7 +141,7 @@ class LoginWindow(QDialog):
     login_complete = Signal(object)
     login_aborted = Signal()
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, *, relog_err: str | None = None):
         super().__init__(parent)
         self.setWindowTitle("Sign in with Microsoft")
         self.setFixedWidth(420)
@@ -143,6 +151,9 @@ class LoginWindow(QDialog):
         self._poller: DeviceCodePoller | None = None
         self._open_browser = config.open_browser_for_login
         self._build_ui()
+        if relog_err:
+            self.status_label.setText(relog_err)
+            self.status_label.setVisible(True)
 
     def _build_ui(self):  # TODO: turn this into a QStackedWidget
         layout = QVBoxLayout(self)
@@ -321,9 +332,13 @@ class LoginWindow(QDialog):
         self.status_label.setText("Authenticating with Xbox Live...")
 
         msa = MicrosoftAccount(token_data)
-        lp = auth_flow(msa)
-        if not lp:
-            log.error("Auth chain failed! Details:\n%s", lp.err_string())
+        try:
+            lp = auth_flow(msa)
+        except NoConnectionError as err:
+            error_box(str(err))
+            return self.reject()
+        except Exception as err:
+            log.error("Auth chain failed! Details:\n%s", str(err))
             self.status_label.setText("Authentication failed")
             self.start_button.setEnabled(True)
             self.open_browser.setHidden(False)

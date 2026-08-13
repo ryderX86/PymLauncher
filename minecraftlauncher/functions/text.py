@@ -2,6 +2,7 @@
 Helper functions for text stuff
 """
 
+from string import digits, ascii_letters
 import platform
 import json
 import re
@@ -50,3 +51,15 @@ def is_path_valid(fp: str):
     if not m:
         return False
     return m.string == fp
+
+
+_PATHSAFE_ALLOWED_CHARS = "".join((".-_", ascii_letters, digits))
+
+
+def pathsafe_str(text: str) -> str:
+    output = []
+    for char in text:
+        if char not in _PATHSAFE_ALLOWED_CHARS:
+            continue
+        output.append(char)
+    return "".join(output)

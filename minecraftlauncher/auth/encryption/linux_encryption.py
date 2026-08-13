@@ -48,7 +48,8 @@ def decrypt(data: bytes) -> str:
         return key.decrypt(data).decode("utf-8")
     except InvalidToken as err:
         log.error("Failed decryption:", exc_info=err)
-        return ""
+        new = RuntimeError("Failed to decrypt user data")
+        raise new from err
 
 
 def data_save_hook(j: dict | str) -> Buffer:

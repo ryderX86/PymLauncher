@@ -13,7 +13,6 @@ import os
 import re
 
 from PySide6.QtCore import QThread, Signal
-import requests
 
 from minecraftlauncher.constants import (
     LAUNCHER_NAME,
@@ -26,7 +25,6 @@ from minecraftlauncher.datatypes import GameProfile
 from minecraftlauncher.back.library_manager import evaluate_rules
 from minecraftlauncher.auth import LauncherAccount
 from minecraftlauncher.config import config, JarRedownloadBehavior
-from minecraftlauncher.offline import offline_man
 from minecraftlauncher.paths import paths
 from .library_manager import build_classpath, filter_libraries
 from .java_manager import find_java_exc
@@ -35,7 +33,6 @@ from . import (
     asset_manager,
     library_manager,
     java_manager,
-    account_manager,
 )
 
 log = logging.getLogger(__name__)
@@ -655,58 +652,12 @@ class LaunchWorker(QThread):
         # this is probably the one thing that can't catastrophically fail
         classpath = library_manager.build_classpath(libs, jar_path)
 
-        if self.auth_info.token_valid:
-            reauth = False
-        elif offline_man.offline:
-            log.debug("User has no valid token, not refreshing (offline mode)")
-            reauth = False
-        else:
-            self.log.warning(
-                "User account doesn't have a valid token, "
-                "trying to refresh..."
-            )
-            self.status.emit("Reauthenticating...")
-            try:
-                self.auth_info.minecraft_auth()
-            except RuntimeError as err:
-                self.log.error(
-                    "Failed to authenticate account, aborting launch.",
-                    exc_info=err,
-                )
-                self.finished.emit(False, str(getattr(err, "__notes__", err)))
-                return
-            except requests.RequestException as err:
-                self.log.error(
-                    "Failed to authenticate account (are we offline?):",
-                    exc_info=err,
-                )
-                self.finished.emit(False, str(err))
-                return
-            reauth = True
-        assert self.auth_info.token
-        if not self.auth_info.profile:
-            log.warning(
-                "Account doesn't have associated profile info, trying "
-                "to fetch it..."
-            )
-            try:
-                self.auth_info.get_profile_info()
-            except Exception as err:
-                self.log.error(
-                    "Failed to fetch profile info (are we offline?)",
-                    exc_info=err,
-                )
-                self.finished.emit(
-                    False, "Failed to fetch profile info (are we offline?)"
-                )
-                return
-            else:
-                log.info("Got profile info for '%s'", self.auth_info.gamertag)
-                assert self.auth_info.profile
-                reauth = True
+        # DO NOT add reauthentication logic here. we do this in LauncherApp
+        # before even the thought of running this is conjured.
 
-        if reauth:
-            account_manager.save_or_replace_account(self.auth_info)
+        # assert statements to shut the type checker up
+        assert self.auth_info.profile
+        assert self.auth_info.token
 
         self.status.emit("Launching Minecraft...")
         cmd = build_launch_command(

@@ -1,14 +1,15 @@
 from collections.abc import Buffer
 import logging
+import time
 import os
 
-from PySide6.QtCore import QSize
+from PySide6.QtCore import QSize, QCoreApplication
 from PySide6.QtGui import QClipboard, QImage, QPixmap, QIcon
 from PySide6.QtWidgets import QApplication
 
 from minecraftlauncher import get_qapp
 
-from .text import indent, is_path_valid
+from .text import indent, is_path_valid, pathsafe_str
 from .error_box import error_box
 
 log = logging.getLogger(__name__)
@@ -68,6 +69,10 @@ def reswrite(path: str | os.PathLike, content: str | Buffer):
     `C:\\test.txt.tmp` to `C:\\test.txt`.
 
     This gives the process *some* resiliance to interruptions while writing.
+
+    If any exception occurs while writing, the process is interrupted and the
+    original file remains in-tact (along with the new file at the "temporary"
+    path), then the exception is raised.
     """
     if isinstance(content, str):
         content = content.encode("utf-8")
@@ -90,7 +95,17 @@ def reswrite(path: str | os.PathLike, content: str | Buffer):
             "Exception occured while writing to '%s':", path, exc_info=err
         )
         raise err
-    if os.path.isfile(path):
-        os.unlink(path)
-    os.rename(tmp, path)
-    return True
+    else:
+        if os.path.isfile(path):
+            os.unlink(path)
+        os.rename(tmp, path)
+        return True
+
+
+def uisleep(seconds: int | float):
+    start = time.time()
+    end = start + seconds
+    while True:
+        QCoreApplication.processEvents()
+        if time.time() >= end:
+            break

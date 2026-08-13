@@ -33,8 +33,8 @@ class OfflineModeCheckerThread(QThread):
     has_run: bool
 
     def __init__(self):
-        self.log = logging.getLogger(type(self).__qualname__)
         super().__init__()
+        self.log = logging.getLogger(type(self).__qualname__)
         self.has_run = False
 
     def run(self):
@@ -46,6 +46,7 @@ class OfflineModeCheckerThread(QThread):
         timeout_xbl: bool = False
         timeout_moj: bool = False
         while True:
+            dns_issue = False
             timeout_xbl = False
             timeout_moj = False
             # check XBL status
@@ -184,7 +185,7 @@ class OfflineModeCheckerThread(QThread):
         elif status["Status"]["SelectedScenarios"]["State"] != XBL_NO_ISSUE:
             return False
         for svc in status["CoreServices"]:
-            if svc["Status"] != XBL_NO_ISSUE:
+            if svc["Status"]["Name"] != XBL_NO_ISSUE:
                 self.log.debug(
                     "Xbox Core Service (%r) issue detected. Status: %r",
                     svc["Name"],
@@ -192,7 +193,7 @@ class OfflineModeCheckerThread(QThread):
                 )
                 return False
         for title in status["Titles"]:
-            if title["Status"] != XBL_NO_ISSUE:
+            if title["Status"]["Name"] != XBL_NO_ISSUE:
                 self.log.debug(
                     "Potential issue with %r. Status: %r",
                     title["Name"],

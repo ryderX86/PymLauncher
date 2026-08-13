@@ -12,7 +12,11 @@ from minecraftlauncher.constants import (
 )
 from minecraftlauncher import SESSION
 from minecraftlauncher.offline import offline_man
-from .auth_error import AuthError, AuthStep
+from .exceptions import (
+    UnauthorizedError,
+    BaseAuthenticationException,
+    NoConnectionError,
+)
 
 log = logging.getLogger(__name__)
 
@@ -93,22 +97,31 @@ class XboxToken:
         ) as err:
             log.warning(
                 "%s occured while attempting MSA token refresh",
-                err.__qualname__,
+                type(err).__name__,
             )
             offline_man.check_requests_error(err)
-            raise RuntimeError(
-                f"Failed to connect to {XBOX_AUTH_URL!r}"
+            raise NoConnectionError(
+                XBOX_AUTH_URL, err, original_request=err.request
             ) from err
         except requests.HTTPError as err:
             log.error(
                 "Failed to refresh MSA token; response code %d",
                 err.response.status_code,
             )
-            return AuthError(
-                AuthStep.XBL, err.response.status_code, err.response.text
-            )
-        else:
-            return cls(response.json())
+            match err.response.status_code:
+                case 401:
+                    raise UnauthorizedError(err.response) from err
+                case _:
+                    raise BaseAuthenticationException(err.response) from err
+        try:
+            resp_json = response.json()
+        except json.JSONDecodeError as err:
+            raise BaseAuthenticationException(
+                response, "Xbox Live returned invalid JSON"
+            ) from err
+        if "Token" not in resp_json:
+            raise BaseAuthenticationException(response)
+        return cls(resp_json)
 
     @property
     def expires_in(self):

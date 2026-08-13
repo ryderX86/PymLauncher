@@ -23,6 +23,7 @@ from minecraftlauncher import SESSION
 from minecraftlauncher.offline import offline_man
 from minecraftlauncher.front import resources
 from minecraftlauncher.paths import paths
+from .exceptions import NoConnectionError, UnauthorizedError
 
 log = logging.getLogger(__name__)
 
@@ -220,15 +221,15 @@ class MinecraftProfile:
         ) as err:
             log.error("Failed to connect to %s:", MOJ_PROF_URL, exc_info=err)
             offline_man.check_requests_error(err)
-            raise RuntimeError(
-                f"Failed to connect to {MOJ_PROF_URL!r}"
+            raise NoConnectionError(
+                MOJ_PROF_URL, err, original_request=err.request
             ) from err
         except requests.HTTPError as err:
             log.error("Failed to fetch profile info!:", exc_info=err)
-            raise
+            raise UnauthorizedError(err.response) from err
         except Exception as err:
             log.error(
-                "Unknown error occured while fetching profile info:",
+                "Unexpected error occured while fetching profile info:",
                 exc_info=err,
             )
             raise
@@ -281,11 +282,11 @@ class MinecraftProfile:
             log.warning(
                 "Failed to connect to %s: %s",
                 MOJ_PROF_URL,
-                err.__qualname__,
+                type(err).__name__,
             )
             offline_man.check_requests_error(err)
-            raise RuntimeError(
-                f"Failed to connect to {MOJ_PROF_URL!r}"
+            raise NoConnectionError(
+                MOJ_PROF_URL, err, original_request=err.request
             ) from err
         except requests.HTTPError as err:
             log.error(

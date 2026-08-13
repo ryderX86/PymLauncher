@@ -8,7 +8,6 @@ for a given Minecraft version.
 from datetime import timedelta
 from collections.abc import Callable
 from xml.etree import ElementTree
-from warnings import deprecated
 import logging
 import hashlib
 import json
@@ -201,63 +200,6 @@ def check_or_download_logging_config(version_json: dict) -> str | None:
         return arg.replace("${path}", final_logging_path)
     else:
         return arg.replace("${path}", dest_path_patched)
-
-
-@deprecated("Don't filter assets before download anymore")
-def filter_assets_downloads(
-    asset_index: dict,
-    *,
-    progress_callback: Callable[[int, int], None] | None = None,
-):
-    """
-    Filters the given asset index by removing files that are already
-    downloaded.
-    """
-    objects: dict = asset_index.get("objects", {})
-    asset_index_out = {}
-    asset_index_out["objects"] = {}
-    total = len(objects.keys())
-    map_virtual_assets: bool = asset_index.get("map_to_resources", False)
-    if map_virtual_assets:
-        total *= 2
-
-    if progress_callback:
-        progress_callback(0, total)
-
-    processed = 0
-    for virtual_path, info in objects.items():
-        file_hash = info["hash"]
-        prefix = file_hash[:2]
-        dest_dir = os.path.join(paths.assets_objects, prefix)
-        dest_path = os.path.join(dest_dir, file_hash)
-
-        dest_path_v = os.path.join(paths.assets_virtual, virtual_path)
-        if os.path.isfile(dest_path):
-            with open(dest_path, "rb") as fb:
-                file_sha1 = hashlib.sha1(fb.read()).hexdigest()
-            if file_sha1 != file_hash:
-                asset_index_out["objects"][virtual_path] = info
-        else:
-            asset_index_out["objects"][virtual_path] = info
-        processed += 1
-        if progress_callback:
-            progress_callback(processed, total)
-
-        if map_virtual_assets:
-            if os.path.isfile(dest_path_v):
-                with open(dest_path_v, "rb") as fb:
-                    file_sha1 = hashlib.sha1(fb.read()).hexdigest()
-                if file_sha1 != file_hash:
-                    if virtual_path not in asset_index_out["objects"]:
-                        asset_index_out["objects"][virtual_path] = info
-            else:
-                if virtual_path not in asset_index_out["objects"]:
-                    asset_index_out["objects"][virtual_path] = info
-            processed += 1
-            if progress_callback:
-                progress_callback(processed, total)
-
-    return asset_index_out
 
 
 def download_assets(

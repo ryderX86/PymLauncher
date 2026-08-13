@@ -12,8 +12,7 @@ from minecraftlauncher.constants import (
 )
 from minecraftlauncher import SESSION
 from minecraftlauncher.offline import offline_man
-from .exceptions import XstsAuthError
-from .auth_error import AuthError, AuthStep
+from .exceptions import XstsAuthError, NoConnectionError
 
 log = logging.getLogger(__name__)
 
@@ -98,31 +97,20 @@ class XstsToken:
         ) as err:
             log.warning(
                 "%s occured while attempting MSA token refresh",
-                err.__qualname__,
+                type(err).__name__,
             )
             offline_man.check_requests_error(err)
-            raise RuntimeError(
-                f"Failed to connect to {XSTS_AUTH_URL!r}"
+            raise NoConnectionError(
+                XSTS_AUTH_URL, err, original_request=err.request
             ) from err
         except requests.HTTPError as err:
-            if err.errno == 401 and "response" in locals():
-                raise XstsAuthError(response.json()) from err  # type: ignore
-            else:
-                log.error(
-                    "Failed to refresh MSA token; response code %d\n"
-                    "Response text: %s",
-                    err.response.status_code,
-                    err.response.text,
-                )
-                return AuthError(
-                    (
-                        AuthStep.XSTS
-                        if relying_party == cls.mojang_uri
-                        else AuthStep.GTG
-                    ),
-                    err.response.status_code,
-                    err.response.text,
-                )
+            log.error(
+                "Failed to refresh MSA token; response code %d\n"
+                "Response text: %s",
+                err.response.status_code,
+                err.response.text,
+            )
+            raise XstsAuthError(err.response.json()) from err
 
         return cls(response.json())
 

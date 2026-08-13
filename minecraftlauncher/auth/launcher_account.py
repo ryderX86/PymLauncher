@@ -89,29 +89,19 @@ class LauncherAccount:
             return True
         if not self.msa_valid and not self.token_valid:
             log.info("Refreshing tokens for '%s'", self.gamertag)
-            success = self.msa.refresh()
-            if not success:
-                return success
+            self.msa.refresh()
         if not self.token_valid:
             if not self.xbox:
                 xbox = XboxToken.auth(self.msa)
-                if not xbox:
-                    return xbox
                 self.xbox = xbox
             xsts = XstsToken.auth(self.xbox)
-            if not xsts:
-                return xsts
             # xbl_meta is used to get the gamertag. we could technically remove
             # this in the future since we can get the XUID from the JWT within
             # the mojang token, and from there can get the gamertag, but right
             # now it's not worth it
             xbl_meta = XstsToken.auth(self.xbox, "http://xboxlive.com")
-            if not xbl_meta:
-                return xbl_meta
             self.gamertag = xbl_meta.gamertag
             mc = MinecraftToken.auth(xsts)
-            if not mc:
-                return mc
             self.token = mc
         if profile_update:
             self.get_profile_info()
@@ -167,12 +157,25 @@ class LauncherAccount:
         Retrieves the username safely, always returns str.
 
         If the profile isn't loaded or there's no username, it will return
-        `""`.
+        a blank string.
         """
         if self.profile:
             return self.profile.name
         else:
             return ""
+
+    @property
+    def displayname(self):
+        """
+        Returns either the in-game username, or the Xbox username if it's a
+        demo account, with the XUID itself as a last resort if somehow that's
+        empty.
+        """
+        if self.profile:
+            return self.profile.name
+        elif self.gamertag:
+            return self.gamertag
+        return self.xuid
 
     @property
     def uuid(self):
@@ -250,3 +253,17 @@ class LauncherAccount:
         if isinstance(other, str):
             return other == self.xuid
         return super().__eq__(other)
+
+    def has_same_info(self, other: LauncherAccount):
+        """
+        Checks the JSON serialization of both accounts
+
+        If any are different, returns False. Otherwise, returns True
+        """
+        return self.serialize() == other.serialize()
+
+    def __str__(self):
+        if self.gamertag:
+            return self.gamertag
+        else:
+            return self.xuid

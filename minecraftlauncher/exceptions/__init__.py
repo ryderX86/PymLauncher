@@ -1,0 +1,2 @@
+class EncryptedDataDecodeError(Exception):
+    pass

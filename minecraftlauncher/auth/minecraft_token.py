@@ -14,7 +14,7 @@ from minecraftlauncher.constants import (
 )
 from minecraftlauncher import SESSION
 from minecraftlauncher.offline import offline_man
-from .auth_error import AuthError, AuthStep
+from .exceptions import NoConnectionError, UnauthorizedError
 
 log = logging.getLogger(__name__)
 
@@ -118,11 +118,11 @@ class MinecraftToken:
         ) as err:
             log.warning(
                 "%s occured while attempting MSA token refresh",
-                err.__qualname__,
+                type(err).__name__,
             )
             offline_man.check_requests_error(err)
-            raise RuntimeError(
-                f"Failed to connect to {MOJ_AUTH_URL!r}"
+            raise NoConnectionError(
+                MOJ_AUTH_URL, err, original_request=err.request
             ) from err
         except requests.HTTPError as err:
             log.error(
@@ -132,9 +132,7 @@ class MinecraftToken:
                 err.response.status_code,
                 err.response.text,
             )
-            return AuthError(
-                AuthStep.MOJ, err.response.status_code, err.response.text
-            )
+            raise UnauthorizedError(err.response) from err
 
         if response is None:
             raise ValueError("Failed to get response")
@@ -144,8 +142,7 @@ class MinecraftToken:
     @classmethod
     def auth(cls, xsts_token: XstsToken):
         payload = {
-            "identityToken": "XBL3.0 x=%(uhs)s;%(xsts)s"
-            % {"uhs": xsts_token.user_hash, "xsts": xsts_token.token}
+            "identityToken": f"XBL3.0 x={xsts_token.user_hash};{xsts_token.token}"
         }
 
         response = None
@@ -158,14 +155,14 @@ class MinecraftToken:
         ) as err:
             log.warning(
                 "%s occured while attempting MSA token refresh",
-                err.__qualname__,
+                type(err).__name__,
             )
             offline_man.check_requests_error(err)
-            raise RuntimeError(
-                f"Failed to connect to {MOJ_AUTH_URL!r}"
+            raise NoConnectionError(
+                MOJ_AUTH_URL, err, original_request=err.request
             ) from err
         except requests.HTTPError as err:
-            if err.response.status_code in (400, 401, 402, 403):
+            if err.response.status_code in (400, 402, 403):
                 log.warning("Malformed request err; defaulting to alt auth url")
                 log.debug("returning `cls.auth_alternate(xsts_token)`")
                 return cls.auth_alternate(xsts_token)
@@ -175,9 +172,7 @@ class MinecraftToken:
                 err.response.status_code,
                 err.response.text,
             )
-            return AuthError(
-                AuthStep.MOJ, err.response.status_code, err.response.text
-            )
+            raise UnauthorizedError(err.response) from err
 
         if response is None:
             raise ValueError("response should not be false!")

@@ -29,7 +29,7 @@ def set_jump_list():  # TODO: rename to build_jump_list()
     - SHAddToRecentDocs()
 
     This function has a lot of `# type: ignore` in it, maybe there's a better
-    way to do it that doesn't piss off the type-checker?
+    way to do it that doesn't set off the type-checker?
     """
     if not profile_manager.profiles:
         log.warning("set_jump_list() called before profiles are loaded!")

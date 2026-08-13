@@ -1,4 +1,5 @@
 from time import sleep
+from json import JSONDecodeError
 import logging
 import atexit
 import sys
@@ -13,13 +14,15 @@ from .config import config
 from .offline import offline_man
 from . import constants, launchargs, setup_qapp, get_qapp, logs
 from .functions.error_box import error_box
-from .functions import detect_set_clipboard
+from .functions import detect_set_clipboard, uisleep
 from .ostools.win32 import setup_app_id
 from .front.styles import STYLESHEET, get_fonts, gen_palette, FontList
 from .front.window.loading_blocker import LoadingBlockerWindow
 from .front.window.main.main_window import MainWindow
 from .front.window.login import LoginWindow
 from .front.window.game_error import ErrorDisplay
+from .front.window.warning import WarningDialog, ButtonConfig
+from .exceptions import EncryptedDataDecodeError
 from .back import (
     account_manager,
     download_helpers,
@@ -28,6 +31,11 @@ from .back import (
     java_manager,
 )
 from .auth import LauncherAccount
+from .auth.exceptions import (
+    NoConnectionError,
+    BaseAuthenticationException,
+    MSAServerUnavailableError,
+)
 
 log = logging.getLogger("minecraftlauncher")
 
@@ -100,6 +108,7 @@ class LauncherApp:
             page.build()
 
     def run(self) -> int:
+        global clean_exit
         log.debug("Attempting to get version manifest set up...")
         self.lb_window.set_text("Fetching version list")
         try:
@@ -132,7 +141,83 @@ class LauncherApp:
         log.debug("Attempting to load accounts from cache...")
         if not offline_man.offline:
             self.lb_window.set_text("Authenticating")
-        accounts, _ = account_manager.load_accounts()
+        try:
+            accounts, _ = account_manager.load_accounts()
+        except PermissionError as err:
+            log.error("Failed to read accounts.bin:", exc_info=err)
+            error_box(
+                "Failed to read accounts from storage.\n"
+                "The launcher cannot continue loading and will close.\n"
+                "Please make sure you are using the right account with the "
+                "necessary permissions."
+            )
+            sys.exit(-1)
+        except AttributeError as err:
+            log.error("AttributeError in account loading:", exc_info=err)
+            if err.obj is not None:
+                log.debug("Object type at fault: %r", type(err.obj).__name__)
+            else:
+                log.debug("Can't retrieve object type from exception")
+            if err.name is not None:
+                log.debug("Missing key: %r", err.name)
+            else:
+                log.debug("Can't retrieve key name from exception")
+            sys.exit(-1)
+        except (JSONDecodeError, EncryptedDataDecodeError) as err:
+            # get user input before proceeding, if True then the user answered
+            # yes to deleting the accounts.bin file
+            if isinstance(err, EncryptedDataDecodeError):
+                dialog_text = (
+                    "Failed to load accounts from storage.\n"
+                    "The file may be unrecoverable due to a decryption error.\n"
+                    "Would you like to reset the storage file and try again?\n"
+                    "(A backup will remain in place)"
+                )
+            else:
+                dialog_text = (
+                    "Failed to load accounts from storage.\n"
+                    "The file may have invalid formatting.\n"
+                    "Would you like to reset the storage file and try again?\n"
+                    "(A backup will remain in place)"
+                )
+            delete_accounts = WarningDialog.warn(
+                text=dialog_text,
+                title="Error loading accounts",
+                button_config=ButtonConfig.YES_NO,
+                button_labels={"no": "Close Launcher"},
+                parent=self.lb_window,
+            )
+            if delete_accounts:
+                account_manager.reset_accounts_file()
+                accounts, _ = account_manager.load_accounts()
+            else:
+                clean_exit = True
+                sys.exit()
+        except BaseAuthenticationException as err:
+            accounts = account_manager.accounts
+            if len(accounts) > 1:
+                self.close_if_login_aborted = False
+            else:
+                self.close_if_login_aborted = True
+            self.lb_window.hide()
+            self.show_login()
+            if not account_manager.active_account:
+                try:
+                    account_manager.choose_account()
+                except RuntimeError:
+                    log.debug(
+                        "User aborted login and no accounts have up-to-date "
+                        "credentials. Exiting."
+                    )
+                    clean_exit = True
+                    sys.exit()
+        except Exception as err:
+            log.error("Unexpected error in account loading:", exc_info=err)
+            error_box(
+                "Failed to read accounts from storage.\n"
+                "The launcher cannot continue loading and will now close."
+            )
+            sys.exit(-1)
         if accounts:
             self.close_if_login_aborted = False
         else:
@@ -213,43 +298,107 @@ class LauncherApp:
             active.get_profile_info()
             assert active.profile
 
-        if not active.token:
-            log.debug("Can't find account (mojang) token, refreshing...")
-            active.minecraft_auth()
-            assert active.token
+        if not active.token or not active.token_valid:
+            log.debug(
+                "Invalid or no token for %r, refreshing...", active.gamertag
+            )
+            try:
+                active.refresh()
+            except NoConnectionError:
+                log.info("No connection, getting user's input")
+                should_proceed = WarningDialog.warn(
+                    self.main_window,
+                    "Authentication Error",
+                    "Failed to connect to the authentication servers. "
+                    "Do you want to launch in offline mode?",
+                    button_config=ButtonConfig.YES_NO,
+                )
+                if not should_proceed:
+                    self.main_window.home_page.aborted_launch()
+                    return
+            except Exception as err:
+                self.main_window.home_page.aborted_launch()
+                dialog = LoginWindow(self.main_window, relog_err=str(err))
+                dialog.exec()
+                return
 
         self.main_window.home_page.install_launch_game(
             profile.version_id, profile, active
         )
 
-    def _on_account_changed(self, xuid: str):
+    def _on_account_changed(
+        self, xuid: str, *, current_retries: int | None = None
+    ):
+        MAX_RETRIES = 5
         if self.lb_window.isVisible():
             self.lb_window.accept()
         if xuid in {a.xuid for a in account_manager.accounts}:
             account_manager.active_account = xuid
             acc = account_manager.fetch_account(xuid)
             assert acc
-            if not acc.token or not acc.token.is_active:
-                self.lb_window.set_text("Reauthenticating")
+            if (
+                not acc.token or not acc.token.is_active
+            ) and not offline_man.offline:
+                if not current_retries:
+                    self.lb_window.set_text("Reauthenticating")
                 self.lb_window.open()
-                acc_refresh = acc.refresh()
-                if acc_refresh:
-                    self.lb_window.accept()
-                    account_manager.save_or_replace_account(acc)
-                else:  # AuthError
+                try:
+                    acc.refresh()
+                except NoConnectionError:
+                    pass  # handled elsewhere already
+                except MSAServerUnavailableError:
+                    if not current_retries or current_retries < MAX_RETRIES:
+                        if not current_retries:
+                            current_retries = 1
+                        log.warning(
+                            "Failed to authenticate: Server unavailable; "
+                            "retrying (attempt %i of %i)",
+                            current_retries,
+                            MAX_RETRIES,
+                        )
+                        self.lb_window.set_text(
+                            "Server currently unavailable, "
+                            "waiting to try again (attempt "
+                            f"{current_retries+1} of {MAX_RETRIES+1})"
+                        )
+                        uisleep(5)
+                        self.lb_window.accept()
+                        return self._on_account_changed(
+                            xuid, current_retries=current_retries + 1
+                        )
+                    else:
+                        log.error(
+                            "Failed to authenticate: Server unavailable;"
+                            " max retries exceeded. Notifying user."
+                        )
+                        error_box(
+                            "Failed to authenticate: "
+                            "The server is currently unavailable. "
+                            "Please try again later."
+                        )
+                        self.lb_window.accept()
+                        self.main_window.account_dropdown.next_account()
+                        return
+                except (
+                    BaseAuthenticationException
+                ) as err:  # should only ever be a 402 by this point
                     log.warning(
-                        "Couldn't refresh %s, prompting user to relog. %s",
-                        xuid,
-                        acc_refresh.err_string(),
+                        "Failed to refresh %r: %r. Prompting user to relog.",
+                        acc.gamertag,
+                        type(err).__name__,
                     )
-                    dialog = LoginWindow(self.lb_window)
+                    dialog = LoginWindow(self.lb_window, relog_err=str(err))
                     dialog.rejected.connect(
                         self.main_window.account_dropdown.next_account
                     )
                     return dialog.exec()
+                else:
+                    self.lb_window.accept()
+                    account_manager.save_or_replace_account(acc)
         else:
             log.warning("Couldn't find the active account in accounts!")
         self._refresh_account_ui()
+        return
 
     def _refresh_account_ui(self):
         self.main_window.account_dropdown.refresh()
@@ -259,17 +408,26 @@ class LauncherApp:
             account_manager.active_account
         )
         assert active_account
-        if not active_account.token_valid:
+        if not active_account.token_valid and not offline_man.offline:
             self.lb_window.set_text("Authenticating")
-            active_account.minecraft_auth()
-            account_manager.save_or_replace_account(active_account)
+            try:
+                active_account.refresh()
+            except NoConnectionError:
+                pass
+            except Exception as err:
+                dialog = LoginWindow(self.main_window, relog_err=str(err))
+                dialog.exec()
+                if not active_account.token_valid:
+                    self.main_window.account_dropdown.next_account()
+                    return
+            else:
+                account_manager.save_or_replace_account(active_account)
         self.main_window.account_page.set_account_info(active_account)
 
     def _close_event(self):
         self.qapp.exit(0)
 
 
-@atexit.register
 def on_exit():
     """
     Registered with `atexit` in `main()`.
@@ -288,7 +446,6 @@ def on_exit():
 def main():
     global clean_exit
     if not constants.DEV and "-m" in sys.argv:  # nuitka multithreading fix
-        atexit.unregister(on_exit)
         log.info("-m specified, not running App().run()")
         return
     else:
@@ -316,6 +473,7 @@ def main():
         log.error("Failed to load config file:", exc_info=err)
         error_box("Failed to load config file! Config will be regenerated.")
     app = LauncherApp()
+    atexit.register(on_exit)
     code = app.run()
     logging.info("Exiting with code %d", code)
     clean_exit = True

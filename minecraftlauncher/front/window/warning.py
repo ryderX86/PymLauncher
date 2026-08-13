@@ -1,4 +1,5 @@
 from enum import IntEnum, auto
+from typing import Literal
 import logging
 
 from PySide6.QtGui import QIcon
@@ -21,6 +22,9 @@ class ButtonConfig(IntEnum):
 class UserReturn(IntEnum):
     NO = 0
     OK_YES = 1
+
+
+type ButtonLabelType = Literal["ok", "yes", "no"]
 
 
 class WarningType(IntEnum):
@@ -53,6 +57,7 @@ class WarningDialog(QMessageBox):
         icon: QIcon | None = None,
         show_once: bool = False,
         button_config: ButtonConfig = ButtonConfig.OK,
+        button_labels: dict[ButtonLabelType, str] | None = None,
         parent=None,
     ):
         super().__init__(parent, text=text)
@@ -96,6 +101,17 @@ class WarningDialog(QMessageBox):
                     self._checkbox = QCheckBox(CHECKBOX_TEXT_YESNO)
             self.setCheckBox(self._checkbox)
             self._checkbox.setChecked(False)
+        if button_labels:
+            if "ok" in button_labels:
+                self.button(self.StandardButton.Ok).setText(button_labels["ok"])
+            if "yes" in button_labels:
+                self.button(self.StandardButton.Yes).setText(
+                    button_labels["yes"]
+                )
+            if "no" in button_labels:
+                self.button(self.StandardButton.Yes).setText(
+                    button_labels["no"]
+                )
 
     def _handle_dismissal(self):
         if self._checkbox.isChecked() or self._show_once:
@@ -191,6 +207,7 @@ class WarningDialog(QMessageBox):
         show_once: bool = False,
         button_config: ButtonConfig = ButtonConfig.OK,
         ico: QIcon | None = None,
+        button_labels: dict[ButtonLabelType, str] | None = None,
     ):
         dialog = cls(
             text,
@@ -200,6 +217,7 @@ class WarningDialog(QMessageBox):
             button_config=button_config,
             parent=parent,
             show_once=show_once,
+            button_labels=button_labels,
         )
         dialog.exec()
         s = dialog.status

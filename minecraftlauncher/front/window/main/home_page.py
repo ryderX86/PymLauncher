@@ -275,26 +275,22 @@ class HomePage(QWidget):
         self._profile_change(profile)
 
     def _profile_change(self, profile: GameProfile):
+        self._reset_play_button()
         try:
             prof_exists = profile.check_install()
         except InvalidVersionIdError:
             self.progress_label.setText(
                 f"Unknown game version: {profile.version_id}"
             )
-            self.play_button.setText("Invalid version")
-            self.play_button.setDisabled(True)
             return
         if prof_exists:
-            if not offline_man.offline:
-                self.play_button.setText("Launch Game")
-            else:
-                self.play_button.setText("Launch Game (offline)")
             self.progress_label.setText("Ready to launch.")
-            self.play_button.setDisabled(False)
-        else:
+        elif not offline_man.offline:
             self.progress_label.setText("Ready to install.")
-            self.play_button.setText(f"Install {profile.real_version_id}")
-            self.play_button.setDisabled(offline_man.offline)
+        else:
+            self.progress_label.setText(
+                f"Version {profile.version_id} isn't installed!"
+            )
         self.version_label.setText(f"Version: {profile.version_id}")
 
     def _on_play(self):
@@ -359,7 +355,7 @@ class HomePage(QWidget):
         # allow
         prof = profile_manager.get_current_profile()
         prof.set_last_used()
-        self._profile_change(prof)
+        self._reset_play_button()
         if int(exit_code) != 0:
             self.game_crash.emit(exit_code, stdout)
         self.kill_worker()
@@ -430,8 +426,39 @@ class HomePage(QWidget):
             self.game_open.emit()
         else:
             error_box(f"Failed to launch the game: {message}")
-            prof = profile_manager.get_current_profile()
-            self._profile_change(prof)
+            self._reset_play_button()
+
+    def _reset_play_button(self):
+        profile = profile_manager.get_current_profile()
+        try:
+            sel_version_installed = profile.check_install()
+        except InvalidVersionIdError:
+            self.play_button.setText("Invalid game version ID")
+            self.play_button.setDisabled(True)
+            sel_version_installed = False
+            return
+        if offline_man.offline:
+            if sel_version_installed:
+                self.play_button.setText("Launch Game (offline)")
+            else:
+                self.play_button.setText("Cannot install")
+                self.play_button.setDisabled(True)
+                return
+        else:
+            if sel_version_installed:
+                self.play_button.setText("Launch Game")
+            else:
+                self.play_button.setText(
+                    f"Install {profile.real_version_id or profile.version_id}"
+                )
+        self.play_button.setDisabled(False)
+        return
+
+    def aborted_launch(self):
+        self._reset_play_button()
+        self.progress_frame.setVisible(False)
+        self.progress_label.setText("")
+        self.progress_bar.setValue(0)
 
     def config_changed(self):
         self.game_logs.setHidden(not config.show_logs_on_home)

@@ -2,12 +2,13 @@
 Paths for launcher & game data
 """
 
+from socket import gethostname
 import os
 import sys
 import logging
 
 from minecraftlauncher import constants, launchargs
-from minecraftlauncher.functions import is_path_valid
+from minecraftlauncher.functions import is_path_valid, pathsafe_str
 
 log = logging.getLogger(__name__)
 
@@ -75,10 +76,18 @@ class PathFinder:
 
     _game: str
     _data: str
+    _uses_portable: bool
+    _hostname: str | None
 
     def setup(self, game_dir: str | None = None, data_dir: str | None = None):
         default = get_user_data_dir()
         portable = get_portable_path()
+        if portable:
+            self._uses_portable = True
+            self._hostname = pathsafe_str(gethostname())
+        else:
+            self._uses_portable = False
+            self._hostname = None
 
         # order: func override -> CLI args -> env vars -> portable.txt file
         if game_dir:
@@ -170,6 +179,8 @@ class PathFinder:
 
     @property
     def accounts_file(self):
+        if self._uses_portable:
+            return os.path.join(self._data, f"accounts-{self._hostname}.bin")
         return os.path.join(self._data, "accounts.bin")
 
     def generate_folder_structure(self):

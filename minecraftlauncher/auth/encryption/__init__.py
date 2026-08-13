@@ -42,6 +42,8 @@ def run_import():
                     data_load_hook,
                     data_save_hook,
                 )
+
+                ENABLED = True
             except Exception as err:
                 log.error(
                     "Failed to load Linux encryption module:", exc_info=err

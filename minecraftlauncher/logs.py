@@ -110,6 +110,6 @@ def setup():
             case QtMsgType.QtSystemMsg:
                 func = qt_logger.info
             case _:
-                func = qt_logger.debug
+                func = qt_logger.info
 
         func(msg)

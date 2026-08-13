@@ -15,9 +15,6 @@ from .winerr_codes import WinErrorCode
 
 log = logging.getLogger(__name__)
 
-protect_data = win32crypt.CryptProtectData
-unprotect_data = win32crypt.CryptUnprotectData
-
 ENTROPY = b"WTF IS A KILOMETER!!!!!!!!!!"
 DESCRIPTION = f"Accounts data for {LAUNCHER_NAME}"
 
@@ -26,7 +23,9 @@ def encrypt(data: str | bytes) -> Buffer:
     if isinstance(data, str):
         data = data.encode("utf-8")
 
-    encrypted_data = protect_data(data, DESCRIPTION, ENTROPY)
+    encrypted_data: bytes = win32crypt.CryptProtectData(
+        data, DESCRIPTION, ENTROPY
+    )
 
     if encrypted_data:
         return encrypted_data
@@ -35,29 +34,30 @@ def encrypt(data: str | bytes) -> Buffer:
 
 
 def decrypt(data: bytes) -> str:
+    data_desc: str
+    data_out: bytes
     try:
-        desc, data_out = unprotect_data(data, ENTROPY)
+        data_desc, data_out = win32crypt.CryptUnprotectData(data, ENTROPY)
     except pywintypes.error as err:  # pylint: disable=no-member
         err_code = err.winerror
         if err_code in WinErrorCode:
             error_name = f"{hex(err_code)} ({WinErrorCode(err_code).name})"
         else:
             error_name = hex(err_code)
-        desc = err.strerror
+        data_desc = err.strerror
         func = err.funcname
         new = RuntimeError("Failed to decrypt user data")
         new.add_note(f"Error code: {error_name}")
-        new.add_note(desc)
+        new.add_note(data_desc)
         new.add_note(f"Function called: {func}")
         raise new from err
 
-    if desc != DESCRIPTION:
+    if data_desc != DESCRIPTION:
         log.warning(
-            "Encrypted data description doesn't match. "
-            "Something very likely went wrong.\n"
+            "Encrypted data description doesn't match.\n"
             "Default description: '%s'\nEncryption description: '%s'",
             DESCRIPTION,
-            desc,
+            data_desc,
         )
 
     if data_out:
