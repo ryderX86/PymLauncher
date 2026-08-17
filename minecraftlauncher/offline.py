@@ -82,6 +82,7 @@ class _OfflineModeManager:
         ):
             log.warning("DNS error occured, setting offline mode.")
             self.offline = True
+            log.error("Exception traceback:", exc_info=err)
         return self.offline
 
     @property
@@ -94,7 +95,7 @@ class _OfflineModeManager:
 
 
 offline_man = _OfflineModeManager()
-_api_poller = OfflineModeCheckerThread()
+connectivity_poller = OfflineModeCheckerThread()
 _current_status = "Unknown"
 
 
@@ -113,14 +114,14 @@ def _status_update(dns_issue: bool, xbl_issue: bool, moj_issue: bool):
 
 
 def _start_status_checker_thread(callback: Callable):
-    global _api_poller, _current_status
-    if _api_poller.has_run:
-        _api_poller.terminate()
-        _api_poller.deleteLater()
-        _api_poller = OfflineModeCheckerThread()
+    global connectivity_poller, _current_status
+    if connectivity_poller.has_run:
+        connectivity_poller.terminate()
+        connectivity_poller.deleteLater()
+        connectivity_poller = OfflineModeCheckerThread()
     _current_status = "Unknown"
 
-    _api_poller.cause_changed.connect(_status_update)
-    _api_poller.back_online.connect(callback)
+    connectivity_poller.cause_changed.connect(_status_update)
+    connectivity_poller.back_online.connect(callback)
     log.debug("Starting OfflineModeCheckerThread()")
-    _api_poller.start()
+    connectivity_poller.start()

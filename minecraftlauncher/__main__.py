@@ -11,8 +11,9 @@ import requests
 
 from .paths import paths
 from .config import config
-from .offline import offline_man
-from . import constants, launchargs, setup_qapp, get_qapp, logs
+from .offline import offline_man, connectivity_poller
+from . import constants, setup_qapp, get_qapp, logs
+from .launchargs import launchargs
 from .functions.error_box import error_box
 from .functions import detect_set_clipboard, uisleep
 from .ostools.win32 import setup_app_id
@@ -24,12 +25,11 @@ from .front.window.game_error import ErrorDisplay
 from .front.window.warning import WarningDialog, ButtonConfig
 from .exceptions import EncryptedDataDecodeError
 from .back import (
-    account_manager,
-    download_helpers,
     profile_manager,
     version_manager,
     java_manager,
 )
+from .back.account_manager import account_man
 from .auth import LauncherAccount
 from .auth.exceptions import (
     NoConnectionError,
@@ -88,10 +88,6 @@ class LauncherApp:
             self._on_account_changed
         )
 
-        self.main_window.destroyed.connect(
-            download_helpers.RunnableDownloader.kill_all
-        )
-
         self.main_window.home_page.game_crash.connect(self.show_crash_dialog)
 
         if constants.DEV:
@@ -142,7 +138,7 @@ class LauncherApp:
         if not offline_man.offline:
             self.lb_window.set_text("Authenticating")
         try:
-            accounts, _ = account_manager.load_accounts()
+            account_man.load_accounts()
         except PermissionError as err:
             log.error("Failed to read accounts.bin:", exc_info=err)
             error_box(
@@ -188,22 +184,21 @@ class LauncherApp:
                 parent=self.lb_window,
             )
             if delete_accounts:
-                account_manager.reset_accounts_file()
-                accounts, _ = account_manager.load_accounts()
+                account_man.reset_accounts_file()
+                account_man.load_accounts()
             else:
                 clean_exit = True
                 sys.exit()
         except BaseAuthenticationException as err:
-            accounts = account_manager.accounts
-            if len(accounts) > 1:
+            if account_man.has_accounts:
                 self.close_if_login_aborted = False
             else:
                 self.close_if_login_aborted = True
             self.lb_window.hide()
             self.show_login()
-            if not account_manager.active_account:
+            if not account_man.active:
                 try:
-                    account_manager.choose_account()
+                    account_man.auto_set_active()
                 except RuntimeError:
                     log.debug(
                         "User aborted login and no accounts have up-to-date "
@@ -218,7 +213,7 @@ class LauncherApp:
                 "The launcher cannot continue loading and will now close."
             )
             sys.exit(-1)
-        if accounts:
+        if account_man.has_accounts:
             self.close_if_login_aborted = False
         else:
             self.close_if_login_aborted = True
@@ -244,11 +239,11 @@ class LauncherApp:
 
     def _on_login_abort(self):
         global clean_exit
-        active_acc = account_manager.active_account
+        active_acc = account_man.active
         if self.close_if_login_aborted or not active_acc:
             clean_exit = True
             sys.exit(1)
-        account_manager.set_active_account(active_acc)
+        account_man.set_active(active_acc)
         self._refresh_account_ui()
 
     def show_crash_dialog(self, exit_code: str, stderr: str):
@@ -263,34 +258,35 @@ class LauncherApp:
         self.lb_window.open()
         self.lb_window.set_text("Loading account details")
         self.lb_window.update()
-        account_manager.save_or_replace_account(account)
-        account_manager.set_active_account(account.xuid)
+        account_man.replace(account)
+        account_man.set_active(account.xuid)
         self._refresh_account_ui()
         self.lb_window.hide()
 
     def logout(self):
-        active_account = account_manager.active_account
-        if active_account:
-            account_manager.remove_account(active_account)
-        if len(account_manager.accounts) > 0:
-            account_manager.active_account = account_manager.accounts[0].xuid
+        if account_man.active:
+            account_man.remove(account_man.active)
+        if account_man.has_accounts:
+            account_man.auto_set_active()
         self._refresh_account_ui()
 
-        if not account_manager.accounts:
+        if not account_man.has_accounts:
             log.info("No accounts left, showing login window.")
             self.close_if_login_aborted = True
             self.show_login()
 
     def play(self):
-        if not account_manager.active_account:
-            error_box("No active account!")
+        if not account_man.active:
+            error_box("No active account! Please submit a bug report.")
             return
-        active = account_manager.fetch_account(account_manager.active_account)
-        assert active
+        active = account_man.auto_set_active()
+        if not active:
+            self.main_window.home_page.aborted_launch()
+            return
 
         profile = profile_manager.get_current_profile()
         if not profile:
-            error_box("No active profile!")
+            error_box("No active launch profile! Please submit a bug report.")
             return
 
         if not active.profile:
@@ -326,16 +322,13 @@ class LauncherApp:
             profile.version_id, profile, active
         )
 
-    def _on_account_changed(
-        self, xuid: str, *, current_retries: int | None = None
-    ):
+    def _on_account_changed(self, xuid: str, *, current_retries: int = 0):
+        global clean_exit
         MAX_RETRIES = 5
         if self.lb_window.isVisible():
             self.lb_window.accept()
-        if xuid in {a.xuid for a in account_manager.accounts}:
-            account_manager.active_account = xuid
-            acc = account_manager.fetch_account(xuid)
-            assert acc
+        if xuid in account_man:
+            acc = account_man.set_active(xuid, ignore_refreshes=True)
             if (
                 not acc.token or not acc.token.is_active
             ) and not offline_man.offline:
@@ -348,8 +341,6 @@ class LauncherApp:
                     pass  # handled elsewhere already
                 except MSAServerUnavailableError:
                     if not current_retries or current_retries < MAX_RETRIES:
-                        if not current_retries:
-                            current_retries = 1
                         log.warning(
                             "Failed to authenticate: Server unavailable; "
                             "retrying (attempt %i of %i)",
@@ -394,19 +385,27 @@ class LauncherApp:
                     return dialog.exec()
                 else:
                     self.lb_window.accept()
-                    account_manager.save_or_replace_account(acc)
+                    account_man.replace_into(acc)
         else:
             log.warning("Couldn't find the active account in accounts!")
+            try:
+                account_man.auto_set_active(raise_on_fail=True)
+            except:
+                self.close_if_login_aborted = True
+                self.show_login()
+                if account_man.active:
+                    self.close_if_login_aborted = False
+                else:
+                    clean_exit = True
+                    sys.exit(0)
         self._refresh_account_ui()
         return
 
     def _refresh_account_ui(self):
         self.main_window.account_dropdown.refresh()
-        if not account_manager.active_account:
+        if not account_man.active:
             return
-        active_account = account_manager.fetch_account(
-            account_manager.active_account
-        )
+        active_account = account_man.active
         assert active_account
         if not active_account.token_valid and not offline_man.offline:
             self.lb_window.set_text("Authenticating")
@@ -421,7 +420,7 @@ class LauncherApp:
                     self.main_window.account_dropdown.next_account()
                     return
             else:
-                account_manager.save_or_replace_account(active_account)
+                account_man.replace_into(active_account)
         self.main_window.account_page.set_account_info(active_account)
 
     def _close_event(self):
@@ -436,11 +435,14 @@ def on_exit():
         log.error("Something went very wrong, not doing normal cleanup.")
         return
     log.info("Cleaning up")
+    if connectivity_poller.has_run and offline_man.offline:
+        log.info("Terminating connectivity poller")
+        connectivity_poller.terminate()
     config.save()
     profile_manager.save_launcher_profiles()
     profile_manager.save_launcher_meta()
-    if account_manager.accounts:
-        account_manager.save_accounts()
+    if account_man.has_accounts:
+        account_man.save_accounts()
 
 
 def main():

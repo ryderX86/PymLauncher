@@ -16,8 +16,10 @@ import os
 import requests
 from PySide6.QtCore import QRunnable
 
-from minecraftlauncher import SESSION
+from minecraftlauncher import SESSION, get_exit_status
 from minecraftlauncher.offline import offline_man
+from minecraftlauncher.config import config
+from minecraftlauncher.functions import is_path_valid
 
 log = logging.getLogger(__name__)
 T = TypeVar("T")
@@ -187,18 +189,27 @@ class DownloadError(Exception):
 
 
 class RunnableDownloader(QRunnable):
-    threads_quit = False
     sleep_time = 0.0
 
     _url: str
     """File download URL"""
     _path: str | os.PathLike
+    """File download URL for game versions using the legacy assets format"""
+    _vpath: str | os.PathLike | None
     """File final location"""
     _hash: str | None
     """File hash to check against"""
     _override: bool
     """Should we override the file? (default: `False`)"""
     _lzma: bool
+    """Is the download coming in compressed with LZMA?"""
+    _callback: Callable[[int], None] | None
+    """Post-download function to run"""
+    _should_check_hash: bool
+    """Do we check hash? (SHA1)"""
+    last_exception: BaseException | None
+    success: bool | None
+    _invalid_download_count: int
 
     log = log.getChild("RunnableDownloader")
 
@@ -207,12 +218,12 @@ class RunnableDownloader(QRunnable):
         self,
         url: str,
         path: os.PathLike | str,
+        vpath: str | os.PathLike | None = None,
         sha1: str | None = None,
         override: bool = False,
-        mkdir: bool = True,
         use_lzma: bool = False,
         callback: Callable[[int], None] | None = None,
-        check_hash: bool = True,
+        check_hash: bool | None = None,
     ):
         """
         Class for a single file to download in a bulk.
@@ -226,41 +237,64 @@ class RunnableDownloader(QRunnable):
 
         If `check_hash` is `True`, the file hash will be checked before
         attempting to download it; otherwise the hash will only be checked
-        after the file has been downloaded and written to disk.
+        after the file has been downloaded and written to disk (defaults to
+        `True` if a hash is provided)
         """
         super().__init__()
         self._url = url
         self._path = path
-        self._file_exists = os.path.isfile(path)
-        if not self._file_exists:
-            parent = os.path.dirname(path)
-            if not os.path.isdir(parent):
-                if not mkdir:
-                    raise FileNotFoundError(self._path)
-                try:
-                    os.makedirs(parent, exist_ok=True)
-                except Exception as err:
-                    raise ValueError(
-                        f"Invalid path given for download: {str(self._path)}"
-                    ) from err
+        self._vpath = vpath
+        if not is_path_valid(self._path):
+            raise ValueError(f"Invalid path: {self._path!r}")
+        if self._vpath:
+            if not is_path_valid(self._vpath):
+                raise ValueError(f"Invalid path: {self._vpath!r}")
+            self._file_exists = os.path.isfile(path) and os.path.isfile(
+                self._vpath
+            )
+        else:
+            self._file_exists = os.path.isfile(path)
         self._hash = sha1
+        if sha1 and check_hash is None:
+            check_hash = True
+        elif check_hash is None:
+            check_hash = False
         self._override = override
         self._lzma = use_lzma
         self._callback = callback
-        self._check_hash = check_hash
-        self.last_exception: Exception | None = None
-        self.success: bool | None = None
+        self._should_check_hash = check_hash
+        self.last_exception = None
+        self.success = None
+        self._invalid_download_count = 0
+        if self._should_check_hash and not self._hash:
+            raise ValueError(
+                "should_check_hash set to True but no hash was provided"
+            )
 
     def _check_sha1(self):
-        if not self._hash:
-            return True
-        return _check_file_sha1(self._path, self._hash)
+        if not os.path.isfile(self._path):
+            return False
+        elif not self._should_check_hash:
+            if not config.redownload_option:
+                self.log.debug(
+                    "Skipping download since redownloading without a hash "
+                    "isn't enabled"
+                )
+                return True
+            return False
+        with open(self._path, "rb") as file:
+            content = file.read()
+        return self._hash == hashlib.sha1(content).hexdigest()
 
     def run(self):
-        if self.threads_quit:
+        if get_exit_status():
             self.log.debug("Quitting thread early")
             return
-        if self._check_hash and self._file_exists:
+        elif self.sleep_time:
+            time.sleep(self.sleep_time)
+
+        # check hash before trying to download the file
+        if self._should_check_hash and self._file_exists:
             if self._check_sha1():
                 self.success = True
                 if self._callback:
@@ -268,51 +302,128 @@ class RunnableDownloader(QRunnable):
                 return
             self.log.debug("File exists but SHA1 doesn't match, deleting.")
             os.unlink(self._path)
-        resp = None
+
+        # check/make directories
+        if not os.path.isdir(os.path.dirname(self._path)):
+            try:
+                log.debug(
+                    "Creating directory (plus non-existant parent "
+                    "directories) at %r",
+                    os.path.dirname(self._path),
+                )
+                os.makedirs(self._path, exist_ok=True)
+            except Exception as err:
+                self.log.error(
+                    "Failed to create directory at %r",
+                    os.path.dirname(self._path),
+                    exc_info=err,
+                )
+                self.last_exception = err
+                self.success = False
+                raise
+        if self._vpath and not os.path.isdir(os.path.dirname(self._vpath)):
+            try:
+                log.debug(
+                    "Creating directory (plus non-existant parent "
+                    "directories) at %r",
+                    os.path.dirname(self._path),
+                )
+                os.makedirs(self._vpath, exist_ok=True)
+            except Exception as err:
+                self.log.error(
+                    "Failed to create directory at %r",
+                    os.path.dirname(self._path),
+                    exc_info=err,
+                )
+                self.last_exception = err
+                self.success = False
+                raise
+
+        self.download()
+        return
+
+    def download(self):
+        if get_exit_status():
+            log.debug("Quitting download early")
+            return
+        elif self.sleep_time:
+            time.sleep(self.sleep_time)
+
+        # download the file
         self.success = False
         try:
             resp = SESSION.get(self._url, timeout=30)
             resp.raise_for_status()
+        except requests.HTTPError as err:
+            offline_man.check_requests_error(err)
+            self.last_exception = err
+            if err.response and err.response.status_code == 429:
+                self.log.error(
+                    "HTTP 429: Too many requests; waiting for cooldown"
+                )
+                type(self).sleep_time += 5
+                self.log.debug("Current wait time: %f", self.sleep_time)
+                return self.download()
+            else:
+                self.log.error("HTTPError in download")
+                type(self).sleep_time += 0.2
+                if not offline_man.offline:
+                    return self.download()
+                raise
         except Exception as err:
+            offline_man.check_requests_error(err)
             self.last_exception = err
             self.log.error(
-                "Failed to get file from %r: %r", self._url, str(err)
+                "Failed to get file from %r:", self._url, exc_info=err
             )
+            type(self).sleep_time = 0.2
             raise err
+        type(self).sleep_time = 0
+
+        # check the download
+        if self._lzma:
+            content = lzma.decompress(resp.content)
         else:
-            self.sleep_time = 0
-            if self._lzma:
-                content = lzma.decompress(resp.content)
-            else:
-                content = resp.content
-            if self._hash:
-                sha1 = hashlib.sha1(content).hexdigest()
-                if sha1 != self._hash:
-                    self.last_exception = RuntimeError(
-                        "SHA mismatch occured after download"
-                    )
-                    self.log.error("Download failed, retrying (SHA-1 mismatch)")
-                    resp = None
-            else:
-                log.warning(
-                    "No SHA1 provided for file downloaded at '%s'",
-                    self._path,
+            content = resp.content
+        if self._hash:
+            sha1 = hashlib.sha1(content).hexdigest()
+            if sha1 != self._hash:
+                self.last_exception = RuntimeError(
+                    "SHA mismatch occured after download"
                 )
-            with open(self._path, "wb") as f:
+                if self._invalid_download_count > 5:
+                    err = RuntimeError(
+                        f"Failed to download from {self._url!r}, "
+                        "max retries exceeded. "
+                        f"(SHA-1 mismatch, expected {self._hash!r}, got "
+                        f"{sha1!r})"
+                    )
+                    self.last_exception = err
+                    raise err from self.last_exception
+                self._invalid_download_count += 1
+                self.log.error("Download failed, retrying (SHA-1 mismatch)")
+                resp = None
+                return self.download()
+        else:
+            log.warning(
+                "No SHA1 provided for file downloaded at '%s'",
+                self._path,
+            )
+
+        # write the file
+        with open(self._path, "wb") as f:
+            f.write(content)
+        if self._vpath:
+            with open(self._vpath, "wb") as f:
                 f.write(content)
-            print("Download done")
-            self.success = True
-            if self._callback:
-                self._callback(1)
-            return
+        self.success = True
+        if self._callback:
+            self._callback(1)
+        return
 
     @property
     def failed(self):
         return self.success is False
-
-    @classmethod
-    def kill_all(cls):
-        cls.threads_quit = True
 
     @property
     def download_successful(self):
@@ -351,6 +462,7 @@ class BulkDownloadError(Exception):
         return texts
 
     def __iter__(self):
+        """Return an iterator of exceptions contained in the class"""
         self._iter_idx_ = 0
         return self
 

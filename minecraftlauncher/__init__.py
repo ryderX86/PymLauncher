@@ -5,6 +5,7 @@ from requests.adapters import HTTPAdapter, Retry
 import requests
 
 from .constants import USER_AGENT
+from .networking import ResilientSession
 
 # setting it here allows me to not fool around with detecting when it's created
 # or spam the functions to get it
@@ -19,6 +20,9 @@ def set_exiting():
 
 
 def get_exit_status():
+    """
+    Check if the application is exiting or not.
+    """
     return _exit_status
 
 
@@ -34,7 +38,7 @@ def get_qapp() -> QApplication:
     return _qapp
 
 
-SESSION = requests.sessions.Session()
+SESSION = ResilientSession()
 SESSION.headers["User-Agent"] = USER_AGENT
 SESSION.mount(
     "http",

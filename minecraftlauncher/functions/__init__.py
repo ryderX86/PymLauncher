@@ -56,7 +56,7 @@ def copy_to_clipboard(item: str | int | QPixmap | QIcon | QImage):
                 f"Cannot set clipboard with type {type(item).__name__}"
             )
 
-    log.debug("Copied %r() to clipboard", type(item).__name__)
+    log.debug("Copied %s to clipboard", type(item).__name__)
 
 
 def reswrite(path: str | os.PathLike, content: str | Buffer):

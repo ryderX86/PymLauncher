@@ -12,7 +12,7 @@ from PySide6.QtCore import (
 
 from minecraftlauncher import constants
 from minecraftlauncher.paths import paths
-from minecraftlauncher import launchargs
+from minecraftlauncher.launchargs import launchargs
 
 ROOT_LOGGER = logging.getLogger()
 

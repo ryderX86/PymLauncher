@@ -23,8 +23,9 @@ from PySide6.QtWidgets import (
     QListWidgetItem,
 )
 
-from minecraftlauncher import set_exiting, launchargs
+from minecraftlauncher import set_exiting
 from minecraftlauncher.config import config, PostLaunchBehavior
+from minecraftlauncher.launchargs import launchargs
 from minecraftlauncher.front import styles
 from minecraftlauncher.back import profile_manager
 from minecraftlauncher.constants import LAUNCHER_VERSION

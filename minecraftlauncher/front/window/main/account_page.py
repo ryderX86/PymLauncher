@@ -25,6 +25,7 @@ from minecraftlauncher import functions
 from minecraftlauncher.constants import CHECKMARK_DELAY
 from minecraftlauncher.front.window.skin_change import SkinChange
 from minecraftlauncher.offline import offline_man
+from minecraftlauncher.back.account_manager import account_man
 
 log = logging.getLogger(__name__)
 
@@ -143,6 +144,7 @@ class AccountPage(QWidget):
 
         layout.addWidget(manage_w)
         offline_man.add_hook(self.offline_mode_hook)
+        account_man.add_switch_callback(self.set_account_info, self.destroyed)
 
     def set_account_info(self, info: LauncherAccount):
         """Update account info displayed on page"""

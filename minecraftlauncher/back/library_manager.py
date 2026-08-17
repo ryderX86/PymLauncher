@@ -403,7 +403,11 @@ def download_libraries_threaded(
                     continue
             download_list.append(
                 RunnableDownloader(
-                    url, destination, sha1 or None, callback=passed_callback
+                    url=url,
+                    path=destination,
+                    sha1=sha1 or None,
+                    check_hash=bool(sha1),
+                    callback=passed_callback,
                 )
             )
 

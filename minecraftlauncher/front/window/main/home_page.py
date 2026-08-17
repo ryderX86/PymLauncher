@@ -320,7 +320,7 @@ class HomePage(QWidget):
         )
         self._worker.progress.connect(self._on_progress)
         self._worker.status.connect(self._on_status)
-        self._worker.finished.connect(self._on_finished)
+        self._worker.done.connect(self._on_finished)
         self._worker.game_closed.connect(self._on_game_closed)
         if show_logs:
             log.debug("Starting game with logs shown")
@@ -426,7 +426,7 @@ class HomePage(QWidget):
             self.game_open.emit()
         else:
             error_box(f"Failed to launch the game: {message}")
-            self._reset_play_button()
+            self.aborted_launch()
 
     def _reset_play_button(self):
         profile = profile_manager.get_current_profile()

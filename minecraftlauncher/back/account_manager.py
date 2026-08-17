@@ -1,11 +1,13 @@
-from collections.abc import Buffer
+from collections.abc import Buffer, Callable
+from types import MappingProxyType
+from typing import Any
 import logging
 import json
 import time
 import os
 
-from minecraftlauncher import constants
 from minecraftlauncher.paths import paths
+from minecraftlauncher.launchargs import launchargs
 from minecraftlauncher.auth import LauncherAccount
 from minecraftlauncher.auth.encryption import data_load_hook, data_save_hook
 from minecraftlauncher.auth import encryption
@@ -26,6 +28,7 @@ class AccountManager:
     _accounts: dict[str, LauncherAccount] = {}  # str is XUID
     _active_account: LauncherAccount | None
     _loaded: bool
+    _active_callbacks: list[Callable[[LauncherAccount], None]] = []
 
     def __new__(cls):
         if cls._instance:
@@ -34,7 +37,7 @@ class AccountManager:
             )
             return cls._instance  # singleton
         else:
-            return cls()
+            return object.__new__(cls)
 
     def __init__(self):
         self._loaded = False
@@ -50,6 +53,17 @@ class AccountManager:
     def active(self, account_or_xuid: str | LauncherAccount):
         return self.set_active(account_or_xuid)
 
+    @property
+    def loaded(self):
+        return self._loaded
+
+    @property
+    def has_accounts(self):
+        return len(self._accounts) > 0
+
+    def __bool__(self):
+        return self._loaded
+
     def load_accounts(self):
         """
         Loads accounts from accounts.bin.
@@ -61,7 +75,7 @@ class AccountManager:
         if self._accounts:
             log.warning(
                 "load_accounts() called while self._accounts already exists, "
-                "resetting it"
+                "re-loading it"
             )
             self._accounts = {}
         if not paths.ready:
@@ -111,10 +125,32 @@ class AccountManager:
             account = LauncherAccount.from_json(cached)
             self._accounts[account.xuid] = account
 
+        self._loaded = True
+
         if last_used_xuid in self._accounts:
             self.auto_set_active(last_used_xuid, raise_on_fail=False)
+        elif last_used_xuid is not None:
+            log.warning(
+                "Last known active account (XUID: %r) not in accounts cache",
+                last_used_xuid,
+            )
+            self.auto_set_active()
 
         return
+
+    def save_accounts(self):
+        store = self.dump()
+
+        payload: Buffer
+        if encryption.ENABLED and not launchargs.unencrypted_accounts:
+            payload = data_save_hook(store)
+        else:
+            payload = json.dumps(store).encode("utf-8")
+
+        reswrite(paths.accounts_file, payload)
+        log.debug(
+            "Saved %d accounts to %r", len(self._accounts), paths.accounts_file
+        )
 
     def list(self, sort=True) -> list[LauncherAccount]:
         output = [*self._accounts.values()]
@@ -123,23 +159,31 @@ class AccountManager:
         return output
 
     def auto_set_active(
-        self, preferred_xuid: str | None, raise_on_fail: bool = False
-    ):
+        self, preferred_xuid: str | None = None, raise_on_fail: bool = False
+    ) -> LauncherAccount | None:
         set_account = False
         if preferred_xuid and preferred_xuid in self._accounts:
             account = self._accounts[preferred_xuid]
             try:
                 self._check_refresh_token(account)
-            except:
-                set_account = False
+            except Exception as err:
+                log.debug(
+                    "Ignoring %r exception while refreshing tokens for %r",
+                    type(err).__name__,
+                    account.gamertag,
+                )
             else:
                 log.debug(
                     "Switching account from %r to %r",
-                    self._active_account,
-                    account,
+                    (
+                        self._active_account.gamertag
+                        if self._active_account
+                        else None
+                    ),
+                    account.gamertag,
                 )
                 self._active_account = account
-                return
+                return self.active
         elif preferred_xuid:
             raise KeyError(
                 f"Account with XUID {preferred_xuid!r} not found in cache!"
@@ -160,8 +204,12 @@ class AccountManager:
             else:
                 log.debug(
                     "Switching account from %r to %r",
-                    self._active_account,
-                    acc,
+                    (
+                        self._active_account.gamertag
+                        if self._active_account
+                        else "<none>"
+                    ),
+                    acc.gamertag,
                 )
                 self._active_account = acc
                 set_account = True
@@ -169,27 +217,10 @@ class AccountManager:
 
         if raise_on_fail and not set_account:
             raise RuntimeError("Failed to set any active account")
-        return
-
-    def save_accounts(self):
-        store = {
-            "active": (
-                self._active_account.gamertag if self._active_account else None
-            ),
-            "accounts": [account.serialize() for account in self.list()],
-            "last_saved": time.time(),
-        }
-
-        payload: Buffer
-        if encryption.ENABLED:
-            payload = data_save_hook(store)
-        else:
-            payload = json.dumps(store).encode("utf-8")
-
-        reswrite(paths.accounts_file, payload)
-        log.debug(
-            "Saved %d accounts to %r", len(self._accounts), paths.accounts_file
-        )
+        if self.active:
+            for callback in self._active_callbacks:
+                callback(self.active)
+        return self.active
 
     def _check_refresh_token(self, acc_or_xuid: str | LauncherAccount):
         if isinstance(acc_or_xuid, str):
@@ -208,7 +239,9 @@ class AccountManager:
             self.save_accounts()
             return
 
-    def set_active(self, new_account: str | LauncherAccount):
+    def set_active(
+        self, new_account: str | LauncherAccount, ignore_refreshes: bool = False
+    ):
         if isinstance(new_account, LauncherAccount):
             if new_account.xuid not in self._accounts:
                 log.warning(
@@ -219,9 +252,13 @@ class AccountManager:
                 )
                 self._accounts[new_account.xuid] = new_account
             new_account = new_account.xuid
-        account = self.get(new_account)
+        account = self[new_account]
 
-        if not account.token_valid and not offline_man.offline:
+        if (
+            not account.token_valid
+            and not offline_man.offline
+            and not ignore_refreshes
+        ):
             log.debug(
                 "%r doesn't have an active token, trying to refresh it",
                 account.gamertag,
@@ -231,8 +268,18 @@ class AccountManager:
             except NoConnectionError:
                 pass
 
+        log.debug(
+            "Switching account from %r to %r",
+            self.active.gamertag if self.active else None,
+            account.gamertag,
+        )
+
         # if refresh fails, exception will be raised before this happens:
         self._active_account = account
+        assert self.active
+        for callback in self._active_callbacks:
+            callback(self.active)
+        return self.active
 
     def replace_into(self, account: LauncherAccount):
         """Add or replace account into the cache"""
@@ -248,15 +295,13 @@ class AccountManager:
             raise KeyError(f"Account with XUID {xuid} not in cache")
         return self._accounts[xuid]
 
-    def remove(self, xuid: str):
-        if xuid not in self._accounts:
-            raise KeyError(f"Account with XUID {xuid} not in cache")
-        if self._active_account and self._active_account.xuid == xuid:
-            self._active_account = None
-        log.debug("Removing %r from accounts", self._accounts[xuid].gamertag)
-        del self._accounts[xuid]
+    def remove(self, xuid: str | LauncherAccount):
+        if isinstance(xuid, LauncherAccount):
+            xuid = xuid.xuid
+        del self[xuid]
 
     def __iter__(self):
+        """Returns an iterator of all LauncherAccount objects in cache."""
         return self.list().__iter__()
 
     def __getitem__(self, xuid: str):
@@ -268,6 +313,8 @@ class AccountManager:
         if xuid not in self._accounts:
             raise KeyError(f"Account with XUID {xuid} not in cache")
         log.debug("Removing account %r from cache", self[xuid].gamertag)
+        if self.active and self.active.xuid == xuid:
+            self._active_account = None
         del self._accounts[xuid]
 
     def __setitem__(self, xuid: str, account: LauncherAccount):
@@ -275,265 +322,81 @@ class AccountManager:
             log.debug("Overriding account %r", self[xuid].gamertag)
         self._accounts[xuid] = account
 
+    def dump(self):
+        return {
+            "active": (self.active.xuid if self.active else None),
+            "accounts": [account.serialize() for account in self.list()],
+            "last_saved": time.time(),
+        }
 
-accounts: list[LauncherAccount] = []
-active_account: str | None = None
+    def reset_accounts_file(self):
+        """
+        "Resets" the accounts.bin file by renaming it to "accounts.bin.bak"
 
+        (adds onto `paths.accounts_file`, so `accounts-DESKTOP-4SQSLS.bin`
+        would get renamed to `accounts-DESKTOP-4SQSLS.bin.bak`)
 
-def _sort_accounts():
-    accounts.sort(key=lambda a: a.displayname.lower())
-
-
-def save_accounts(
-    accounts_: list | None = None,
-    *,
-    active_xuid: str | None = None,
-    return_unencrypted: bool = False,
-):
-    """
-    Save account data to disk.
-
-    Entries should be a full `LauncherAccount` object.
-
-    If `accounts_` isn't provided, the global `accounts` is used instead.
-    """
-    global accounts
-    if accounts_:
-        log.warning("Overriding accounts cache")
-        accounts = accounts_
-    elif not accounts_ and not accounts:
-        log.debug("No accounts to save")
-        return
-
-    payload_json = {
-        "active": active_xuid or active_account,
-        "accounts": [acc.serialize() for acc in accounts],
-        "last_saved": time.time(),
-    }
-
-    if return_unencrypted:
-        log.warning("Returning unencrypted accounts.bin to var (not saving)")
-        return json.dumps(payload_json, indent=4 if constants.DEV else None)
-
-    payload = data_save_hook(payload_json)
-
-    reswrite(paths.accounts_file, payload)
-
-    log.info("Saved %d accounts to cache file.", len(accounts))
-    return None
-
-
-def save_or_replace_account(
-    acc: LauncherAccount, accounts_: list[LauncherAccount] | None = None
-):
-    """Add or replace account into cache and save to disk."""
-    global accounts
-    if accounts_:
-        log.warning("Overriding accounts cache")
-        accounts = accounts_
-
-    for i, account in enumerate(accounts):
-        if account.xuid == acc.xuid:
-            if account.has_same_info(acc):
-                log.warning(
-                    "save_or_replaced_account() called with no changes!"
-                )
-            if account.gamertag == acc.gamertag:
-                log.debug(
-                    "Replacing cached account %r with updated info",
-                    account.gamertag,
-                )
-            else:
-                log.debug(
-                    "Replacing cached account %r with updated info (new tag: %r)",
-                    account.gamertag,
-                    acc.gamertag,
-                )
-            accounts[i] = acc
-            save_accounts()
-            return
-    log.debug("Adding %r to cached accounts", acc.gamertag)
-    accounts.append(acc)
-    _sort_accounts()
-    save_accounts()
-    return
-
-
-def choose_account(last_used_xuid: str | None = None):
-    """
-    Look at all accounts currently loaded in memory, then compare XUIDs and
-    authentication status. If everything looks good from the first, we run with
-    that, otherwise we attempt reauthentication until we get an authenticated
-    account or find out we're in offline mode.
-    """
-    global active_account
-
-    refreshed_any_account: bool = False
-
-    for account in sorted(accounts, key=lambda a: a.xuid != last_used_xuid):
-        if account.token_valid:
-            log.debug(
-                "Found an account with active token: %r; using this one.",
-                account.gamertag,
+        If the file already exists, the timestamp will be appended to
+        `accounts.bin` or `accounts-DESKTOP-4SQSLS.bin` before `.bak`.
+        """
+        if not os.path.isfile(paths.accounts_file):
+            raise RuntimeError(
+                "reset_accounts_file() called without an existing file"
             )
-            active_account = account.xuid
-            break
+        if os.path.isfile(f"{paths.accounts_file}.bak"):
+            filename = f"{paths.accounts_file}-{int(time.time())}.bak"
         else:
-            log.debug(
-                "Invalid token for %r, trying to refresh it...",
-                account.gamertag,
+            filename = f"{paths.accounts_file}.bak"
+
+        log.debug("Resetting %r (backup: %r)", paths.accounts_file, filename)
+        os.replace(paths.accounts_file, filename)
+
+    def dict(self):
+        return MappingProxyType(self._accounts)
+
+    as_dict = dict
+
+    def __contains__(self, xuid_or_account: str | LauncherAccount):
+        """
+        Checks if the account (or account associated with the provided XUID)
+        is in the accounts cache.
+        """
+        if isinstance(xuid_or_account, str):
+            return xuid_or_account in self._accounts
+        else:
+            return xuid_or_account in self._accounts.values()
+
+    def add_switch_callback(
+        self,
+        callback: Callable[[LauncherAccount], None],
+        destroyed_signal: Any = None,
+    ):
+        if callback in self._active_callbacks:
+            log.warning(
+                "Attempted to add callback %r multiple times", callback.__name__
             )
+            return
+        self._active_callbacks.append(callback)
+        if destroyed_signal is not None:
             try:
-                account.refresh()
-            except NoConnectionError:
-                log.info("We're offline, proceeding with %r.", account.gamertag)
-                active_account = account.xuid
-                break
-            except Exception as err:
-                log.debug(
-                    "Failed token refresh, trying next account", exc_info=err
+                destroyed_signal.connect(
+                    lambda: self.remove_switch_callback(callback)
                 )
-                active_account = None
-                continue
-            else:
-                refreshed_any_account = True
-                log.debug(
-                    "Successfully refreshed token, we'll use %r.",
-                    account.gamertag,
-                )
-                active_account = account.xuid
-                break
+            except AttributeError as err:
+                raise TypeError(
+                    "Object passed to 'destroyed_signal' doesn't "
+                    "have a 'connect()' method"
+                ) from err
 
-    # we have to save accounts if we know there's a refresh otherwise there's
-    # no guarentee anywhere we'll save accounts unless one is added or there's
-    # a refresh in the play button's process
-    if refreshed_any_account:
-        save_accounts()
-    return
+    def remove_switch_callback(
+        self, callback: Callable[[LauncherAccount], None]
+    ):
+        if callback not in self._active_callbacks:
+            raise AttributeError(
+                f"Function {callback.__name__!r} was never registered "
+                "as a callback"
+            )
+        self._active_callbacks.remove(callback)
 
 
-def load_accounts() -> tuple[list[LauncherAccount], str | None]:
-    global accounts
-    global active_account
-
-    if not os.path.isfile(paths.accounts_file):
-        return [], None
-
-    if accounts:
-        return accounts, active_account
-
-    # read accounts file:
-    with open(paths.accounts_file, "rb") as b:
-        payload_bytes = b.read()
-    if payload_bytes[0:1] == b"{":
-        encrypted = False
-        payload = payload_bytes.decode("utf-8")
-    else:
-        encrypted = True
-        try:
-            payload = data_load_hook(payload_bytes)
-        except (UnicodeError, RuntimeError) as err:
-            raise EncryptedDataDecodeError(*err.args) from err
-
-    try:
-        accounts_file = json.loads(payload)
-    except json.JSONDecodeError as err:
-        log.error("Failed to load accounts.bin:", exc_info=err)
-        if encrypted and not payload.startswith("{"):
-            raise EncryptedDataDecodeError from err
-        else:
-            raise err
-
-    # parse accounts:
-    accounts = []
-    raw_accounts = accounts_file.get("accounts", [])
-    active_account = accounts_file.get("active")
-    for raw_acc in raw_accounts:
-        acc = LauncherAccount.from_json(raw_acc)
-        accounts.append(acc)
-
-    # sort & choose first account
-    _sort_accounts()
-    choose_account(active_account)
-
-    log.info(
-        "Loaded %d account(s) from %r",
-        len(accounts),
-        os.path.split(paths.accounts_file)[-1],
-    )
-    return accounts, active_account
-
-
-def remove_account(xuid: str) -> bool:
-    """
-    Remove an account by XUID; return `True` if removed, otherwise return
-    `False`, then save the account cache.
-    """
-    global active_account
-    i: int | None = None
-    for acc in accounts:
-        if acc.xuid == xuid:
-            i = accounts.index(acc)
-            break
-    if isinstance(i, int):
-        if xuid == active_account:
-            active_account = None
-        del accounts[i]
-        log.info("Removed %s from accounts cache.", xuid)
-        if len(accounts) > 0:
-            choose_account()
-        save_accounts()
-        return True
-    else:
-        log.warning(
-            "Tried to remove an account that wasn't in the cache! (XUID: %r)",
-            xuid,
-        )
-        return False
-
-
-def set_active_account(xuid: str) -> bool:
-    global active_account
-
-    if xuid not in [acc.xuid for acc in accounts]:
-        raise KeyError(f"Account {xuid!r} not in cache")
-    active_account = xuid
-    acc = fetch_account(xuid)
-    assert acc
-    log.debug("Set active account to %s", acc.gamertag)
-    return True
-
-
-def update_account(account: LauncherAccount):
-    for i, acc in enumerate(accounts):
-        if acc.xuid == account.xuid:
-            accounts[i] = account
-            return
-
-    accounts.append(account)
-
-
-def fetch_account(xuid: str) -> LauncherAccount | None:
-    for acc in accounts:
-        if acc.xuid == xuid:
-            return acc
-    return None
-
-
-def reset_accounts_file():
-    """
-    Reset the accounts.bin file and save previous version to a backup file
-    """
-    global accounts, active_account
-    if not os.path.isfile(paths.accounts_file):
-        log.warning(
-            "reset_accounts_file() called while accounts.bin doesn't "
-            "exist! (checked at %r)",
-            paths.accounts_file,
-        )
-        return
-    accounts = []
-    active_account = None
-    backup_name = f"{paths.accounts_file}-corrupted-{int(time.time())}.bak"
-    log.warning("Renaming %r -> %r", paths.accounts_file, backup_name)
-    os.replace(paths.accounts_file, backup_name)
+account_man = AccountManager()

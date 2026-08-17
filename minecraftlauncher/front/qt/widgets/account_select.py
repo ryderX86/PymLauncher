@@ -10,7 +10,7 @@ from PySide6.QtCore import Signal
 from PySide6.QtGui import QKeyEvent
 from PySide6.QtWidgets import QComboBox, QAbstractItemView
 
-from minecraftlauncher.back import account_manager
+from minecraftlauncher.back.account_manager import account_man
 from minecraftlauncher.front.resources import symbol
 from minecraftlauncher.functions import error_box
 from minecraftlauncher.offline import offline_man
@@ -22,7 +22,7 @@ ADD_ACCOUNT_OFFLINE_ERR_TEXT = "Cannot add account while offline!"
 
 
 class AccountSelect(QComboBox):
-    account_changed = Signal(str)  # gamertag
+    account_changed = Signal(str)  # XUID
     add_account_requested = Signal()
 
     def __init__(self, parent=None):
@@ -45,7 +45,8 @@ class AccountSelect(QComboBox):
         self.blockSignals(True)
 
         self.clear()
-        accounts, active_xuid = account_manager.load_accounts()
+        accounts = account_man.list()
+        active_xuid = account_man.active.xuid if account_man.active else None
 
         active_idx = 0
         for i, acc in enumerate(accounts):
@@ -80,11 +81,15 @@ class AccountSelect(QComboBox):
     def keyPressEvent(self, e: QKeyEvent) -> None:
         return None
 
+    def setCurrentIndex(self, index: int):
+        ci = self.currentIndex()
+        if index != ci:
+            self._previous_index = ci
+        return super().setCurrentIndex(index)
+
     def _on_index_changed(self, index: int):
         if index < 0:
             return
-
-        self._previous_index = index
 
         text = self.itemText(index)
         if text == ADD_ACCOUNT_TEXT:
@@ -96,8 +101,9 @@ class AccountSelect(QComboBox):
 
         xuid = self.itemData(index)
         if xuid:
-            account_manager.set_active_account(xuid)
             self.account_changed.emit(xuid)
+        else:
+            log.warning("No XUID for selected account!")
 
     def next_account(self):
         add_idx = self.count() - 2

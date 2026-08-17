@@ -6,6 +6,7 @@ Game management utilities
 
 import logging
 import uuid
+import json
 import os
 
 from PySide6.QtCore import Qt, Signal, QTimer, QUrl
@@ -17,7 +18,7 @@ from minecraftlauncher.front.window.modloaders import (
     NeoForgeInstallWindow,
 )
 from minecraftlauncher.front.qt.widgets import Section
-from minecraftlauncher.back import account_manager
+from minecraftlauncher.back.account_manager import account_man
 from minecraftlauncher.offline import offline_man
 from minecraftlauncher.functions import beep
 from minecraftlauncher.paths import paths
@@ -98,15 +99,12 @@ class UtilitiesPage(QWidget):
     if constants.DEV:
         # TODO: just spawn a qdialog for it or something, save an SSD lol
         def _dump_accs(self):
-            accounts_list = account_manager.save_accounts(
-                return_unencrypted=True
-            )
+            accounts_list = json.dumps(account_man.dump(), indent=4)
             assert accounts_list
-            b = accounts_list.encode("utf-8")
             dump_path = os.path.join(paths.data, f"temp-{uuid.uuid4()}.json")
             log.debug("Writing to %s", dump_path)
-            with open(dump_path, "wb") as file:
-                file.write(b)
+            with open(dump_path, "w") as file:
+                file.write(accounts_list)
             log.debug("Opening with QDesktopServices")
             uri = QUrl.fromLocalFile(dump_path)
             QDesktopServices.openUrl(uri)

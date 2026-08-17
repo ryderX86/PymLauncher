@@ -7,8 +7,9 @@ import os
 import sys
 import logging
 
-from minecraftlauncher import constants, launchargs
-from minecraftlauncher.functions import is_path_valid, pathsafe_str
+from . import constants
+from .launchargs import launchargs
+from .functions import is_path_valid, pathsafe_str
 
 log = logging.getLogger(__name__)
 
@@ -78,6 +79,7 @@ class PathFinder:
     _data: str
     _uses_portable: bool
     _hostname: str | None
+    _accsuffix: str = "bin"
 
     def setup(self, game_dir: str | None = None, data_dir: str | None = None):
         default = get_user_data_dir()
@@ -116,6 +118,9 @@ class PathFinder:
         if not is_path_valid(self._data):
             raise ValueError(f"Invalid data directory: {self._data!r}")
         self.ready = True
+
+        if launchargs.unencrypted_accounts:
+            self._accsuffix = "json"
 
     @property
     def game(self):
@@ -180,8 +185,10 @@ class PathFinder:
     @property
     def accounts_file(self):
         if self._uses_portable:
-            return os.path.join(self._data, f"accounts-{self._hostname}.bin")
-        return os.path.join(self._data, "accounts.bin")
+            return os.path.join(
+                self._data, f"accounts-{self._hostname}.{self._accsuffix}"
+            )
+        return os.path.join(self._data, f"accounts.{self._accsuffix}")
 
     def generate_folder_structure(self):
         _check_create_dir(self.game)

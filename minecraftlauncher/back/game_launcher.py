@@ -417,7 +417,7 @@ class LaunchWorker(QThread):
             version_json = version_manager.fetch_version_json(self.version_id)
         except Exception as err:
             log.error("Failed to get version manifest:", exc_info=err)
-            self.finished.emit(
+            self.done.emit(
                 False, f"Failed to get version info ({type(err).__name__})"
             )
             return
@@ -429,7 +429,7 @@ class LaunchWorker(QThread):
                 self.version_id,
                 exc_info=err,
             )
-            self.finished.emit(
+            self.done.emit(
                 False,
                 f"Failed to resolve inheritence for version {self.version_id}",
             )
@@ -448,7 +448,7 @@ class LaunchWorker(QThread):
                 self.version_id,
                 exc_info=err,
             )
-            self.finished.emit(
+            self.done.emit(
                 False,
                 f"Failed downloading client JAR for {self.version_id} "
                 f"({type(err).__name__})",
@@ -457,7 +457,7 @@ class LaunchWorker(QThread):
 
         self.status.emit("Downloading assets...")
         try:
-            asset_manager.download_assets_threaded(
+            asset_manager.download_assets(
                 asset_manager.fetch_asset_index(version_json),
                 progress_callback=lambda c, t: self.progress.emit(
                     "Downloading assets", c, t, False
@@ -488,7 +488,7 @@ class LaunchWorker(QThread):
                 exc_info=err,
             )
             log.info("Aborting launch")
-            self.finished.emit(False, "Log4J config could not be set up")
+            self.done.emit(False, "Log4J config could not be set up")
             return
 
         self.status.emit("Downloading libraries...")
@@ -514,7 +514,7 @@ class LaunchWorker(QThread):
                 self.version_id,
                 exc_info=err,
             )
-            self.finished.emit(
+            self.done.emit(
                 False,
                 f"Failed downloading libraries for version {self.version_id} "
                 f"({type(err).__name__})",
@@ -528,7 +528,7 @@ class LaunchWorker(QThread):
                 self.version_id,
                 exc_info=err,
             )
-            self.finished.emit(
+            self.done.emit(
                 False,
                 f"Failed downloading natives for version {self.version_id} "
                 f"({type(err).__name__})",
@@ -543,7 +543,7 @@ class LaunchWorker(QThread):
                 self.version_id,
                 exc_info=err,
             )
-            self.finished.emit(
+            self.done.emit(
                 False,
                 f"Failed extracting natives for version {self.version_id} "
                 f"({type(err).__name__})",
@@ -572,7 +572,7 @@ class LaunchWorker(QThread):
                     "Aborting launch, and notifying user of invalid "
                     "JRE location."
                 )
-                self.finished.emit(
+                self.done.emit(
                     False,
                     "Failed to detect if Java install is valid: "
                     f'"{err.output}"',
@@ -590,7 +590,7 @@ class LaunchWorker(QThread):
                     jre_name,
                     exc_info=err,
                 )
-                self.finished.emit(
+                self.done.emit(
                     False,
                     "Couldn't get JRE info for version "
                     f"{self.version_id}/{jre_name}"
@@ -613,23 +613,20 @@ class LaunchWorker(QThread):
                         jre_name,
                         exc_info=err,
                     )
-                    self.finished.emit(
+                    self.done.emit(
                         False,
                         "Failed downloading FRE manifest for version "
                         f"{self.version_id}/{jre_name} ({type(err).__name__})",
                     )
                     return
             else:
-                self.log.warning(
-                    "Offline mode active, JRE executable may be broken!"
-                )
                 try:
                     java_exc = java_manager.find_java_exc(jre_name)
                 except RuntimeError as err:
                     self.log.error(
                         "Failed to find JRE installation!", exc_info=err
                     )
-                    self.finished.emit(False, str(err))
+                    self.done.emit(False, str(err))
                     return
 
         match OS:
@@ -642,7 +639,7 @@ class LaunchWorker(QThread):
                         "Notifying user and aborting",
                         java_exc,
                     )
-                    self.finished.emit(
+                    self.done.emit(
                         False,
                         f"Couldn't mark JRE executable at '{java_exc}' as "
                         "executable",
@@ -690,10 +687,10 @@ class LaunchWorker(QThread):
         sub_logger = logging.getLogger(os.path.split(cmd[0])[1])
         self._p = launch_game(cmd, cwd=self.profile_data.game_dir)
         if self._p.poll() is None:
-            self.finished.emit(True, "Minecraft launched successfully.")
+            self.done.emit(True, "Minecraft launched successfully.")
         else:
             self.log.warning("Game hasn't given a return code, did it launch?")
-            self.finished.emit(True, "Unknown status")
+            self.done.emit(True, "Unknown status")
 
         if DEV and config.post_launch_option < 1:
             game_log_func = sub_logger.debug

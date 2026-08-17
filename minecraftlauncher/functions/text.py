@@ -6,6 +6,7 @@ from string import digits, ascii_letters
 import platform
 import json
 import re
+import os
 
 
 def indent(text: str | dict | list, amount: int = 2):
@@ -44,7 +45,9 @@ match platform.system():
         FP_REGEX = _POSIX_PATH_REGEX
 
 
-def is_path_valid(fp: str):
+def is_path_valid(fp: str | os.PathLike):
+    if not isinstance(fp, str):
+        fp = str(fp)
     if platform.system() == "Windows":
         fp = fp.replace("/", "\\")
     m = re.match(FP_REGEX, fp)

@@ -10,7 +10,8 @@ from minecraftlauncher.datatypes.launch_profile import GameProfile
 from minecraftlauncher.functions import is_path_valid
 from minecraftlauncher.back import profile_manager
 from minecraftlauncher.paths import paths
-from minecraftlauncher import constants, launchargs
+from minecraftlauncher.launchargs import launchargs
+from minecraftlauncher import constants
 
 log = logging.getLogger(__name__)
 if launchargs.exporting_debug:

@@ -39,6 +39,12 @@ class ConfigHolder:
     copy_code_for_login: bool
     post_launch_option: PostLaunchBehavior
     redownload_option: JarRedownloadBehavior
+    """
+    Should we re-download assets/executables without a SHA1/SHA256 hash?
+
+    Can check with `if <ConfigHolder>.redownload_option`, since the only option
+    to not re-download items is an enum with a value of `0`.
+    """
     maximized: bool
     tooltip_icons_enabled: bool
     ignored_messages: set[int]

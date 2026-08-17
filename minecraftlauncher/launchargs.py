@@ -60,53 +60,60 @@ _parser.add_argument(
     type=str,
     dest="launch_profile",
 )
-
-# defaults
-work_dir: str | None = None
-game_dir: str | None = None
-resource_debug: bool = False
-exporting_debug = False
-debug_logging: bool = False
-launch_profile: str | None = None
-debug_splash_screen: bool = False
-
-ready: bool = False
+_parser.add_argument(
+    "--unencrypted-accounts",
+    action="store_true",
+    default=False,
+    dest="unencrypted_accounts",
+)
 
 
-def get_args():
-    global work_dir, resource_debug, exporting_debug, debug_logging
-    global launch_profile, debug_splash_screen, game_dir
-    _parsed_args = _parser.parse_args()
+class LaunchArgsContainer:
+    ready: bool = False
 
-    work_dir = _parsed_args.work_dir
-    game_dir = _parsed_args.game_dir
-    resource_debug = _parsed_args.resource_debug
-    exporting_debug = _parsed_args.exporting_debug
-    debug_logging = _parsed_args.debug_logging
-    launch_profile = _parsed_args.launch_profile
-    debug_splash_screen = _parsed_args.debug_splash_screen
-    # force_offline: bool = _parsed_args.force_offline
+    work_dir: str | None
+    game_dir: str | None
+    resource_debug: bool
+    exporting_debug: bool
+    debug_logging: bool
+    launch_profile: str | None
+    debug_splash_screen: bool
+    unencrypted_accounts: bool
 
-    if work_dir is not None:
-        work_dir = os.path.normpath(work_dir)
-        if not os.path.isdir(_parsed_args.work_dir):
-            try:
-                os.makedirs(_parsed_args.work_dir, exist_ok=True)
-            except OSError as err:
-                raise ArgumentError(
-                    _work_dir,
-                    f"Failed to create path at {_parsed_args.work_dir}",
-                ) from err
+    def __init__(self):
+        self.work_dir = None
+        self.game_dir = None
+        self.resource_debug = False
+        self.exporting_debug = False
+        self.debug_logging = False
+        self.launch_profile = None
+        self.debug_splash_screen = False
+        self.unencrypted_accounts = False
 
-    global ready
-    ready = True
+    def get_args(self):
+        args = _parser.parse_args()
 
-    return {
-        "work_dir": work_dir,
-        "game_dir": game_dir,
-        "resource_debug": resource_debug,
-        "exporting_debug": exporting_debug,
-        "debug_logging": debug_logging,
-        "launch_profile": launch_profile,
-        "debug_splash_screen": debug_splash_screen,
-    }
+        self.work_dir = args.work_dir
+        self.game_dir = args.game_dir
+        self.resource_debug = args.resource_debug
+        self.exporting_debug = args.exporting_debug
+        self.debug_logging = args.debug_logging
+        self.launch_profile = args.launch_profile
+        self.debug_splash_screen = args.debug_splash_screen
+        self.unencrypted_accounts = args.unencrypted_accounts
+
+        if self.work_dir is not None:
+            self.work_dir = os.path.normpath(self.work_dir)
+            if not os.path.isdir(args.work_dir):
+                try:
+                    os.makedirs(args.work_dir, exist_ok=True)
+                except OSError as err:
+                    raise ArgumentError(
+                        _work_dir,
+                        f"Failed to create path at {args.work_dir}",
+                    ) from err
+
+        self.ready = True
+
+
+launchargs = LaunchArgsContainer()

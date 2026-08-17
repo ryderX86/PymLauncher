@@ -10,7 +10,7 @@ import qrcode
 import qrcode.constants
 import qrcode.image.svg
 
-from minecraftlauncher import launchargs
+from minecraftlauncher.launchargs import launchargs
 from minecraftlauncher.front.styles import (
     uses_dark_mode,
     TEXT_PRIMARY,

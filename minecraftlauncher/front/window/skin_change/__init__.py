@@ -32,7 +32,7 @@ import requests
 
 from minecraftlauncher.front import resources
 from minecraftlauncher.auth import LauncherAccount, SkinModel
-from minecraftlauncher.back import account_manager
+from minecraftlauncher.back.account_manager import account_man
 from minecraftlauncher.functions.error_box import error_box
 from minecraftlauncher.constants import (
     SKIN_CHANGE_URL,
@@ -351,7 +351,7 @@ class SkinChange(QDialog):
 
         if self.account.profile:
             self.account.profile.refresh_profile_info()
-            account_manager.save_accounts()
+            account_man.save_accounts()
         if skin_success and cape_success:
             self.accept()
 

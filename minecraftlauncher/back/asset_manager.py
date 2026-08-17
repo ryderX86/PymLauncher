@@ -8,13 +8,13 @@ for a given Minecraft version.
 from datetime import timedelta
 from collections.abc import Callable
 from xml.etree import ElementTree
+from xml.parsers import expat
 import logging
 import hashlib
 import json
 import time
 import os
 
-import requests
 from PySide6.QtCore import QThreadPool
 
 from minecraftlauncher.constants import (
@@ -28,6 +28,11 @@ from minecraftlauncher.back.download_helpers import (
 )
 from minecraftlauncher import SESSION
 from minecraftlauncher.paths import paths
+from minecraftlauncher.offline import offline_man
+from minecraftlauncher.exceptions.back import (
+    Log4JConfigReadError,
+    AssetDownloadError,
+)
 
 log = logging.getLogger(__name__)
 
@@ -54,8 +59,15 @@ def fetch_asset_index(version_json: dict) -> dict:
             # using SHA1 to verify file
             with open(index_path, "rb") as fb:
                 file_sha = hashlib.sha1(fb.read()).hexdigest()
-            if file_sha == expected_sha1:
-                log.debug("Using cached asset index %r", index_id)
+            if file_sha == expected_sha1 or offline_man.offline:
+                if file_sha == expected_sha1:
+                    log.debug("Using cached asset index %r", index_id)
+                else:  # offline mode warning
+                    log.warning(
+                        "SHA-1 mismatch for %r, cannot re-download it due to "
+                        "being offline. Ignoring...",
+                        index_path,
+                    )
                 with open(index_path, "r") as f:
                     try:
                         return json.loads(f.read())
@@ -65,6 +77,12 @@ def fetch_asset_index(version_json: dict) -> dict:
                             index_path,
                             exc_info=err,
                         )
+                        if offline_man.offline:
+                            raise
+            else:
+                log.warning(
+                    "SHA-1 mismatch for %r, re-downloading it.", index_path
+                )
         else:
             log.warning(
                 "Asset index %r has no SHA1! Using timestamp instead", index_id
@@ -96,37 +114,35 @@ def fetch_asset_index(version_json: dict) -> dict:
     return resp.json()
 
 
-def patch_logging_config(path: str | os.PathLike):
-    if not isinstance(path, str):
-        path = str(path)
+def patch_logging_config(filepath: str | os.PathLike):
+    if not isinstance(filepath, str):
+        filepath = str(filepath)
     # raw string isn't particularly necessary here probably
     PATTERN = r"[%d{HH:mm:ss}] [%t/%level]: %msg{nolookups}%n"
-    with open(path, "r") as f:
+    with open(filepath, "r") as f:
         txt = f.read()
-    xml = ElementTree.fromstring(txt)
-    patched = False
-    # find all tags that will output XML in any form (mojang only uses it for
-    # console anyways and there's no guarantee the format will stay the same)
-    elements = [*xml.iter("XMLLayout"), *xml.iter("LegacyXMLLayout")]
-    for c in elements:
+    try:
+        xml = ElementTree.fromstring(txt)
+    except expat.error as err:
+        log.error("Failed to parse XML from %r:", filepath, exc_info=err)
+        raise Log4JConfigReadError(filepath, err.lineno, err.offset) from err
+    # find all tags that will output XML in any form
+    layout_elements = [*xml.iter("XMLLayout"), *xml.iter("LegacyXMLLayout")]
+    if not layout_elements:
+        log.debug("No XMLLayout elements in logging config, skipping patch")
+        return filepath
+    for c in layout_elements:
         c.clear()
 
         # <PatternLayout pattern="..." />
         c.tag = "PatternLayout"
         c.set("pattern", PATTERN)
-        patched = True
-        # no break, there should only be one but if there's more there may be
-        # some weird stuff going on anyways, so keep going
-    if patched:
-        log.debug("Patched %r with non-XML config", os.path.split(path)[1])
-        stem, suffix = os.path.splitext(path)
-        new_path = f"{stem}_patched{suffix}"
-        with open(new_path, "wb") as fb:
-            fb.write(ElementTree.tostring(xml))
-        return new_path
-    else:
-        log.warning("Couldn't patch logging config %r", os.path.split(path)[1])
-    return path
+    log.debug("Patched %r with non-XML config", os.path.split(filepath)[1])
+    stem, suffix = os.path.splitext(filepath)
+    new_path = f"{stem}_patched{suffix}"
+    with open(new_path, "wb") as fb:
+        fb.write(ElementTree.tostring(xml))
+    return new_path
 
 
 def check_or_download_logging_config(version_json: dict) -> str | None:
@@ -150,18 +166,13 @@ def check_or_download_logging_config(version_json: dict) -> str | None:
     file_info: dict = logging_info["file"]
 
     # check essential keys
-    if "id" not in file_info:
-        log.warning("ID missing from log config! Considering it invalid.")
+    # TODO: check function uses to see if we need to raise AssetDownloadError
+    id_: str = file_info.get("id", "")
+    sha1: str = file_info.get("sha1", "")
+    url: str = file_info.get("url", "")
+    if not all((id_, sha1, url)):
+        log.warning("Invalid logging config details")
         return None
-    elif "sha1" not in file_info:
-        log.warning("SHA1 missing from log config! Considering it invalid.")
-        return None
-    elif "url" not in file_info:
-        log.warning("URL not in logging config! Considering it invalid.")
-        return None
-    id_: str = file_info["id"]
-    sha1: str = file_info["sha1"]
-    url: str = file_info["url"]
 
     dest_folder = os.path.join(paths.assets, "log_configs")
     if not os.path.isdir(dest_folder):
@@ -180,10 +191,13 @@ def check_or_download_logging_config(version_json: dict) -> str | None:
             )
             os.unlink(dest_path)
             if os.path.isfile(dest_path_patched):
-                log.info("Also unlinking patch file for logging config %r", id_)
+                log.debug(
+                    "Also unlinking patch file for logging config %r", id_
+                )
                 os.unlink(dest_path_patched)
-    if not os.path.isfile(dest_path):
+    else:
         log.info("Downloading logging config %r", id_)
+    if not os.path.isfile(dest_path):
         try:
             resp = download(url, sha=sha1)
             with open(dest_path, "wb") as fb:
@@ -192,10 +206,9 @@ def check_or_download_logging_config(version_json: dict) -> str | None:
             log.error(
                 "Failed to download logging config from %r:", url, exc_info=err
             )
-            raise
+            raise AssetDownloadError(url) from err
 
     if not os.path.isfile(dest_path_patched):
-        log.info("Patching logging config %r to not use (Legacy)XMLLayout", id_)
         final_logging_path = patch_logging_config(dest_path)
         return arg.replace("${path}", final_logging_path)
     else:
@@ -203,65 +216,10 @@ def check_or_download_logging_config(version_json: dict) -> str | None:
 
 
 def download_assets(
-    asset_index: dict, *, progress_callback: Callable | None = None
-):
-    objects: dict = asset_index.get("objects", {})
-    total = len(objects.keys())
-
-    downloaded_count = 0
-    processed = 0
-
-    for virtual_path, info in objects.items():
-        file_hash: str = info["hash"]
-        prefix = file_hash[:2]
-
-        dest_dir = os.path.join(paths.assets_objects, prefix)
-        if not os.path.isdir(dest_dir):
-            os.makedirs(dest_dir, exist_ok=True)
-        dest_path = os.path.join(dest_dir, file_hash)
-
-        if os.path.isfile(dest_path):
-            with open(dest_path, "rb") as fb:
-                existing_hash = hashlib.sha1(fb.read()).hexdigest()
-            if existing_hash == file_hash:
-                processed += 1
-                if progress_callback:
-                    progress_callback(processed, total)
-                continue
-            else:
-                log.debug(
-                    "Overriding asset '%s' (SHA1 didn't match)", file_hash
-                )
-
-        url = f"{RESOURCES_URL}/{prefix}/{file_hash}"
-        try:
-            resp = download(url, sha=file_hash)
-        except requests.RequestException as err:
-            log.warning(
-                "Failed to download asset %s:", virtual_path, exc_info=err
-            )
-            processed += 1
-            if progress_callback:
-                progress_callback(processed, total)
-            continue
-
-        with open(dest_path, "wb") as fb:
-            fb.write(resp.content)
-        log.debug("Downloaded '%s' successfully.", virtual_path)
-        processed += 1
-        downloaded_count += 1
-        if progress_callback:
-            progress_callback(processed, total)
-        continue
-
-    log.debug(
-        "Asset download complete: %d new / %d total", downloaded_count, total
-    )
-    return downloaded_count
-
-
-def download_assets_threaded(
-    asset_index: dict, *, progress_callback: Callable | None = None
+    asset_index: dict,
+    *,
+    progress_callback: Callable | None = None,
+    threaded: bool = True,
 ):
     # check pool before anything
     pool = QThreadPool.globalInstance()
@@ -269,7 +227,7 @@ def download_assets_threaded(
         log.warning(
             "Couldn't get thread pool, downloading single-threaded instead."
         )
-        return download_assets(asset_index, progress_callback=progress_callback)
+        threaded = False
 
     objects: dict = asset_index.get("objects", {})
     total = len(objects.keys())
@@ -298,19 +256,16 @@ def download_assets_threaded(
         dest_dir = os.path.join(paths.assets_objects, prefix)
         dest_path = os.path.join(dest_dir, file_hash)
         downloader = RunnableDownloader(
-            f"{RESOURCES_URL}/{prefix}/{file_hash}",
-            dest_path,
-            file_hash,
+            url=f"{RESOURCES_URL}/{prefix}/{file_hash}",
+            path=dest_path,
+            vpath=(
+                os.path.join(paths.assets_virtual, virtual_path)
+                if map_virtual_assets
+                else None
+            ),
+            sha1=file_hash,
             callback=add_number,
         )
-        if map_virtual_assets:
-            v_downloader = RunnableDownloader(
-                f"{RESOURCES_URL}/{prefix}/{file_hash}",
-                os.path.join(paths.assets_virtual, virtual_path),
-                file_hash,
-                callback=add_number,
-            )
-            download_list.append(v_downloader)
         download_list.append(downloader)
     if not download_list:
         return 0
@@ -324,14 +279,20 @@ def download_assets_threaded(
     #     final_dl_list = BulkDownloadWorker.auto_split(download_list)
     if progress_callback:
         progress_callback(0, total)
-    pool.setMaxThreadCount(CPU_THREADS)
-    for worker in download_list:
-        pool.start(worker)
-    timedout = not pool.waitForDone(900000)  # 15 min
-    if timedout:
-        raise RuntimeError("Downloads timed out completely")
-    elif any(not a.success for a in download_list):
-        raise BulkDownloadError.from_runnable_list(download_list)
+
+    # start downloads
+    if threaded:
+        pool.setMaxThreadCount(CPU_THREADS)
+        for worker in download_list:
+            pool.start(worker)
+        timedout = not pool.waitForDone(900000)  # 15 min
+        if timedout:
+            raise AssetDownloadError("Downloads timed out completely")
+        elif any(not a.success for a in download_list):
+            raise BulkDownloadError.from_runnable_list(download_list)
+    else:
+        for worker in download_list:
+            worker.run()
     log.debug("Asset downloads complete")
     return len(download_list)
 

@@ -378,7 +378,6 @@ def install_java_version_threaded(
                 url,
                 path,
                 sha1,
-                mkdir=True,
                 use_lzma=use_lzma,
                 callback=file_downloaded,
             )
