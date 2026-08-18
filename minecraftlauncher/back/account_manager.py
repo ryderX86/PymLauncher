@@ -1,7 +1,9 @@
-from collections.abc import Buffer, Callable
+from collections.abc import Callable
 from types import MappingProxyType
 from typing import Any
 import logging
+import socket
+import base64
 import json
 import time
 import os
@@ -29,6 +31,7 @@ class AccountManager:
     _active_account: LauncherAccount | None
     _loaded: bool
     _active_callbacks: list[Callable[[LauncherAccount], None]] = []
+    _loadtime_account_times: dict[str, dict] = {}
 
     def __new__(cls):
         if cls._instance:
@@ -86,8 +89,8 @@ class AccountManager:
             return
 
         try:
-            with open(paths.accounts_file, "rb") as file:
-                file_bytes = file.read()
+            with open(paths.accounts_file, "r") as file:
+                file_text = file.read()
         except PermissionError:
             log.debug(
                 "PermissionError occured whilst attempting to read accounts.bin"
@@ -96,28 +99,41 @@ class AccountManager:
             log.debug("user directory: %r", os.path.expanduser("~"))
             raise
 
-        if len(file_bytes) == 0:
+        if len(file_text) == 0:
             log.warning(
                 "Blank accounts.bin file detected, aborting load process"
             )
             return
-        if file_bytes.startswith(b"{"):
-            encrypted = False
-        else:
-            encrypted = True
-
-        if encrypted:
-            try:
-                text = data_load_hook(file_bytes)
-            except (RuntimeError, UnicodeError) as err:
-                raise EncryptedDataDecodeError(*err.args) from err
-        else:
-            text = file_bytes.decode("utf-8")
 
         # if a JSONDecodeError exists there's not really a point to catching it
         # here, since we handle this in the callers for load_accounts() so that
         # we can notify the user within the GUI instead.
-        accounts_bin: dict = json.loads(text)
+        accounts_bin: dict = json.loads(file_text)
+        if accounts_bin["encrypted"]:
+            hostname = socket.gethostname()
+            if accounts_bin["computer"] != hostname:
+                log.warning(
+                    "Computer name doesn't match accounts.bin name! "
+                    "(expected %r, got %r)",
+                    accounts_bin["computer"],
+                    hostname,
+                )
+            for account in accounts_bin["accounts"]:
+                try:
+                    account["msa_token"]["access_token"] = data_load_hook(
+                        base64.b85decode(account["msa_token"]["access_token"])
+                    )
+                    account["msa_token"]["refresh_token"] = data_load_hook(
+                        base64.b85decode(account["msa_token"]["refresh_token"])
+                    )
+                    if "mc_token" in account:
+                        account["mc_token"] = json.loads(
+                            data_load_hook(
+                                base64.b85decode(account["mc_token"])
+                            )
+                        )
+                except (RuntimeError, UnicodeError) as err:
+                    raise EncryptedDataDecodeError(*err.args) from err
         raw_accounts: list[dict] = accounts_bin.get("accounts", [])
         last_used_xuid: str | None = accounts_bin.get("active")
 
@@ -141,11 +157,20 @@ class AccountManager:
     def save_accounts(self):
         store = self.dump()
 
-        payload: Buffer
         if encryption.ENABLED and not launchargs.unencrypted_accounts:
-            payload = data_save_hook(store)
-        else:
-            payload = json.dumps(store).encode("utf-8")
+            for account in store["accounts"]:
+                account["msa_token"]["access_token"] = base64.b85encode(
+                    data_save_hook(account["msa_token"]["access_token"])
+                ).decode("utf-8")
+                account["msa_token"]["refresh_token"] = base64.b85encode(
+                    data_save_hook(account["msa_token"]["access_token"])
+                ).decode("utf-8")
+                if "mc_token" in account:
+                    account["mc_token"] = base64.b85encode(
+                        data_save_hook(account["mc_token"])
+                    ).decode("utf-8")
+
+        payload = json.dumps(store)
 
         reswrite(paths.accounts_file, payload)
         log.debug(
@@ -324,9 +349,11 @@ class AccountManager:
 
     def dump(self):
         return {
+            "computer": socket.gethostname(),
+            "encrypted": encryption.ENABLED
+            and not launchargs.unencrypted_accounts,
             "active": (self.active.xuid if self.active else None),
             "accounts": [account.serialize() for account in self.list()],
-            "last_saved": time.time(),
         }
 
     def reset_accounts_file(self):
