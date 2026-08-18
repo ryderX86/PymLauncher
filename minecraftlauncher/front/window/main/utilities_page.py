@@ -4,9 +4,12 @@ minecraftlauncher.front.window.main.utilities_page
 Game management utilities
 """
 
+from textwrap import dedent
+import platform
 import logging
 import uuid
 import json
+import sys
 import os
 
 from PySide6.QtCore import Qt, Signal, QTimer, QUrl
@@ -19,6 +22,7 @@ from minecraftlauncher.front.window.modloaders import (
 )
 from minecraftlauncher.front.qt.widgets import Section
 from minecraftlauncher.back.account_manager import account_man
+from minecraftlauncher.front.window import TextPopup
 from minecraftlauncher.offline import offline_man
 from minecraftlauncher.functions import beep
 from minecraftlauncher.paths import paths
@@ -76,6 +80,10 @@ class UtilitiesPage(QWidget):
             test_beep.clicked.connect(beep)
             debug_section.addWidget(test_beep)
 
+            misc_info = QPushButton("Debug Info")
+            misc_info.clicked.connect(self.system_info)
+            debug_section.addWidget(misc_info)
+
             layout.addWidget(debug_section)
 
         # nf_row = HRow(self)
@@ -118,3 +126,26 @@ class UtilitiesPage(QWidget):
 
     def offline_mode_hook(self, offline: bool):
         self.f_win_button.setDisabled(offline)
+
+    def system_info(self):
+        os_info = platform.uname()
+        text = dedent(f"""
+        System info:
+            CPU type: {os_info.machine}
+            CPU thread count: {os.cpu_count()}
+            Usable CPU threads: {os.process_cpu_count()}
+            OS: {os_info.system} {os_info.version}
+            Computer name: {os_info.node}
+        Process info:
+            PID: {os.getpid()}
+            CWD: {os.getcwd()}
+            Executable: {sys.executable}
+            Python flags: {", ".join(str(a) for a in sys.flags)}
+        Launcher info:
+            Offline: {"Yes" if offline_man.offline else "No"}
+            .minecraft directory: {paths.game}
+            Launcher data directory: {paths.data}
+            Accounts cache filename: {paths.accounts_file}
+        """).strip()
+
+        TextPopup(text, "Debug Info", "Debug Info", parent=self)

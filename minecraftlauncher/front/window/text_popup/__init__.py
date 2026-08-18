@@ -15,9 +15,10 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QHBoxLayout,
     QFrame,
+    QApplication,
 )
 
-from minecraftlauncher.functions import copy_to_clipboard, clipboard_present
+from minecraftlauncher.functions import copy_to_clipboard
 from minecraftlauncher.front.styles import get_fonts
 
 log = logging.getLogger(__name__)
@@ -97,7 +98,7 @@ class TextPopup(QDialog):
             clipboard_button.setStyleSheet(
                 clipboard_button.styleSheet() + " font: italic;"
             )
-        elif not clipboard_present:
+        elif not QApplication.clipboard():
             log.warning("No clipboard found")
             clipboard_button.setDisabled(True)
         buttons_layout.addWidget(clipboard_button)

@@ -247,91 +247,18 @@ def parse_lib_path(url: str, name: str) -> tuple[str, str]:
     )
 
 
-def download_libraries(
+def get_libraries_download_list(
     libraries: list[dict],
     *,
     progress_callback: Callable[[int, int], None] | None = None,
 ):
     total = len(libraries)
-    downloaded = 0
-    processed_libs: list[str] = []
-
-    for idx, lib in enumerate(libraries, 1):
-        downloads: dict = lib.get("downloads", {})
-        artifact: dict = downloads.get("artifact", {})
-
-        if artifact:
-            path: str = artifact.get("path", "")
-            url = artifact.get("url", "")
-            sha1 = artifact.get("sha1", "")
-            size = artifact.get("size", 0)
-        else:
-            name: str | None = lib.get("name")
-            url: str | None = lib.get("url")
-            if (not name) or (not url):
-                log.warning("No artifact, name, or URL in library, skipping.")
-                if progress_callback:
-                    progress_callback(idx, total)
-                continue
-            sha1: str | None = lib.get("sha1")
-            size: int = lib.get("size", 0)
-            url, path = parse_lib_path(url, name)
-
-        if sha1 and sha1 in processed_libs:
-            log.warning(
-                "Duplicate libary %s; continuing.",
-                lib.get("name", "<unidentified>"),
-            )
-            continue
-
-        if (not url) and (not path):
-            log.warning(
-                "Manually retrieving URL and path for %s",
-                lib.get("name", "<unidentified>"),
-            )
-            path_, url_, sha1_ = _get_lib_filepath(lib)
-            if (not path_) or (not url_) or (not sha1_):
-                pass
-            else:
-                path = path_
-                url = url_
-                sha1 = sha1_
-            del path_, url_, sha1_
-
-        if url and path:
-            destination = os.path.join(paths.libraries, *path.split("/"))
-            if _download_file(url, destination, sha1, size):
-                downloaded += 1
-                log.info(
-                    "Downloaded library %s to '%s'",
-                    lib.get("name", "<unidentified>"),
-                    str(destination),
-                )
-
-        if progress_callback:
-            progress_callback(idx, total)
-
-        if sha1:
-            processed_libs.append(sha1)
-
-    log.debug(
-        "Finished downloading libraries: %d new / %d total", downloaded, total
-    )
-    return downloaded
-
-
-def download_libraries_threaded(
-    libraries: list[dict],
-    *,
-    progress_callback: Callable[[int, int], None] | None = None,
-):
-    total = len(libraries)
-    downloaded = 0
     download_list: list[RunnableDownloader] = []
 
     if progress_callback:
+        downloaded = 0
 
-        def passed_callback(i: int):
+        def callback(i: int):
             nonlocal downloaded, total
             downloaded += i
             progress_callback(downloaded, total)
@@ -339,15 +266,8 @@ def download_libraries_threaded(
         progress_callback(0, total)
     else:
 
-        def passed_callback(i: int):
+        def callback(i: int):
             pass
-
-    pool = QThreadPool.globalInstance()
-    if not pool:
-        log.warning("Couldn't get QThreadPool, downloading single-threaded")
-        return download_libraries(
-            libraries, progress_callback=progress_callback
-        )
 
     for idx, lib in enumerate(libraries, 1):
         downloads: dict = lib.get("downloads", {})
@@ -405,23 +325,54 @@ def download_libraries_threaded(
                 RunnableDownloader(
                     url=url,
                     path=destination,
-                    sha1=sha1 or None,
+                    sha1=sha1,
                     check_hash=bool(sha1),
-                    callback=passed_callback,
+                    callback=callback,
                 )
             )
 
-    pool.setMaxThreadCount(CPU_THREADS)
-    for dl in download_list:
-        pool.start(dl)
-    pool.waitForDone()
-    if any(not a.success for a in download_list):
-        raise BulkDownloadError.from_runnable_list(download_list)
+    return download_list
 
-    log.info(
-        "Finished downloading libraries: %d new / %d total", downloaded, total
+
+def download_libraries(
+    libraries: list[dict],
+    *,
+    progress_callback: Callable[[int, int], None] | None = None,
+    threaded: bool = True,
+):
+    pool = QThreadPool.globalInstance()
+    if not pool:
+        log.warning("Couldn't get QThreadPool, downloading single-threaded")
+        threaded = False
+
+    dl_list = get_libraries_download_list(
+        libraries, progress_callback=progress_callback
     )
-    return downloaded
+
+    if threaded:
+        pool.setMaxThreadCount(CPU_THREADS)
+        for dl in dl_list:
+            pool.start(dl)
+        pool.waitForDone(900000)
+        if any(not a.success for a in dl_list):
+            raise BulkDownloadError.from_runnable_list(dl_list)
+    else:
+        log.debug("Running library download unthreaded")
+        for dl in dl_list:
+            dl.run()
+            if not dl.success:
+                log.warning("Worker failed, breaking early.")
+                break
+        if any(not a.success for a in dl_list):
+            raise BulkDownloadError.from_runnable_list(dl_list)
+
+    downloaded_count = len({a.downloaded_file for a in dl_list})
+    log.info(
+        "Finished downloading libraries: %d new / %d total",
+        downloaded_count,
+        len(dl_list),
+    )
+    return downloaded_count
 
 
 def _get_natives_classifier(lib: dict) -> str | None:

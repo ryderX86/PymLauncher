@@ -215,41 +215,31 @@ def check_or_download_logging_config(version_json: dict) -> str | None:
         return arg.replace("${path}", dest_path_patched)
 
 
-def download_assets(
+def get_assets_download_list(
     asset_index: dict,
-    *,
     progress_callback: Callable | None = None,
-    threaded: bool = True,
-):
-    # check pool before anything
-    pool = QThreadPool.globalInstance()
-    if not pool:
-        log.warning(
-            "Couldn't get thread pool, downloading single-threaded instead."
-        )
-        threaded = False
-
+) -> list[RunnableDownloader]:
     objects: dict = asset_index.get("objects", {})
-    total = len(objects.keys())
+    dl_count = len(objects.keys())
+    dl_list: list[RunnableDownloader] = []
 
+    # def the callback function
     if progress_callback:
+        processed = 0
 
         def add_number(i: int):
-            nonlocal processed, download_list, total
+            nonlocal processed, dl_list, dl_count
             processed += i
-            progress_callback(processed, total)
+            progress_callback(processed, dl_count)
+
+        progress_callback(0, dl_count)
 
     else:
 
         def add_number(i: int):
             pass
 
-    download_list: list[RunnableDownloader] = []
-    processed = 0
-
     map_virtual_assets: bool = asset_index.get("map_to_resources", False)
-    if map_virtual_assets:
-        total *= 2
     for virtual_path, info in objects.items():
         file_hash = info["hash"]
         prefix = file_hash[:2]
@@ -266,9 +256,7 @@ def download_assets(
             sha1=file_hash,
             callback=add_number,
         )
-        download_list.append(downloader)
-    if not download_list:
-        return 0
+        dl_list.append(downloader)
     # if progress_callback:
     #     final_dl_list = BulkDownloadWorker.auto_split(
     #         download_list,
@@ -277,24 +265,43 @@ def download_assets(
     #     )
     # else:
     #     final_dl_list = BulkDownloadWorker.auto_split(download_list)
-    if progress_callback:
-        progress_callback(0, total)
+
+    return dl_list
+
+
+def download_assets(
+    asset_index: dict,
+    *,
+    progress_callback: Callable | None = None,
+    threaded: bool = True,
+) -> int:
+    # check pool before anything
+    pool = QThreadPool.globalInstance()
+    if not pool:
+        log.warning(
+            "Couldn't get thread pool, downloading single-threaded instead."
+        )
+        threaded = False
+    dl_list = get_assets_download_list(asset_index, progress_callback)
+    if not dl_list:
+        return 0
+    dl_count = len(dl_list)
 
     # start downloads
     if threaded:
         pool.setMaxThreadCount(CPU_THREADS)
-        for worker in download_list:
+        for worker in dl_list:
             pool.start(worker)
         timedout = not pool.waitForDone(900000)  # 15 min
         if timedout:
             raise AssetDownloadError("Downloads timed out completely")
-        elif any(not a.success for a in download_list):
-            raise BulkDownloadError.from_runnable_list(download_list)
+        elif any(not a.success for a in dl_list):
+            raise BulkDownloadError.from_runnable_list(dl_list)
     else:
-        for worker in download_list:
+        for worker in dl_list:
             worker.run()
     log.debug("Asset downloads complete")
-    return len(download_list)
+    return dl_count
 
 
 def is_virtual_asset(asset_index: dict):

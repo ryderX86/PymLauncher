@@ -22,18 +22,11 @@ from minecraftlauncher.constants import (
 )
 from minecraftlauncher.functions import is_path_valid
 from minecraftlauncher.datatypes import GameProfile
-from minecraftlauncher.back.library_manager import evaluate_rules
 from minecraftlauncher.auth import LauncherAccount
 from minecraftlauncher.config import config, JarRedownloadBehavior
 from minecraftlauncher.paths import paths
-from .library_manager import build_classpath, filter_libraries
-from .java_manager import find_java_exc
-from . import (
-    version_manager,
-    asset_manager,
-    library_manager,
-    java_manager,
-)
+from minecraftlauncher.back import library_manager, java_manager
+from .install_worker import InstallWorker
 
 log = logging.getLogger(__name__)
 
@@ -69,7 +62,7 @@ def _process_jvm_arg_entry(entry, values: dict[str, str]) -> list[str]:
         return [_substitute(entry, values)]
     elif isinstance(entry, dict):
         rules = entry.get("rules", [])
-        if not evaluate_rules(rules):
+        if not library_manager.evaluate_rules(rules):
             return []
         value = entry.get("value", [])
         if isinstance(value, str):
@@ -197,23 +190,11 @@ def _build_legacy_args(
 
 def build_launch_command(
     version_json: dict,
-    player_name: str,
-    player_uuid: str,
-    player_auth_token: str,
-    player_type: str,
-    demo: bool,
-    xuid: str | None = None,
-    java_path: str | None = None,
-    log4j_config: str | None = None,
-    classpath: str | None = None,
-    game_dir: str | None = None,
-    prof_jvm_args: str | None = None,
-    memory_min: str | None = None,
-    memory_max: str | None = None,
-    resolution_width: int | None = None,
-    resolution_height: int | None = None,
-    mods_folder: str | None = None,
-    mods_folder_mode: str | None = None,
+    account: LauncherAccount,
+    java_path: str,
+    log4j_config: str | None,
+    classpath: str,
+    profile: GameProfile,
     **kwargs,
 ):
     """
@@ -223,70 +204,93 @@ def build_launch_command(
     """
     version_id: str = version_json.get("id", "")
     if not version_id:
-        raise ValueError("'version_json' missing expected value for 'id'")
+        raise ValueError("Version info missing expected value for 'id'")
 
     if not java_path:
         java_info = version_json.get("javaVersion", {})
         needed_java_version = java_info.get("component", "")
-        java_path = str(find_java_exc(needed_java_version))
+        java_path = str(java_manager.find_java_exc(needed_java_version))
 
     jar_path = os.path.join(
         paths.game, "versions", version_id, f"{version_id}.jar"
     )
 
-    asset_index_id = version_json.get("assetIndex", {}).get("id")
+    asset_index_id: str | None = version_json.get("assetIndex", {}).get("id")
     if not asset_index_id:
         asset_index_id = version_json.get("assets")
     if not asset_index_id:
         raise ValueError(
-            "'version_json' missing expected value for 'assets'"
+            "Version info missing expected value for 'assets'"
             " or 'assetsIndex'"
         )
 
-    if game_dir:
-        if not os.path.isdir(game_dir):
-            if not is_path_valid(game_dir):
+    if profile.game_dir:
+        if not os.path.isdir(profile.game_dir):
+            if not is_path_valid(profile.game_dir):
                 raise ValueError(
-                    f"'game_dir' value '{game_dir}' is an invalid path"
+                    f"Invalid game directory: {profile.game_dir!r}"
                 )
             try:
-                os.makedirs(game_dir, exist_ok=True)
+                os.makedirs(profile.game_dir, exist_ok=True)
+            except PermissionError as err:
+                raise RuntimeError(
+                    f"Couldn't create directory at {profile.game_dir!r} "
+                    "due to lack of permissions "
+                    f"(code: {err.strerror or err.errno})"
+                ) from err
             except Exception as err:
                 raise ValueError(
-                    f"Couldn't create directory at {game_dir!r}, "
-                    "do we have permissions?"
+                    f"Couldn't create directory at {profile.game_dir!r} "
+                    f"(original exception: {type(err).__name__})"
                 ) from err
+        game_dir = profile.game_dir
     else:
         game_dir = paths.game
 
-    natives_dir = os.path.join(paths.game, "bin", version_id)
+    natives_dir: str = kwargs.get("natives_dir") or os.path.join(
+        paths.game, "bin", version_id
+    )
     if not os.path.isdir(natives_dir):
         os.makedirs(natives_dir, exist_ok=True)
 
     if not classpath:
-        lib_list = filter_libraries(version_json)
-        classpath = build_classpath(lib_list, jar_path)
+        lib_list = library_manager.filter_libraries(version_json)
+        classpath = library_manager.build_classpath(lib_list, jar_path)
 
-    if resolution_height and not resolution_width:
-        resolution_width = 1024
-    if resolution_width and not resolution_height:
-        resolution_height = 768
+    if profile.resolution_height or profile.resolution_width:
+        resolution_width = profile.resolution_width or 1024
+        resolution_height = profile.resolution_height or 768
+    else:
+        resolution_width = None
+        resolution_height = None
+
+    if not account.token or not account.token_valid:
+        raise ValueError(
+            f"Account provided (gt {account.gamertag}) either "
+            "has no token or an invalid token"
+        )
+    elif not account.profile:
+        raise ValueError(
+            f"Account provided (gt {account.gamertag}) has no profile"
+        )
+
+    session = f"token:{account.token.access_token}:{account.token.username}"
 
     values = {
-        "auth_player_name": player_name,
-        "auth_uuid": player_uuid,
+        "auth_player_name": account.profile.name,
+        "auth_uuid": account.token.username,
         "version_name": version_id,
         "version_type": version_json.get("type", "unknown"),
-        "auth_access_token": player_auth_token,
-        "auth_session": f"token:{player_auth_token}:{player_uuid}",
+        "auth_access_token": account.token.access_token,
+        "auth_session": session,
         "user_properties": "{}",
-        "user_type": "msa",
+        "user_type": account.player_type,
         "assets_index_name": asset_index_id,
         "game_assets": os.path.join(paths.game, "assets", "virtual", "legacy"),
         "assets_root": os.path.join(paths.game, "assets"),
         "game_directory": game_dir,
         "clientid": "0",
-        "auth_xuid": xuid,
+        "auth_xuid": account.xuid,
         "resolution_width": resolution_width,
         "resolution_height": resolution_height,
         "natives_directory": natives_dir,
@@ -301,7 +305,7 @@ def build_launch_command(
     features: list[str] = []
     if resolution_height or resolution_width:
         features.append("has_custom_resolution")
-    if demo:
+    if account.demo_mode:
         features.append("is_demo_user")
 
     if "arguments" in version_json.keys():
@@ -309,13 +313,12 @@ def build_launch_command(
     else:
         jvm_args, game_args = _build_legacy_args(version_json, values, features)
 
-    if mods_folder:
-        mods_folder = mods_folder.strip()
+    if profile.mods_folder:
+        mods_folder = profile.mods_folder.strip()
         if " " in mods_folder:
             if mods_folder[0] != '"' or mods_folder[-1] != '"':
                 mods_folder = f'"{mods_folder}"'
-        if not mods_folder_mode:
-            mods_folder_mode = "modsFolder"
+        mods_folder_mode = profile.mods_folder_mode or "modsFolder"
         jvm_args.insert(-2, f"-Dfabric.{mods_folder_mode}={mods_folder}")
 
     cmd: list[str] = [java_path]
@@ -328,9 +331,9 @@ def build_launch_command(
         cmd.append(log4j_config)
 
     main_class = version_json.get("mainClass", "net.minecraft.client.main.Main")
-    cmd.extend([f"-Xms{memory_min}", f"-Xmx{memory_max}"])
-    if prof_jvm_args:
-        cmd.extend(prof_jvm_args.split(" "))
+    cmd.extend([f"-Xms{profile.memory_min}", f"-Xmx{profile.memory_max}"])
+    if profile.jvm_args:
+        cmd.extend(profile.jvm_args.split(" "))
     cmd.append(main_class)
     cmd.extend(game_args)
 
@@ -388,304 +391,59 @@ class LaunchWorker(QThread):
 
     log = log.getChild("LaunchWorker")
 
+    # instance attributes
+    installer: InstallWorker
+
     def __init__(
         self,
-        version_id: str,
-        profile_data: GameProfile,
-        auth_info: LauncherAccount,
-        emit_logs: bool = True,
+        installer: InstallWorker,
         log_hook: Callable[[str], None] | None = None,
         parent=None,
     ):
         super().__init__(parent)
-        self.version_id = version_id
-        self.profile_data = profile_data
-        self.auth_info = auth_info
         self._hook = log_hook
-        self.emit_logs = emit_logs
         self._p: subprocess.Popen
+        self.installer = installer
 
     def run(self):
-        match self.version_id:
-            case "latest-release":
-                self.version_id = version_manager.get_latest_release()
-            case "latest-snapshot":
-                self.version_id = version_manager.get_latest_snapshot()
-
-        self.status.emit("Fetching version info...")
-        try:
-            version_json = version_manager.fetch_version_json(self.version_id)
-        except Exception as err:
-            log.error("Failed to get version manifest:", exc_info=err)
-            self.done.emit(
-                False, f"Failed to get version info ({type(err).__name__})"
-            )
-            return
-        try:
-            version_json = version_manager.resolve_inheritence(version_json)
-        except Exception as err:
-            log.error(
-                "Inheritence parsing failed for %s:",
-                self.version_id,
-                exc_info=err,
-            )
-            self.done.emit(
-                False,
-                f"Failed to resolve inheritence for version {self.version_id}",
-            )
-            return
-        self.status.emit("Downloading client JAR...")
-        try:
-            jar_path = version_manager.download_client_jar(
-                version_json,
-                progress_callback=lambda c, t: self.progress.emit(
-                    f"{self.version_id}.jar", c / 1_000_000, t / 1_000_000, True
-                ),
-            )
-        except Exception as err:
-            log.error(
-                "Failed downloading client JAR for %s:",
-                self.version_id,
-                exc_info=err,
-            )
-            self.done.emit(
-                False,
-                f"Failed downloading client JAR for {self.version_id} "
-                f"({type(err).__name__})",
-            )
-            return
-
-        self.status.emit("Downloading assets...")
-        try:
-            asset_manager.download_assets(
-                asset_manager.fetch_asset_index(version_json),
-                progress_callback=lambda c, t: self.progress.emit(
-                    "Downloading assets", c, t, False
-                ),
-            )
-        except Exception as err:
-            log.error(
-                "Failed downloading assets for %s:",
-                self.version_id,
-                exc_info=err,
-            )
-            self.finished.emit(
-                False,
-                f"Failed downloading assets for version {self.version_id} "
-                f"({type(err).__name__})",
-            )
-            return
-
-        self.status.emit("Checking log4j config file...")
-        try:
-            log4j_config = asset_manager.check_or_download_logging_config(
-                version_json
-            )
-        except Exception as err:
-            log.error(
-                "Failed to get Log4J config set up for version %s:",
-                self.version_id,
-                exc_info=err,
-            )
-            log.info("Aborting launch")
-            self.done.emit(False, "Log4J config could not be set up")
-            return
-
-        self.status.emit("Downloading libraries...")
-        try:
-            libs = library_manager.filter_libraries(version_json)
-        except Exception as err:
-            log.error(
-                "Failed to filter libraries for %s, trying to continue "
-                "anyways...",
-                self.version_id,
-            )
-            libs = version_json.get("libraries", [])
-        try:
-            library_manager.download_libraries_threaded(
-                libs,
-                progress_callback=lambda c, t: self.progress.emit(
-                    "Downloading libraries", c, t, False
-                ),
-            )
-        except Exception as err:
-            log.error(
-                "Failed downloading libraries for version %s:",
-                self.version_id,
-                exc_info=err,
-            )
-            self.done.emit(
-                False,
-                f"Failed downloading libraries for version {self.version_id} "
-                f"({type(err).__name__})",
-            )
-            return
-        try:
-            library_manager.download_natives(libs)
-        except Exception as err:
-            log.error(
-                "Failed to download natives for %s:",
-                self.version_id,
-                exc_info=err,
-            )
-            self.done.emit(
-                False,
-                f"Failed downloading natives for version {self.version_id} "
-                f"({type(err).__name__})",
-            )
-            return
-        natives_dir = os.path.join(paths.game, "bin", self.version_id)
-        try:
-            natives_dir = library_manager.extract_natives(libs, natives_dir)
-        except Exception as err:
-            log.error(
-                "Failed extracting natives for %s:",
-                self.version_id,
-                exc_info=err,
-            )
-            self.done.emit(
-                False,
-                f"Failed extracting natives for version {self.version_id} "
-                f"({type(err).__name__})",
-            )
-            return
-
-        self.status.emit("Checking for Java install...")
-        profile_jre = self.profile_data.java_path
-        if profile_jre and not os.path.isfile(profile_jre):
-            log.warning("Bad java executable: %s", profile_jre)
-        if profile_jre and os.path.isfile(profile_jre):
-            try:
-                subprocess.run(
-                    [profile_jre.replace("javaw", "java"), "-version"],
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    check=True,
-                )
-            except subprocess.CalledProcessError as err:
-                self.log.warning(
-                    "Java installation exited with code %d:\n%s",
-                    err.returncode,
-                    str(err.output),
-                )
-                self.log.info(
-                    "Aborting launch, and notifying user of invalid "
-                    "JRE location."
-                )
-                self.done.emit(
-                    False,
-                    "Failed to detect if Java install is valid: "
-                    f'"{err.output}"',
-                )
-                return
-            else:
-                java_exc = profile_jre
-        else:
-            jre_name = version_json.get("javaVersion", {}).get("component", "")
-            try:
-                jre_manifest = java_manager.get_jvm_version_manifest(jre_name)
-            except Exception as err:
-                log.error(
-                    "Failed getting JRE manifest for %s:",
-                    jre_name,
-                    exc_info=err,
-                )
-                self.done.emit(
-                    False,
-                    "Couldn't get JRE info for version "
-                    f"{self.version_id}/{jre_name}"
-                    f"({type(err).__name__})",
-                )
-                return
-            if not paths.game:
-                self.status.emit("Downloading Java...")
-                try:
-                    java_exc = java_manager.install_java_version_threaded(
-                        jre_name,
-                        jre_manifest,
-                        progress_callback=lambda c, t: self.progress.emit(
-                            "Downloading Java", c, t, False
-                        ),
-                    )
-                except Exception as err:
-                    log.error(
-                        "Failed downloading JRE version %s:",
-                        jre_name,
-                        exc_info=err,
-                    )
-                    self.done.emit(
-                        False,
-                        "Failed downloading FRE manifest for version "
-                        f"{self.version_id}/{jre_name} ({type(err).__name__})",
-                    )
-                    return
-            else:
-                try:
-                    java_exc = java_manager.find_java_exc(jre_name)
-                except RuntimeError as err:
-                    self.log.error(
-                        "Failed to find JRE installation!", exc_info=err
-                    )
-                    self.done.emit(False, str(err))
-                    return
-
-        match OS:
-            case "windows":
-                pass
-            case _:
-                if not java_manager.mark_executable(java_exc):
-                    log.warning(
-                        "Couldn't mark JRE exec at '%s' as executable. "
-                        "Notifying user and aborting",
-                        java_exc,
-                    )
-                    self.done.emit(
-                        False,
-                        f"Couldn't mark JRE executable at '{java_exc}' as "
-                        "executable",
-                    )
-                    return
+        version_json = self.installer.version_json
+        launch_profile = self.installer.launch_profile
+        account = self.installer.account
+        java_executable_path = self.installer.java_executable_path
+        jar_path = self.installer.jar_path
+        log4j_cfg_path = self.installer.log4j_cfg_path
+        libraries = self.installer.libraries
+        natives_dir = self.installer.natives_dir
 
         # this is probably the one thing that can't catastrophically fail
-        classpath = library_manager.build_classpath(libs, jar_path)
+        classpath = library_manager.build_classpath(libraries, jar_path)
 
         # DO NOT add reauthentication logic here. we do this in LauncherApp
         # before even the thought of running this is conjured.
 
         # assert statements to shut the type checker up
-        assert self.auth_info.profile
-        assert self.auth_info.token
+        assert account.profile
+        assert account.token
 
         self.status.emit("Launching Minecraft...")
         cmd = build_launch_command(
             version_json,
-            self.auth_info.profile.name,
-            self.auth_info.profile.uuid,
-            self.auth_info.token.access_token,
-            self.auth_info.player_type,
-            self.auth_info.demo_mode,
-            self.auth_info.xuid,
-            java_exc,
-            log4j_config,
+            account,
+            java_executable_path,
+            log4j_cfg_path,
             classpath,
-            self.profile_data.game_dir,
-            self.profile_data.jvm_args,
-            self.profile_data.memory_min,
-            self.profile_data.memory_max,
-            self.profile_data.resolution_width,
-            self.profile_data.resolution_height,
-            self.profile_data.mods_folder,
-            self.profile_data.mods_folder_mode,
+            launch_profile,
+            natives_dir=natives_dir,
         )
         logged_cmd = " ".join(cmd).replace(
-            self.auth_info.token.access_token, "[REDACTED]"
+            account.token.access_token, "[REDACTED]"
         )
         if OS == "windows":
             logged_cmd.replace("", "")
         self.log.info("Launch command: '%s'", logged_cmd)
 
         sub_logger = logging.getLogger(os.path.split(cmd[0])[1])
-        self._p = launch_game(cmd, cwd=self.profile_data.game_dir)
+        self._p = launch_game(cmd, cwd=launch_profile.game_dir)
         if self._p.poll() is None:
             self.done.emit(True, "Minecraft launched successfully.")
         else:
@@ -701,7 +459,7 @@ class LaunchWorker(QThread):
         # reverse this when reading:
         stdout_cache: list[str] = []
 
-        if self.emit_logs and not self._hook:
+        if config.show_logs_on_home and not self._hook:
             self._hook = self.game_log.emit
 
         if self._hook:
@@ -741,3 +499,9 @@ class LaunchWorker(QThread):
             if config.redownload_option > 1:
                 config.redownload_option = JarRedownloadBehavior.NEVER
         self.game_closed.emit(str(self._p.returncode), stdout)
+
+    def start_if_success(self, success: bool, *args):
+        if success:
+            self.start()
+        else:
+            return

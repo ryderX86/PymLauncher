@@ -24,15 +24,16 @@ from PySide6.QtWidgets import (
 
 from minecraftlauncher.functions import error_box, is_path_valid
 from minecraftlauncher.back.profile_manager import GameProfile
-from minecraftlauncher.back.game_launcher import LaunchWorker
+from minecraftlauncher.threads.launch_worker import LaunchWorker
+from minecraftlauncher.threads.install_worker import InstallWorker
 from minecraftlauncher.back import profile_manager
 from minecraftlauncher.exceptions.datatypes import InvalidVersionIdError
 from minecraftlauncher.paths import paths
-from minecraftlauncher.auth import LauncherAccount
 from minecraftlauncher.front import resources
 from minecraftlauncher.front.qt.models import ProfileSelectionModel
 from minecraftlauncher.front.qt.widgets import Header1, SecondaryLabel
 from minecraftlauncher.front.styles import get_fonts
+from minecraftlauncher.front.window.text_popup import TextPopup
 from minecraftlauncher.config import config
 from minecraftlauncher.offline import offline_man
 
@@ -56,7 +57,7 @@ class HomePage(QWidget):
         super().__init__(parent)
         self.fonts = get_fonts()
         self.selection_model = ProfileSelectionModel.instance()
-        self._worker: LaunchWorker | None = None
+        self._launcher: LaunchWorker | None = None
         self._no_icon = QIcon().pixmap(QSize(32, 32))
         self._build_ui()
         self.profile_needs_install: bool = True
@@ -65,9 +66,9 @@ class HomePage(QWidget):
         pass
 
     def kill_worker(self):
-        if self._worker:
+        if self._launcher:
             log.debug("self._worker.deleteLater()")
-            self._worker.deleteLater()
+            self._launcher.deleteLater()
 
     def _build_ui(self):
         layout = QVBoxLayout(self)
@@ -304,30 +305,22 @@ class HomePage(QWidget):
             self.play_button.setText("Installing...")
         self.play_requested.emit()
 
-    def install_launch_game(
-        self,
-        version_id: str,
-        profile_data: GameProfile,
-        auth_info: LauncherAccount,
-    ):
-        """Start download/launch process in a background thread"""
+    def prep_for_launch(self, installer: InstallWorker, launcher: LaunchWorker):
+        # ui stuff
         self.progress_bar.setValue(0)
         self.progress_frame.setVisible(True)
-        show_logs = config.show_logs_on_home
 
-        self._worker = LaunchWorker(
-            version_id, profile_data, auth_info, emit_logs=show_logs
-        )
-        self._worker.progress.connect(self._on_progress)
-        self._worker.status.connect(self._on_status)
-        self._worker.done.connect(self._on_finished)
-        self._worker.game_closed.connect(self._on_game_closed)
-        if show_logs:
-            log.debug("Starting game with logs shown")
-            self._worker.game_log.connect(self._handle_game_log)
+        installer.progress.connect(self._on_progress)
+        installer.status.connect(self._on_status)
+        installer.done.connect(self._on_install_finished)
+
+        launcher.progress.connect(self._on_progress)
+        launcher.status.connect(self._on_status)
+        launcher.done.connect(self._on_launch_finished)
+        launcher.game_closed.connect(self._on_game_closed)
+        if config.show_logs_on_home:
+            launcher.game_log.connect(self._handle_game_log)
         self.game_logs.clear()
-        log.debug("Starting background worker for install...")
-        self._worker.start()
 
     def _on_progress(
         self, label: str, current: float, total: float, use_mb: bool
@@ -385,7 +378,7 @@ class HomePage(QWidget):
             case "mods":
                 if prof.mods_folder and prof.mods_folder_mode != "addMods":
                     if not is_path_valid(prof.mods_folder):
-                        error_box(f"Bad mods folder path: {prof.mods_folder!r}")
+                        error_box(f"Bad mods directory: {prof.mods_folder!r}")
                         return
                     p = os.path.normpath(prof.mods_folder)
                 else:
@@ -416,7 +409,7 @@ class HomePage(QWidget):
         qurl = QUrl.fromLocalFile(p)
         QDesktopServices.openUrl(qurl)
 
-    def _on_finished(self, success: bool, message: str):
+    def _on_launch_finished(self, success: bool, message: str):
         if success:
             self.play_button.setText("Playing...")
             self.play_button.setEnabled(False)
@@ -425,8 +418,29 @@ class HomePage(QWidget):
             self.progress_bar.setValue(0)
             self.game_open.emit()
         else:
-            error_box(f"Failed to launch the game: {message}")
             self.aborted_launch()
+            TextPopup(
+                message or "No content provided",
+                "Failed to launch game",
+                "Launch Error",
+                self,
+            )
+
+    def _on_install_finished(self, success: bool, message: str | None = None):
+        if success:
+            self.play_button.setText("Launching...")
+            self.play_button.setEnabled(False)
+            self.progress_frame.setVisible(False)
+            self.progress_label.setText("")
+            self.progress_bar.setValue(0)
+        else:
+            self.aborted_launch()
+            TextPopup(
+                message or "No content provided",
+                "Failed to install game",
+                "Installation Error",
+                self,
+            )
 
     def _reset_play_button(self):
         profile = profile_manager.get_current_profile()

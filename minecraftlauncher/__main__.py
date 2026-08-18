@@ -30,6 +30,8 @@ from .back import (
     java_manager,
 )
 from .back.account_manager import account_man
+from .threads.install_worker import InstallWorker
+from .threads.launch_worker import LaunchWorker
 from .auth import LauncherAccount
 from .auth.exceptions import (
     NoConnectionError,
@@ -54,6 +56,9 @@ class LauncherApp:
 
     fonts: FontList
     """Named tuple containing the fonts"""
+
+    install_worker: InstallWorker
+    launch_worker: LaunchWorker
 
     def __init__(self):
         self.qapp = get_qapp()
@@ -318,9 +323,17 @@ class LauncherApp:
                 dialog.exec()
                 return
 
-        self.main_window.home_page.install_launch_game(
-            profile.version_id, profile, active
+        self.install_worker = InstallWorker(
+            profile.version_id, profile, active, True, self.main_window
         )
+        self.launch_worker = LaunchWorker(
+            self.install_worker, None, self.main_window
+        )
+        self.main_window.home_page.prep_for_launch(
+            self.install_worker, self.launch_worker
+        )
+        self.install_worker.done.connect(self.launch_worker.start_if_success)
+        self.install_worker.start()
 
     def _on_account_changed(self, xuid: str, *, current_retries: int = 0):
         global clean_exit

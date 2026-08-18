@@ -9,7 +9,6 @@ from datetime import timedelta
 import hashlib
 import logging
 import json
-import lzma
 import stat
 import time
 import os
@@ -25,6 +24,10 @@ from minecraftlauncher.constants import (
 )
 from minecraftlauncher.paths import paths
 from minecraftlauncher.functions.text import indent
+from minecraftlauncher.exceptions.back import (
+    JavaIndexError,
+    MarkExecutableError,
+)
 from .download_helpers import download, RunnableDownloader, BulkDownloadError
 
 log = logging.getLogger(__name__)
@@ -232,179 +235,144 @@ def find_java_exc(name: str):
     raise RuntimeError("No working java executable found")
 
 
-def install_java_version(
+def get_java_file_dowloads(
     name: str, jre_manifest: dict, *, progress_callback: Callable | None = None
-):
-    """Installs specified JRE version from Mojang. Returns javaw.exe path"""
-    path_list = jre_manifest.get("files", {})
-    files = {k: v for k, v in path_list.items() if v["type"] == "file"}
-    dirs: list[str] = [
-        k for k, v in path_list.items() if v["type"] == "directory"
-    ]
+) -> list[RunnableDownloader]:
+    """
+    Gets list of downloaders for the specified JRE version from Mojang.
 
-    total_size = len(files.keys()) - len(dirs)
+    Raises `minecraftlauncher.exceptions.back.JavaIndexError` if any file in
+    the index is missing download info
+    """
+    # filter index into files only (normally directories are present)
+    path_list: dict[str, dict] = {
+        k: v
+        for k, v in jre_manifest.get("files", {}).items()
+        if v["type"] == "file"
+    }
 
-    jre_path_default = java_base_path(name)
-
-    match OS:
-        case "windows":
-            exc_path = ["bin", "javaw.exe"]
-        case "osx":
-            exc_path = ["jre.bundle", "Contents", "Home", "bin", "java"]
-        case _:
-            exc_path = ["bin", "java"]
-
-    if not os.path.isdir(jre_path_default):
-        os.makedirs(jre_path_default, exist_ok=True)
-    completed = 0
-    downloaded = 0
-
-    for subpath in dirs:
-        dir_ = os.path.join(jre_path_default, subpath)
-        if not os.path.isdir(dir_):
-            os.makedirs(dir_, exist_ok=True)
-    for subpath, finfo in files.items():
-        path = os.path.join(jre_path_default, *subpath.split("/"))
-        e_sha1 = finfo["downloads"]["raw"].get("sha1")  # expected sha1
-        if os.path.isfile(path):
-            with open(path, "rb") as f:
-                f_sha1 = hashlib.sha1(f.read()).hexdigest()
-            if e_sha1 and e_sha1 == f_sha1:
-                completed += 1
-                continue
-            if e_sha1:
-                log.warning(
-                    "File at '%s' has SHA1 ('%s') that doesn't match "
-                    "expected value '%s'",
-                    subpath,
-                    f_sha1,
-                    e_sha1,
-                )
-
-        # prioritize lower internet reliance first, then fallback to raw file
-        url = str(finfo.get("downloads", {}).get("lzma", {}).get("url", ""))
-        sha1 = str(finfo.get("downloads", {}).get("lzma", {}).get("sha1", ""))
-        use_lzma = True
-        if not url:
-            url = str(finfo.get("downloads", {}).get("raw", {})["url"])
-            sha1 = str(finfo.get("downloads", {}).get("raw", {})["sha1"])
-            use_lzma = False
-
-        log.info("Downloading '%s' from '%s'", subpath, url)
-
-        # use the matching hash since we don't load the lzma yet
-        resp = download(url, sha=sha1)
-
-        with open(path, "wb") as fb:
-            if use_lzma:
-                fb.write(lzma.decompress(resp.content))
-            else:
-                fb.write(resp.content)
-
-        log.debug("Downloaded '%s'->'%s'", url, subpath)
-        completed += 1
-        downloaded += 1
-        if progress_callback:
-            progress_callback(completed, total_size)
-        continue
-
-    log.info("Download complete, %d/%d new files.", downloaded, total_size)
-
-    if "MinecraftJava.exe" in files.keys():
-        return os.path.join(jre_path_default, "MinecraftJava.exe")
-    else:
-        return os.path.join(jre_path_default, *exc_path)
-
-
-def install_java_version_threaded(
-    name: str, jre_manifest: dict, *, progress_callback: Callable | None = None
-):
-    """Installs specified JRE version from Mojang. Returns javaw.exe path"""
-    pool = QThreadPool.globalInstance()
-    if not pool:
-        log.warning("Couldn't get QThreadPool, downloading single-threaded")
-        return install_java_version(
-            name, jre_manifest, progress_callback=progress_callback
-        )
-    path_list = jre_manifest.get("files", {})
-    files = {k: v for k, v in path_list.items() if v["type"] == "file"}
-    dirs: list[str] = [
-        k for k, v in path_list.items() if v["type"] == "directory"
-    ]
-
-    total_size = len(files.keys())
-    if progress_callback:
-        progress_callback(0, total_size)
+    dl_count = len(path_list.keys())
 
     jre_path_default = os.path.join(paths.jre_path, name)
 
-    match OS:
-        case "windows":
-            exc_path = ["bin", "javaw.exe"]
-        case "osx":
-            exc_path = ["jre.bundle", "Contents", "Home", "bin", "java"]
-        case _:
-            exc_path = ["bin", "java"]
+    if progress_callback:
+        progress_callback(0, dl_count)
+        completed = 0
 
-    os.makedirs(jre_path_default, exist_ok=True)
-    completed = 0
-    downloaded = 0
+        def callback(i: int):
+            nonlocal completed
+            completed += i
+            progress_callback(completed, dl_count)
 
-    def file_downloaded(i: int):
-        nonlocal completed, total_size, progress_callback
-        completed += 1
-        if progress_callback:
-            progress_callback(completed, total_size)
+    else:
 
-    download_workers: list[RunnableDownloader] = []
+        def callback(i: int):
+            pass
 
-    for subpath in dirs:
-        dir_ = os.path.join(jre_path_default, subpath)
-        os.makedirs(dir_, exist_ok=True)
-    for subpath, finfo in files.items():
+    dl_list: list[RunnableDownloader] = []
+
+    for subpath, finfo in path_list.items():
         path = os.path.join(jre_path_default, *subpath.split("/"))
         sha1 = finfo["downloads"]["raw"].get("sha1")  # expected sha1
 
-        # prioritize lower internet reliance first, then fallback to raw file
-        url = str(finfo.get("downloads", {}).get("lzma", {}).get("url", ""))
+        # get download url
+        url = finfo.get("downloads", {}).get("lzma", {}).get("url")
         use_lzma = True
         if not url:
-            url = str(finfo.get("downloads", {}).get("raw", {})["url"])
+            url = finfo.get("downloads", {}).get("raw", {}).get("url")
+            if not url:
+                raise JavaIndexError(subpath, jre_manifest)
             use_lzma = False
 
+        if not isinstance(url, str):
+            raise JavaIndexError(subpath, jre_manifest) from TypeError(url)
+
         # use the matching hash since we don't load the lzma yet
-        download_workers.append(
+        dl_list.append(
             RunnableDownloader(
-                url,
-                path,
-                sha1,
+                url=url,
+                path=path,
+                sha1=sha1,
                 use_lzma=use_lzma,
-                callback=file_downloaded,
+                callback=callback,
             )
         )
 
-    pool.setMaxThreadCount(CPU_THREADS)
-    for dl in download_workers:
-        pool.start(dl)
-    timed_out = not pool.waitForDone(900000)
-    if timed_out:
-        raise RuntimeError("Downloads completely timed out")
-    elif any(not a.success for a in download_workers):
-        raise BulkDownloadError.from_runnable_list(download_workers)
+    return dl_list
 
-    log.info("Download complete, %d/%d new files.", downloaded, total_size)
 
-    if "MinecraftJava.exe" in files.keys():
-        return os.path.join(jre_path_default, "MinecraftJava.exe")
+def download_java_version(
+    name: str,
+    jre_manifest: dict,
+    *,
+    progress_callback: Callable | None = None,
+    threaded: bool = True,
+):
+    pool = QThreadPool.globalInstance()
+    if not pool:
+        log.warning("Couldn't get QThreadPool, downloading single-threaded")
+        threaded = False
+
+    dl_list = get_java_file_dowloads(
+        name, jre_manifest, progress_callback=progress_callback
+    )
+
+    jre_path_default = os.path.join(paths.jre_path, name)
+
+    if threaded:
+        pool.setMaxThreadCount(CPU_THREADS)
+        for worker in dl_list:
+            pool.start(worker)
+        timed_out = not pool.waitForDone(900000)
+        if timed_out:
+            raise RuntimeError("Downloads completely timed out")
+        elif any(not a.success for a in dl_list):
+            raise BulkDownloadError.from_runnable_list(dl_list)
     else:
-        return os.path.join(jre_path_default, *exc_path)
+        log.warning("Running downloads unthreaded")
+        for worker in dl_list:
+            worker.run()
+            if worker.failed:
+                log.warning("Download worker failed, breaking early")
+                break
+        if any(not a.success for a in dl_list):
+            raise BulkDownloadError.from_runnable_list(dl_list)
+
+    log.info(
+        "Download complete, %d/%d new files.",
+        len({a.downloaded_file for a in dl_list}),
+        len(dl_list),
+    )
+
+    match OS:
+        case "windows":
+            base_exc_path = ["bin", "javaw.exe"]
+        case "osx":
+            base_exc_path = ["jre.bundle", "Contents", "Home", "bin", "java"]
+        case _:
+            base_exc_path = ["bin", "java"]
+
+    if OS == "windows":
+        if "MinecraftJava.exe" in jre_manifest.get("files", {}).keys():
+            return os.path.join(jre_path_default, "MinecraftJava.exe")
+        else:
+            return os.path.join(jre_path_default, *base_exc_path)
+    else:
+        exc_path = os.path.join(jre_path_default, *base_exc_path)
+        try:
+            mark_executable(exc_path)
+        except PermissionError as err:
+            log.error(
+                "Unable to mark %r as executable:", exc_path, exc_info=err
+            )
+            raise
+        return exc_path
 
 
 def mark_executable(exe_path: str | os.PathLike) -> bool:
-    match OS:
-        case "windows":
-            log.warning("mark_executable() called from Windows")
-            return os.path.splitext(exe_path)[1] == ".exe"
+    if OS == "windows":
+        log.warning("mark_executable() called from Windows")
+        return os.path.splitext(exe_path)[1] == ".exe"
     if not os.path.isfile(exe_path):
         raise ValueError(f"File at '{exe_path}' doesn't exist")
     perms = stat.S_IXUSR | stat.S_IXOTH | stat.S_IXGRP
@@ -413,9 +381,19 @@ def mark_executable(exe_path: str | os.PathLike) -> bool:
     log.debug("Attempting to mark file at '%s' as executable", exe_path)
     try:
         os.chmod(exe_path, os.stat(exe_path).st_mode | perms)
+    except PermissionError as err:
+        log.error(
+            "Failed to mark file at %r as executable (no permissions)",
+            exe_path,
+            exc_info=err,
+        )
+        raise MarkExecutableError(exe_path) from err
     except Exception as err:
         log.error(
-            "Failed to mark file at '%s' as executable:", exe_path, exc_info=err
+            "Failed to mark file at %r as executable (%s)",
+            exe_path,
+            type(err).__name__,
+            exc_info=err,
         )
-        return False
+        raise MarkExecutableError(exe_path) from err
     return True

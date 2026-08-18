@@ -210,6 +210,7 @@ class RunnableDownloader(QRunnable):
     last_exception: BaseException | None
     success: bool | None
     _invalid_download_count: int
+    _downloaded_file: bool
 
     log = log.getChild("RunnableDownloader")
 
@@ -218,12 +219,12 @@ class RunnableDownloader(QRunnable):
         self,
         url: str,
         path: os.PathLike | str,
-        vpath: str | os.PathLike | None = None,
         sha1: str | None = None,
-        override: bool = False,
         use_lzma: bool = False,
         callback: Callable[[int], None] | None = None,
         check_hash: bool | None = None,
+        *,
+        vpath: str | os.PathLike | None = None,
     ):
         """
         Class for a single file to download in a bulk.
@@ -259,13 +260,13 @@ class RunnableDownloader(QRunnable):
             check_hash = True
         elif check_hash is None:
             check_hash = False
-        self._override = override
         self._lzma = use_lzma
         self._callback = callback
         self._should_check_hash = check_hash
         self.last_exception = None
         self.success = None
         self._invalid_download_count = 0
+        self._downloaded_file = False
         if self._should_check_hash and not self._hash:
             raise ValueError(
                 "should_check_hash set to True but no hash was provided"
@@ -311,7 +312,7 @@ class RunnableDownloader(QRunnable):
                     "directories) at %r",
                     os.path.dirname(self._path),
                 )
-                os.makedirs(self._path, exist_ok=True)
+                os.makedirs(os.path.dirname(self._path), exist_ok=True)
             except Exception as err:
                 self.log.error(
                     "Failed to create directory at %r",
@@ -328,7 +329,7 @@ class RunnableDownloader(QRunnable):
                     "directories) at %r",
                     os.path.dirname(self._path),
                 )
-                os.makedirs(self._vpath, exist_ok=True)
+                os.makedirs(os.path.dirname(self._path), exist_ok=True)
             except Exception as err:
                 self.log.error(
                     "Failed to create directory at %r",
@@ -417,6 +418,7 @@ class RunnableDownloader(QRunnable):
             with open(self._vpath, "wb") as f:
                 f.write(content)
         self.success = True
+        self._downloaded_file = True
         if self._callback:
             self._callback(1)
         return
@@ -432,6 +434,16 @@ class RunnableDownloader(QRunnable):
         due to SHA matching
         """
         return self.success
+
+    @property
+    def downloaded_file(self) -> bool:
+        """
+        Whether or not the file was downloaded or not.
+
+        Used for debugging to determine file count vs. actual downloaded,
+        since SHA-1 matches won't be overridden.
+        """
+        return self._downloaded_file
 
 
 class BulkDownloadError(Exception):
@@ -477,6 +489,8 @@ class BulkDownloadError(Exception):
     def from_runnable_list(cls, dl_list: list[RunnableDownloader]):
         exc_list = []
         for dl in dl_list:
-            if not dl.success and dl.last_exception:
+            if dl.success is not None and (
+                dl.last_exception and not dl.success
+            ):
                 exc_list.append(dl.last_exception)
         return cls(*exc_list)
