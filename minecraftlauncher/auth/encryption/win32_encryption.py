@@ -5,6 +5,7 @@ crypt32.dll based encryption for accounts.bin
 __all__ = ["encrypt", "decrypt", "data_load_hook", "data_save_hook"]
 from collections.abc import Buffer
 import logging
+import socket
 import json
 
 from win32 import win32crypt
@@ -12,11 +13,18 @@ import pywintypes  # type: ignore
 
 from minecraftlauncher.constants import LAUNCHER_NAME
 from .winerr_codes import WinErrorCode
+from .exceptions import EncryptedDataDecodeError
 
 log = logging.getLogger(__name__)
 
 ENTROPY = b"WTF IS A KILOMETER!!!!!!!!!!"
 DESCRIPTION = f"Accounts data for {LAUNCHER_NAME}"
+FILE_HEADER = b"".join(
+    [
+        f"Accounts data created by {socket.gethostname()}".encode("utf-8"),
+        b"\n\n\x00",
+    ]
+)
 
 
 def encrypt(data: str | bytes) -> Buffer:
@@ -28,7 +36,7 @@ def encrypt(data: str | bytes) -> Buffer:
     )
 
     if encrypted_data:
-        return encrypted_data
+        return b"".join([FILE_HEADER, encrypted_data])
     else:
         raise RuntimeError("Failed to encrypt")
 
@@ -36,6 +44,22 @@ def encrypt(data: str | bytes) -> Buffer:
 def decrypt(data: bytes) -> str:
     data_desc: str
     data_out: bytes
+    other_machine = True
+    # handle the plaintext header before continuing
+    if data.startswith(FILE_HEADER):
+        data = data[len(FILE_HEADER) :]
+        other_machine = False
+    elif data.startswith(b"Accounts data created by "):
+        try:
+            log.warning(
+                "Accounts data shows another machine name: %r",
+                data[: data.find(b"\n")].decode("utf-8"),
+            )
+        except:
+            log.warning("Failed to get machine name from accounts cache header")
+            log.warning("Accounts data shows another machine name")
+        if b"\x00" in data:
+            data = data[data.find(b"\x00") + 1 :]
     try:
         data_desc, data_out = win32crypt.CryptUnprotectData(data, ENTROPY)
     except pywintypes.error as err:  # pylint: disable=no-member
@@ -46,7 +70,9 @@ def decrypt(data: bytes) -> str:
             error_name = hex(err_code)
         data_desc = err.strerror
         func = err.funcname
-        new = RuntimeError("Failed to decrypt user data")
+        new = EncryptedDataDecodeError(
+            "Failed to decrypt user data", other_machine=other_machine
+        )
         new.add_note(f"Error code: {error_name}")
         new.add_note(data_desc)
         new.add_note(f"Function called: {func}")

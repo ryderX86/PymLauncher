@@ -23,7 +23,7 @@ from .front.window.main.main_window import MainWindow
 from .front.window.login import LoginWindow
 from .front.window.game_error import ErrorDisplay
 from .front.window.warning import WarningDialog, ButtonConfig
-from .exceptions import EncryptedDataDecodeError
+from .auth.encryption.exceptions import EncryptedDataDecodeError
 from .back import (
     profile_manager,
     version_manager,

@@ -12,7 +12,9 @@ from minecraftlauncher.auth import LauncherAccount
 from minecraftlauncher.auth.encryption import data_load_hook, data_save_hook
 from minecraftlauncher.auth import encryption
 from minecraftlauncher.auth.exceptions import NoConnectionError
-from minecraftlauncher.exceptions import EncryptedDataDecodeError
+from minecraftlauncher.auth.encryption.exceptions import (
+    EncryptedDataDecodeError,
+)
 from minecraftlauncher.functions import reswrite
 from minecraftlauncher.offline import offline_man
 
@@ -20,8 +22,6 @@ log = logging.getLogger(__name__)
 
 
 class AccountManager:
-    """WIP, don't use"""
-
     _instance: AccountManager | None = None
 
     # instance attributes
