@@ -101,7 +101,7 @@ class AccountSelect(QComboBox):
 
         xuid = self.itemData(index)
         if xuid:
-            account_man.set_active(xuid, True)
+            self.account_changed.emit(xuid)
         else:
             log.warning("No XUID for selected account!")
 

@@ -12,7 +12,6 @@ import pywintypes  # type: ignore
 
 from minecraftlauncher.constants import LAUNCHER_NAME
 from .winerr_codes import WinErrorCode
-from .exceptions import EncryptedDataDecodeError
 
 log = logging.getLogger(__name__)
 
@@ -37,7 +36,6 @@ def encrypt(data: str | bytes) -> Buffer:
 def decrypt(data: bytes) -> str:
     data_desc: str
     data_out: bytes
-    other_machine = True
     try:
         data_desc, data_out = win32crypt.CryptUnprotectData(data, ENTROPY)
     except pywintypes.error as err:  # pylint: disable=no-member
@@ -48,9 +46,7 @@ def decrypt(data: bytes) -> str:
             error_name = hex(err_code)
         data_desc = err.strerror
         func = err.funcname
-        new = EncryptedDataDecodeError(
-            "Failed to decrypt user data", other_machine=other_machine
-        )
+        new = RuntimeError("Failed to decrypt user data")
         new.add_note(f"Error code: {error_name}")
         new.add_note(data_desc)
         new.add_note(f"Function called: {func}")

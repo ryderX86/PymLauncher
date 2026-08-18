@@ -23,7 +23,7 @@ from .front.window.main.main_window import MainWindow
 from .front.window.login import LoginWindow
 from .front.window.game_error import ErrorDisplay
 from .front.window.warning import WarningDialog, ButtonConfig
-from .auth.encryption.exceptions import EncryptedDataDecodeError
+from .exceptions import EncryptedDataDecodeError
 from .back import (
     profile_manager,
     version_manager,
@@ -88,6 +88,11 @@ class LauncherApp:
         self.main_window.login_requested.connect(self.show_login)
         self.main_window.account_page.logout_requested.connect(self.logout)
         self.main_window.home_page.play_requested.connect(self.play)
+
+        self.main_window.account_dropdown.account_changed.connect(
+            self._on_account_changed
+        )
+
         self.main_window.home_page.game_crash.connect(self.show_crash_dialog)
 
         if constants.DEV:
@@ -213,8 +218,6 @@ class LauncherApp:
                 "The launcher cannot continue loading and will now close."
             )
             sys.exit(-1)
-        else:
-            account_man.add_switch_callback(self._on_account_changed)
         if account_man.has_accounts:
             self.close_if_login_aborted = False
         else:
@@ -332,22 +335,21 @@ class LauncherApp:
         self.install_worker.done.connect(self.launch_worker.start_if_success)
         self.install_worker.start()
 
-    def _on_account_changed(
-        self, account: LauncherAccount, *, current_retries: int = 0
-    ):
+    def _on_account_changed(self, xuid: str, *, current_retries: int = 0):
         global clean_exit
         MAX_RETRIES = 5
         if self.lb_window.isVisible():
             self.lb_window.accept()
-        if account in account_man:
+        if xuid in account_man:
+            acc = account_man.set_active(xuid, ignore_refreshes=True)
             if (
-                not account.token or not account.token.is_active
+                not acc.token or not acc.token.is_active
             ) and not offline_man.offline:
                 if not current_retries:
                     self.lb_window.set_text("Reauthenticating")
                 self.lb_window.open()
                 try:
-                    account.refresh()
+                    acc.refresh()
                 except NoConnectionError:
                     pass  # handled elsewhere already
                 except MSAServerUnavailableError:
@@ -366,7 +368,7 @@ class LauncherApp:
                         uisleep(5)
                         self.lb_window.accept()
                         return self._on_account_changed(
-                            account, current_retries=current_retries + 1
+                            xuid, current_retries=current_retries + 1
                         )
                     else:
                         log.error(
@@ -386,18 +388,17 @@ class LauncherApp:
                 ) as err:  # should only ever be a 402 by this point
                     log.warning(
                         "Failed to refresh %r: %r. Prompting user to relog.",
-                        account.gamertag,
+                        acc.gamertag,
                         type(err).__name__,
                     )
                     dialog = LoginWindow(self.lb_window, relog_err=str(err))
                     dialog.rejected.connect(
                         self.main_window.account_dropdown.next_account
                     )
-                    dialog.exec()
-                    return
+                    return dialog.exec()
                 else:
                     self.lb_window.accept()
-                    account_man.replace_into(account)
+                    account_man.replace_into(acc)
         else:
             log.warning("Couldn't find the active account in accounts!")
             try:
