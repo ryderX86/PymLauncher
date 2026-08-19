@@ -45,7 +45,6 @@ from PySide6.QtWidgets import (
 from minecraftlauncher.datatypes.game_version import GameVersionStub
 from minecraftlauncher.back.profile_manager import (
     LaunchProfile,
-    load_launcher_profiles,
     save_single_profile,
 )
 from minecraftlauncher.back import version_manager, profile_manager
@@ -799,7 +798,6 @@ class ProfilesPage(QWidget):
     def _load(self):
         self._version_id_validator.load()
         self.populate_version_combo()
-        load_launcher_profiles()
         # for name, icon in resources.get_all_default_icons().items():
         #     self.icon_menu.addItem(icon, name, name)
 

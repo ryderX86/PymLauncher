@@ -13,8 +13,9 @@ from typing import Any, Literal
 from datetime import datetime
 from types import FunctionType
 from functools import lru_cache
-import json
 import logging
+import time
+import json
 import uuid
 import os
 
@@ -360,7 +361,7 @@ def load_launcher_profiles():
             lp_json = json.loads(lp_text)
         except json.JSONDecodeError as err:
             log.error("Failed reading launcher profiles JSON:", exc_info=err)
-            log.warning("Loading default profiles. User should be notified.")
+            raise
         else:
             profs_raw: dict = lp_json.get("profiles", _default_profs_factory())
             profs: dict[str, LaunchProfile] = {}
@@ -523,6 +524,19 @@ def save_launcher_profiles(
     )
     _refresh_profiles()
     return True
+
+
+def reset_profiles():
+    """
+    Renames launcher_profiles.json and launcher_profiles_meta.json to store
+    them as backups
+    """
+    backup_time = int(time.time())
+    os.replace(paths.profiles_file, f"{paths.profiles_file}-{backup_time}.bak")
+    os.replace(
+        paths.profiles_meta_file,
+        f"{paths.profiles_meta_file}-{backup_time}.bak",
+    )
 
 
 def get_last_used_profile(profiles_: dict[str, LaunchProfile] | None = None):
