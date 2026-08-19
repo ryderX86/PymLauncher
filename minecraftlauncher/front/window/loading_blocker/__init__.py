@@ -34,7 +34,7 @@ class LoadingBlockerWindow(QDialog):
     def _build_layout(self):
         _layout = QVBoxLayout(self)
 
-        self.label = QLabel("Loading...")
+        self.label = QLabel("Loading...", wordWrap=True)
         self.label.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         _layout.addWidget(self.label)
