@@ -434,7 +434,6 @@ class LauncherApp:
                     return
             else:
                 account_man.replace_into(active_account)
-        self.main_window.account_page.set_account_info(active_account)
 
     def _close_event(self):
         self.qapp.exit(0)

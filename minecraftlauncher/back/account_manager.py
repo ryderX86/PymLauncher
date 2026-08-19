@@ -180,6 +180,9 @@ class AccountManager:
                     account.gamertag,
                 )
                 self._active_account = account
+                if self.active:
+                    for callback in self._active_callbacks:
+                        callback(self.active)
                 return self.active
         elif preferred_xuid:
             raise KeyError(

@@ -170,10 +170,11 @@ class LoginWindow(QDialog):
 
         self.instruction_label = QLabel(
             "Click the button below to start the sign-in process.\n"
-            "A code will be generated for you to enter on Microsoft's website."
+            "A code will be generated for you to enter on Microsoft's website.",
+            alignment=Qt.AlignmentFlag.AlignCenter,
+            wordWrap=True,
         )
         self.instruction_label.setStyleSheet(f"color: {TEXT_SECONDARY};")
-        self.instruction_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.instruction_label.setWordWrap(True)
         self.instruction_label.setMinimumWidth(self.width() - 64)
         self.instruction_label.setMaximumWidth(self.width() - 32)
@@ -187,8 +188,7 @@ class LoginWindow(QDialog):
         qr_cont.addWidget(self.code_qr_w)
         layout.addWidget(qr_cont_w)
 
-        self.code_label = QLabel("")
-        self.code_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.code_label = QLabel("", alignment=Qt.AlignmentFlag.AlignCenter)
         self.code_label.setStyleSheet(
             "font-size: 28px; font-weight: 700; "
             f"color: {ACCENT}; letter-spacing: 4px; padding: 12px;"
@@ -198,8 +198,9 @@ class LoginWindow(QDialog):
         )
         layout.addWidget(self.code_label)
 
-        self.status_label = QLabel("")
-        self.status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.status_label = QLabel(
+            "", wordWrap=True, alignment=Qt.AlignmentFlag.AlignCenter
+        )
         self.status_label.setStyleSheet(
             f"color: {TEXT_SECONDARY}; font-size: 12px;"
         )
