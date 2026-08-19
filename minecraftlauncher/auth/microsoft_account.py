@@ -16,7 +16,7 @@ from .exceptions import MSABaseAuthenticationException
 
 log = logging.getLogger(__name__)
 
-KNOWN_MSA_DICT_VALS = [
+KNOWN_MSA_DICT_VALS = {
     "token_type",
     "scope",
     "expires_in",
@@ -24,7 +24,8 @@ KNOWN_MSA_DICT_VALS = [
     "refresh_token",
     "id_token",
     "acquired_at",
-]
+    "user_id",
+}
 
 
 class MicrosoftAccount:
@@ -35,6 +36,7 @@ class MicrosoftAccount:
         "access_token",
         "refresh_token",
         "acquired_at",
+        "user_id",
         "_other_token_info",
     )
     token_type: str  # Always "Bearer"
@@ -53,6 +55,7 @@ class MicrosoftAccount:
     """
     access_token: str
     refresh_token: str
+    user_id: str
 
     # The following is NOT included in the MS API response:
     acquired_at: float
@@ -65,9 +68,12 @@ class MicrosoftAccount:
         self._expires_in = msa_info["expires_in"]
         self.access_token = msa_info["access_token"]
         self.refresh_token = msa_info["refresh_token"]
+        self.user_id = msa_info["user_id"]
         self._other_token_info = {
             k: v for k, v in msa_info.items() if k not in KNOWN_MSA_DICT_VALS
         }
+        for key, value in self._other_token_info.items():
+            log.warning("Unknown MSA token key: {%r: %r}", key, value)
         return
 
     @property
@@ -107,6 +113,7 @@ class MicrosoftAccount:
                 "refresh_token": self.refresh_token,
                 "uuid": uuid,
                 "username": username,
+                "user_id": self.user_id,
                 **self._other_token_info,
             }.items()
             if v
