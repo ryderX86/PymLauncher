@@ -119,9 +119,6 @@ class PathFinder:
             raise ValueError(f"Invalid data directory: {self._data!r}")
         self.ready = True
 
-        if launchargs.unencrypted_accounts:
-            self._accsuffix = "json"
-
     @property
     def game(self):
         return self._game

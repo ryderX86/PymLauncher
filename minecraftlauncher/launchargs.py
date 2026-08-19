@@ -60,12 +60,6 @@ _parser.add_argument(
     type=str,
     dest="launch_profile",
 )
-_parser.add_argument(
-    "--unencrypted-accounts",
-    action="store_true",
-    default=False,
-    dest="unencrypted_accounts",
-)
 
 
 class LaunchArgsContainer:
@@ -78,7 +72,6 @@ class LaunchArgsContainer:
     debug_logging: bool
     launch_profile: str | None
     debug_splash_screen: bool
-    unencrypted_accounts: bool
 
     def __init__(self):
         self.work_dir = None
@@ -88,7 +81,6 @@ class LaunchArgsContainer:
         self.debug_logging = False
         self.launch_profile = None
         self.debug_splash_screen = False
-        self.unencrypted_accounts = False
 
     def get_args(self):
         args = _parser.parse_args()
@@ -100,7 +92,6 @@ class LaunchArgsContainer:
         self.debug_logging = args.debug_logging
         self.launch_profile = args.launch_profile
         self.debug_splash_screen = args.debug_splash_screen
-        self.unencrypted_accounts = args.unencrypted_accounts
 
         if self.work_dir is not None:
             self.work_dir = os.path.normpath(self.work_dir)

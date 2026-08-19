@@ -7,7 +7,6 @@ import time
 import os
 
 from minecraftlauncher.paths import paths
-from minecraftlauncher.launchargs import launchargs
 from minecraftlauncher.auth import LauncherAccount
 from minecraftlauncher.auth.encryption import data_load_hook, data_save_hook
 from minecraftlauncher.auth import encryption
@@ -20,8 +19,6 @@ log = logging.getLogger(__name__)
 
 
 class AccountManager:
-    """WIP, don't use"""
-
     _instance: "AccountManager | None" = None
 
     # instance attributes
@@ -142,7 +139,7 @@ class AccountManager:
         store = self.dump()
 
         payload: Buffer
-        if encryption.ENABLED and not launchargs.unencrypted_accounts:
+        if encryption.ENABLED:
             payload = data_save_hook(store)
         else:
             payload = json.dumps(store).encode("utf-8")
