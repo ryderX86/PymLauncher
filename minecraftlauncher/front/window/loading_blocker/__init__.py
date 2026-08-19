@@ -11,10 +11,10 @@ from minecraftlauncher.constants import OS
 from minecraftlauncher import get_qapp
 
 match OS:
-    case "linux":
-        _FLAGS = Qt.WindowType.SplashScreen | Qt.WindowType.FramelessWindowHint
+    case "windows" | "osx":
+        _FLAGS = Qt.WindowType.SplashScreen
     case _:
-        _FLAGS = Qt.WindowType.FramelessWindowHint
+        _FLAGS = Qt.WindowType.SplashScreen | Qt.WindowType.FramelessWindowHint
 
 log = logging.getLogger(__name__)
 
@@ -28,19 +28,11 @@ class LoadingBlockerWindow(QDialog):
         self.setMinimumSize(500, 360)
         self.setMaximumSize(500, 360)
         self.resize(500, 360)
-        self.setProperty("border", True)
         self._build_layout()
         self.qapp = get_qapp()
 
     def _build_layout(self):
         _layout = QVBoxLayout(self)
-
-        # self.animator = QSvgWidget()
-        # self.animator.load(animation("load"))
-        # self.animator.renderer().setAnimationEnabled(True) # type: ignore
-        # self.animator.renderer().setFramesPerSecond(10) # type: ignore
-
-        # _layout.addWidget(self.animator)
 
         self.label = QLabel("Loading...")
         self.label.setAlignment(Qt.AlignmentFlag.AlignCenter)
