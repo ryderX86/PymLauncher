@@ -36,7 +36,7 @@ _cached_capes: dict[str, QPixmap] = {}
 
 
 class TextureState(StrEnum):
-    """Enums for skin/cape "state\"."""
+    """Enums for skin/cape "state" """
 
     ACTIVE = "ACTIVE"
     """Skin/cape is in use and will show in-game"""
