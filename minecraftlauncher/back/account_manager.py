@@ -22,7 +22,7 @@ log = logging.getLogger(__name__)
 class AccountManager:
     """WIP, don't use"""
 
-    _instance: AccountManager | None = None
+    _instance: "AccountManager | None" = None
 
     # instance attributes
     _accounts: dict[str, LauncherAccount] = {}  # str is XUID

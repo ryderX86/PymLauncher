@@ -145,7 +145,7 @@ class MSABaseAuthenticationException(BaseAuthenticationException):
     def get_exception_type(
         cls,
         response: requests.Response,
-    ) -> type[MSABaseAuthenticationException]:
+    ) -> type:
         try:
             j: dict = response.json()
         except Exception as err:

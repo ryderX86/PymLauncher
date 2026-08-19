@@ -254,7 +254,7 @@ class LauncherAccount:
             return other == self.xuid
         return super().__eq__(other)
 
-    def has_same_info(self, other: LauncherAccount):
+    def has_same_info(self, other: "LauncherAccount"):
         """
         Checks the JSON serialization of both accounts
 
