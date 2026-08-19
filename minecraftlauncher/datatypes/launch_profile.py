@@ -51,7 +51,7 @@ DEFAULT_ARGS_LIST = {
 
 
 @dataclass(slots=True)
-class GameProfile:
+class LaunchProfile:
     """Launcher game profile"""
 
     name: str = "Untitled"
@@ -471,7 +471,7 @@ class GameProfile:
                     case "latest-snapshot":
                         data["name"] = "Latest Snapshot"
 
-        return GameProfile(
+        return LaunchProfile(
             name=data.get("name", "Untitled"),
             version_id=data.get("lastVersionId", "latest-release"),
             game_dir=data.get("gameDir"),

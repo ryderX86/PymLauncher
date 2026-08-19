@@ -44,7 +44,7 @@ from PySide6.QtWidgets import (
 
 from minecraftlauncher.datatypes.game_version import GameVersionStub
 from minecraftlauncher.back.profile_manager import (
-    GameProfile,
+    LaunchProfile,
     load_launcher_profiles,
     save_single_profile,
 )
@@ -116,7 +116,7 @@ class VersionJsonBackgroundDownloader(QThread):
 
     log = log.getChild("VersionJsonBackgroundDownloader()")
 
-    def __init__(self, version_id: str, profile: GameProfile, parent=None):
+    def __init__(self, version_id: str, profile: LaunchProfile, parent=None):
         super().__init__(parent)
         self._version_id = version_id
         self._profile = profile
@@ -550,7 +550,7 @@ class ProfilesPage(QWidget):
             self._set_undirty()
             self._save()
 
-    def _hook(self, prof: GameProfile):
+    def _hook(self, prof: LaunchProfile):
         if self._dirty:
             self._abandon_changes_dialog()
         self.version_combo.setDisabled(prof.is_default_profile)
@@ -576,7 +576,7 @@ class ProfilesPage(QWidget):
     def _set_mods_folder_row_visibility(
         self,
         ver_id: str | None = None,
-        prof: GameProfile | None = None,
+        prof: LaunchProfile | None = None,
         set_checkbox: bool = True,
     ):
         if not prof:
@@ -987,7 +987,7 @@ class ProfilesPage(QWidget):
         prof = profile_manager.create_profile()
         profile_manager.set_current_profile(prof)
 
-    def _delete_profile(self, profile: GameProfile | None = None):
+    def _delete_profile(self, profile: LaunchProfile | None = None):
         if not profile:
             profile = profile_manager.get_current_profile()
         confirmation = WarningDialog.warn(
@@ -1038,7 +1038,7 @@ class ProfilesPage(QWidget):
 
         self._set_mods_folder_row_visibility(version_id, set_checkbox=False)
 
-    def _export_prof_icon(self, prof: GameProfile | None = None):
+    def _export_prof_icon(self, prof: LaunchProfile | None = None):
         if not prof:
             prof = profile_manager.get_current_profile()
         if not prof.icon:
@@ -1056,7 +1056,7 @@ class ProfilesPage(QWidget):
         img = ico.pixmap(ico.actualSize(QSize(99999, 99999))).toImage()
         img.save(str_path)
 
-    def _clone_profile(self, prof: GameProfile | None = None):
+    def _clone_profile(self, prof: LaunchProfile | None = None):
         if not prof:
             prof = profile_manager.get_current_profile()
         new = prof.copy()
@@ -1080,7 +1080,7 @@ class ProfilesPage(QWidget):
             menu.addAction(new_prof)
             menu.exec(e.globalPos())
             return
-        elif not isinstance(prof, GameProfile):
+        elif not isinstance(prof, LaunchProfile):
             raise TypeError("Unexpected type when getting profile from index")
 
         save_icon = QAction(menu)
@@ -1150,7 +1150,7 @@ class ProfilesPage(QWidget):
         menu.popup(e.globalPos())
 
     @classmethod
-    def _add_jump_list_item(cls, checked: bool, profile: GameProfile):
+    def _add_jump_list_item(cls, checked: bool, profile: LaunchProfile):
         if not checked:
             return cls._rm_jump_list_item(profile)
         if profile not in config.jump_list_items:
@@ -1158,7 +1158,7 @@ class ProfilesPage(QWidget):
         set_jump_list()
 
     @staticmethod
-    def _rm_jump_list_item(profile: GameProfile):
+    def _rm_jump_list_item(profile: LaunchProfile):
         try:
             config.jump_list_items.remove(profile.uuid)
         except ValueError:

@@ -12,7 +12,7 @@ from PySide6.QtCore import (
     QSize,
 )
 
-from minecraftlauncher.datatypes.launch_profile import GameProfile
+from minecraftlauncher.datatypes.launch_profile import LaunchProfile
 from minecraftlauncher.back import profile_manager, version_manager
 from minecraftlauncher.front import resources
 
@@ -165,8 +165,8 @@ class ProfileModel(QAbstractTableModel):
     def profile(self, idx: QModelIndex | QPersistentModelIndex):
         if not idx.isValid():
             return
-        prof: GameProfile = self.data(idx, Qt.ItemDataRole.UserRole)
-        assert isinstance(prof, GameProfile)
+        prof: LaunchProfile = self.data(idx, Qt.ItemDataRole.UserRole)
+        assert isinstance(prof, LaunchProfile)
         return prof
 
     def data(self, index, role: int = Qt.ItemDataRole.DisplayRole) -> Any:
@@ -240,7 +240,7 @@ class ProfileModel(QAbstractTableModel):
             return True
         return False
 
-    def _handle_new_prof(self, profile: GameProfile):
+    def _handle_new_prof(self, profile: LaunchProfile):
         row = profile_manager.get_row_from_profile(profile)
         self.beginInsertRows(QModelIndex(), row, row)
         self.endInsertRows()

@@ -23,7 +23,7 @@ from PySide6.QtWidgets import (
 )
 
 from minecraftlauncher.functions import error_box, is_path_valid
-from minecraftlauncher.back.profile_manager import GameProfile
+from minecraftlauncher.back.profile_manager import LaunchProfile
 from minecraftlauncher.threads.launch_worker import LaunchWorker
 from minecraftlauncher.threads.install_worker import InstallWorker
 from minecraftlauncher.back import profile_manager
@@ -248,7 +248,7 @@ class HomePage(QWidget):
                 self.profile_dropdown.setCurrentIndex(profs.index(current))
 
     def _on_dropdown_select(self, index: int):
-        prof: GameProfile = self.profile_dropdown.itemData(index)
+        prof: LaunchProfile = self.profile_dropdown.itemData(index)
         self.profile_dropdown.blockSignals(True)
         current_prof = profile_manager.get_current_profile()
         if prof != current_prof:
@@ -275,7 +275,7 @@ class HomePage(QWidget):
         profile = profile_manager.get_profile(row)
         self._profile_change(profile)
 
-    def _profile_change(self, profile: GameProfile):
+    def _profile_change(self, profile: LaunchProfile):
         self._reset_play_button()
         try:
             prof_exists = profile.check_install()

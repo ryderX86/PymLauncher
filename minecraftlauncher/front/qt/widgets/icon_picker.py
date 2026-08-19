@@ -18,7 +18,7 @@ from PySide6.QtWidgets import (
     QFileDialog,
 )
 
-from minecraftlauncher.datatypes.launch_profile import GameProfile
+from minecraftlauncher.datatypes.launch_profile import LaunchProfile
 from minecraftlauncher.front import resources
 from minecraftlauncher.functions.error_box import error_box
 
@@ -55,7 +55,7 @@ class IconPicker(QWidget):
         self.icon_automated.connect(self._set_automated)
         self._automated_status = False
         self._previous: QListWidgetItem | None = None
-        self._current_profile: GameProfile | None = None
+        self._current_profile: LaunchProfile | None = None
         self.view.setIconSize(
             QSize(self._DEFAULT_ICO_SIZE, self._DEFAULT_ICO_SIZE)
         )
@@ -155,7 +155,7 @@ class IconPicker(QWidget):
         self.loaded = True
         self.icon_automated.emit(False)
 
-    def profile_selected(self, prof: GameProfile):
+    def profile_selected(self, prof: LaunchProfile):
         self._current_profile = prof
         if not self.loaded:
             return

@@ -35,7 +35,7 @@ from PySide6.QtWidgets import (
 )
 
 from minecraftlauncher import config, constants
-from minecraftlauncher.datatypes import GameProfile
+from minecraftlauncher.datatypes import LaunchProfile
 from minecraftlauncher.datatypes.game_version import GameVersionStub
 from minecraftlauncher.back import version_manager, profile_manager
 from minecraftlauncher.front import styles, resources

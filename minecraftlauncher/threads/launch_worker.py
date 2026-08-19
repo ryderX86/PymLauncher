@@ -21,7 +21,7 @@ from minecraftlauncher.constants import (
     DEV,
 )
 from minecraftlauncher.functions import is_path_valid
-from minecraftlauncher.datatypes import GameProfile
+from minecraftlauncher.datatypes import LaunchProfile
 from minecraftlauncher.auth import LauncherAccount
 from minecraftlauncher.config import config, JarRedownloadBehavior
 from minecraftlauncher.paths import paths
@@ -194,7 +194,7 @@ def build_launch_command(
     java_path: str,
     log4j_config: str | None,
     classpath: str,
-    profile: GameProfile,
+    profile: LaunchProfile,
     **kwargs,
 ):
     """

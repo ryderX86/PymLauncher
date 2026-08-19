@@ -22,7 +22,7 @@ from PySide6.QtCore import Signal, QObject
 
 from minecraftlauncher.config import config
 from minecraftlauncher.paths import paths
-from minecraftlauncher.datatypes import GameProfile
+from minecraftlauncher.datatypes import LaunchProfile
 from minecraftlauncher.functions import reswrite
 from minecraftlauncher import get_exit_status
 
@@ -43,17 +43,17 @@ _DEFAULT_SETTINGS_JSON: dict[str, Any] = {
 
 type ProfileType = Literal["custom", "latest-release", "latest-snapshot"]
 
-profiles: dict[str, GameProfile] = {}
+profiles: dict[str, LaunchProfile] = {}
 
-_current_profile: GameProfile | None = None
-_profile_switch_handlers: list[Callable[[GameProfile], None]] = []
+_current_profile: LaunchProfile | None = None
+_profile_switch_handlers: list[Callable[[LaunchProfile], None]] = []
 _profile_refresh_handlers: list[Callable] = []
 
 _launcher_settings = {**_DEFAULT_SETTINGS_JSON}
 
 
 @lru_cache(maxsize=32)
-def get_row_from_profile(profile: GameProfile):
+def get_row_from_profile(profile: LaunchProfile):
     i = 0
     for _, prof in profiles.items():
         if prof == profile:
@@ -70,7 +70,7 @@ def reorder_profiles(new_order: Iterable[str]):
     Reorder profiles cache in the order of IDs provided
     """
     global profiles
-    new_profiles: dict[str, GameProfile] = {}
+    new_profiles: dict[str, LaunchProfile] = {}
     for profile_id in new_order:
         if profile_id not in profiles:
             raise ValueError(
@@ -93,7 +93,7 @@ def reorder_profiles(new_order: Iterable[str]):
     return
 
 
-def reorder_single_profile(prof: GameProfile, idx: int):
+def reorder_single_profile(prof: LaunchProfile, idx: int):
     ids = [*profiles.keys()]
     if prof.uuid not in ids:
         raise ValueError("Profile ID not present in profiles!")
@@ -102,7 +102,7 @@ def reorder_single_profile(prof: GameProfile, idx: int):
     return reorder_profiles(ids)
 
 
-def add_profile_switch_handler(func: Callable[[GameProfile], None]):
+def add_profile_switch_handler(func: Callable[[LaunchProfile], None]):
     """
     Adds a function to the profile switch handler list, then outputs the index.
 
@@ -113,7 +113,7 @@ def add_profile_switch_handler(func: Callable[[GameProfile], None]):
 
 
 def remove_profile_switch_handler(
-    func_idx: Callable[[GameProfile], None] | int,
+    func_idx: Callable[[LaunchProfile], None] | int,
 ):
     match func_idx:
         case int():
@@ -173,7 +173,7 @@ def get_current_profile():
     return _current_profile
 
 
-def get_profile(idx: str | int) -> GameProfile:
+def get_profile(idx: str | int) -> LaunchProfile:
     match idx:
         case str():
             if idx not in profiles:
@@ -190,14 +190,14 @@ def get_profile(idx: str | int) -> GameProfile:
 
 
 def set_current_profile_uuid(uid: str):
-    current_prof: GameProfile | None = None
+    current_prof: LaunchProfile | None = None
     if uid not in profiles:
         raise NameError(name=uid)
     current_prof = profiles[uid]
     return set_current_profile(current_prof)
 
 
-def set_current_profile(prof: GameProfile):
+def set_current_profile(prof: LaunchProfile):
     if get_exit_status():
         return
     global _current_profile
@@ -218,7 +218,7 @@ def current_profile_used():
 
 
 class _Signal(QObject):
-    profile_added = Signal(GameProfile)
+    profile_added = Signal(LaunchProfile)
     profile_deleted = Signal(str, int)  # uid, row
     """`uid: str, row: int`"""
 
@@ -286,14 +286,14 @@ def _default_profs_factory():
     latest_uid = str(uuid.uuid4())
     snapshot_uid = str(uuid.uuid4())
     return {
-        latest_uid: GameProfile(
+        latest_uid: LaunchProfile(
             "Latest Release",
             type="latest-release",
             uuid=latest_uid,
             is_default_profile=True,
             icon="Grass",
         ),
-        snapshot_uid: GameProfile(
+        snapshot_uid: LaunchProfile(
             "Latest Snapshot",
             version_id="latest-snapshot",
             uuid=snapshot_uid,
@@ -363,7 +363,7 @@ def load_launcher_profiles():
             log.warning("Loading default profiles. User should be notified.")
         else:
             profs_raw: dict = lp_json.get("profiles", _default_profs_factory())
-            profs: dict[str, GameProfile] = {}
+            profs: dict[str, LaunchProfile] = {}
             has_latest_profile = False
             has_snapshot_profile = False
             for k, v in lp_json.get("settings", {}).items():
@@ -440,7 +440,7 @@ def load_launcher_profiles():
             for key in profile_order:
                 val = profs_raw[key]
                 prof_type = val.get("type", "")
-                profs[key] = GameProfile.from_dict_compat(val, key)
+                profs[key] = LaunchProfile.from_dict_compat(val, key)
                 match prof_type:
                     case "latest-release":
                         has_latest_profile = True
@@ -451,13 +451,13 @@ def load_launcher_profiles():
             if not has_latest_profile:
                 log.warning("Missing latest release profile! Creating one...")
                 uid = str(uuid.uuid4())
-                profs[uid] = GameProfile(
+                profs[uid] = LaunchProfile(
                     "", type="latest-release", version_id="latest-release"
                 )
             if not has_snapshot_profile:
                 log.warning("Missing latest snapshot profile! Creating one...")
                 uid = str(uuid.uuid4())
-                profs[uid] = GameProfile(
+                profs[uid] = LaunchProfile(
                     "", type="latest-snapshot", version_id="latest-snapshot"
                 )
             log.info(
@@ -473,7 +473,7 @@ def load_launcher_profiles():
 
 
 def save_launcher_profiles(
-    profiles_: dict[str, GameProfile] | None = None,
+    profiles_: dict[str, LaunchProfile] | None = None,
     settings: dict[str, bool | str | int] | None = None,
 ):
     """
@@ -525,14 +525,14 @@ def save_launcher_profiles(
     return True
 
 
-def get_last_used_profile(profiles_: dict[str, GameProfile] | None = None):
+def get_last_used_profile(profiles_: dict[str, LaunchProfile] | None = None):
     """Returns the last used profile in the dict."""
     if not profiles_:
         global profiles
     else:
         profiles = profiles_
     latest = -1.0
-    last_used_profile: GameProfile | None = None
+    last_used_profile: LaunchProfile | None = None
     for profile in profiles.values():
         ts = datetime.fromisoformat(profile.last_used).timestamp()
         if ts > latest:
@@ -543,13 +543,13 @@ def get_last_used_profile(profiles_: dict[str, GameProfile] | None = None):
     return last_used_profile
 
 
-def save_single_profile(profile: GameProfile):
+def save_single_profile(profile: LaunchProfile):
     profiles[profile.uuid] = profile
     save_launcher_profiles()
     _refresh_profiles()
 
 
-def delete_single_profile(profile: GameProfile):
+def delete_single_profile(profile: LaunchProfile):
     row = get_row_from_profile(profile)
     del profiles[profile.uuid]
     if profile == _current_profile:
@@ -560,7 +560,7 @@ def delete_single_profile(profile: GameProfile):
 
 def create_profile():
     log.info("Creating new profile...")
-    prof = GameProfile()
+    prof = LaunchProfile()
     profiles[prof.uuid] = prof
     SIGNAL.profile_added.emit(prof)
     set_current_profile(prof)

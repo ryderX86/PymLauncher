@@ -16,7 +16,7 @@ from PySide6.QtWidgets import (
     QFileDialog,
 )
 
-from minecraftlauncher.datatypes.launch_profile import GameProfile
+from minecraftlauncher.datatypes.launch_profile import LaunchProfile
 from minecraftlauncher.back.profile_exporting import PortableProfile
 from minecraftlauncher.front import resources
 from . import Status
@@ -67,7 +67,7 @@ class ProfileExporter(QThread):
 
 
 class ExportProfileDialog(QDialog):
-    def __init__(self, prof: GameProfile, parent=None):
+    def __init__(self, prof: LaunchProfile, parent=None):
         super().__init__(parent)
         self.profile = PortableProfile(prof)
         self._destination = str(Path("~/Documents").resolve())
@@ -203,7 +203,7 @@ class ExportProfileDialog(QDialog):
         self._layout.addWidget(actions)
 
     @classmethod
-    def deploy(cls, profile: GameProfile, parent=None):
+    def deploy(cls, profile: LaunchProfile, parent=None):
         self = cls(profile, parent)
         return self.exec()
 

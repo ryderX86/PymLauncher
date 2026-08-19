@@ -4,7 +4,7 @@ from PySide6.QtCore import Signal, QSize
 from PySide6.QtGui import QFocusEvent, QIcon, QMouseEvent, QWheelEvent
 from PySide6.QtWidgets import QPushButton, QLabel, QHBoxLayout
 
-from minecraftlauncher.datatypes.launch_profile import GameProfile
+from minecraftlauncher.datatypes.launch_profile import LaunchProfile
 from minecraftlauncher.front import resources
 from .icon_picker import IconPicker
 
@@ -132,5 +132,5 @@ class IconPickerButton(QPushButton):
     def setText(self, text: str | None):
         self.dropdown.set_icon_to(text)
 
-    def profile_selected(self, prof: GameProfile):
+    def profile_selected(self, prof: LaunchProfile):
         self.dropdown.profile_selected(prof)

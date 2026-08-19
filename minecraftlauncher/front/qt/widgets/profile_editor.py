@@ -37,7 +37,7 @@ from PySide6.QtWidgets import (
 )
 
 from minecraftlauncher import config, constants
-from minecraftlauncher.datatypes import GameProfile
+from minecraftlauncher.datatypes import LaunchProfile
 from minecraftlauncher.datatypes.game_version import GameVersionStub
 from minecraftlauncher.back import version_manager, profile_manager
 from minecraftlauncher.front import styles, resources
@@ -79,9 +79,9 @@ COMMON_RESOLUTIONS = [
 class ProfileEditor(QWidget):
 
     # instance attributes
-    profile: GameProfile
+    profile: LaunchProfile
 
-    def __init__(self, profile: GameProfile, parent=None):
+    def __init__(self, profile: LaunchProfile, parent=None):
         super().__init__(parent)
         self.profile = profile
         self.setBackgroundRole(styles.CRole.Base)

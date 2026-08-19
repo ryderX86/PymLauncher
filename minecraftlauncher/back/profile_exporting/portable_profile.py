@@ -6,7 +6,7 @@ import json
 import glob
 import os
 
-from minecraftlauncher.datatypes.launch_profile import GameProfile
+from minecraftlauncher.datatypes.launch_profile import LaunchProfile
 from minecraftlauncher.functions import is_path_valid
 from minecraftlauncher.back import profile_manager
 from minecraftlauncher.paths import paths
@@ -64,11 +64,11 @@ class PortableProfile:
 
     type ExportType = ExportType
 
-    def __init__(self, prof: GameProfile | str):
+    def __init__(self, prof: LaunchProfile | str):
         match prof:
             case str():
                 self._prof = prof
-            case GameProfile():
+            case LaunchProfile():
                 self._prof = prof.uuid
 
     @property

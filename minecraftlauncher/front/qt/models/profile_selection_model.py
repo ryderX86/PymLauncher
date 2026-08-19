@@ -2,7 +2,7 @@ import logging
 
 from PySide6.QtCore import Qt, QItemSelectionModel, QModelIndex, Signal
 
-from minecraftlauncher.datatypes.launch_profile import GameProfile
+from minecraftlauncher.datatypes.launch_profile import LaunchProfile
 from minecraftlauncher.back import profile_manager
 from .profile_model import ProfileModel
 
@@ -12,7 +12,7 @@ log = logging.getLogger(__name__.replace("_", ""))
 
 
 class ProfileSelectionModel(QItemSelectionModel):
-    begin_change = Signal(GameProfile)
+    begin_change = Signal(LaunchProfile)
 
     def __init__(self, model=ProfileModel()):
         global _INSTANCE
@@ -50,7 +50,7 @@ class ProfileSelectionModel(QItemSelectionModel):
         if profile_manager.get_current_profile() != profile:
             profile_manager.set_current_profile(profile)
 
-    def _profile_switch(self, prof: GameProfile):
+    def _profile_switch(self, prof: LaunchProfile):
         prof_row = profile_manager.get_row_from_profile(prof)
         idx = self.model().index(prof_row, 0)
         if self.currentIndex().row() != idx.row():

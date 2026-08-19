@@ -9,7 +9,7 @@ import os
 from PySide6.QtCore import QThread, Signal
 
 from minecraftlauncher.functions import is_path_valid
-from minecraftlauncher.datatypes import GameProfile
+from minecraftlauncher.datatypes import LaunchProfile
 from minecraftlauncher.auth import LauncherAccount
 from minecraftlauncher.paths import paths
 from minecraftlauncher.exceptions.back import (
@@ -38,7 +38,7 @@ class InstallWorker(QThread):
 
     # instance attributes
     version_id: str
-    launch_profile: GameProfile
+    launch_profile: LaunchProfile
     account: LauncherAccount
     emit_status: bool
     version_json: dict
@@ -51,7 +51,7 @@ class InstallWorker(QThread):
     def __init__(
         self,
         version_id: str,
-        launch_profile: GameProfile,
+        launch_profile: LaunchProfile,
         account: LauncherAccount,
         emit_status: bool = True,
         parent=None,
