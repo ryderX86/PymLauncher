@@ -359,7 +359,9 @@ class SkinChange(QDialog):
         if not self.account.token:
             self.account.refresh()
         assert self.account.token
-        headers = {"Authorization": f"Bearer {self.account.token.access_token}"}
+        headers = {
+            "Authorization": f"Bearer {self.account.token.access_token}"
+        }
         if self.current_cape:
             try:
                 payload = {"capeId": self.current_cape}
@@ -411,16 +413,18 @@ class SkinChange(QDialog):
         if not self.account.profile:
             self.account.get_profile_info()
         assert self.account.profile
-        current_skin_hash = self.account.profile.current_skin["url"].split("/")[
-            -1
-        ]
+        current_skin_hash = self.account.profile.current_skin["url"].split(
+            "/"
+        )[-1]
         if current_skin_hash == self.current_hash:
             error_box("Skin is already set to this!")
             return False
         if not self.account.token:
             error_box("Invalid access token")
             return False
-        headers = {"Authorization": f"Bearer {self.account.token.access_token}"}
+        headers = {
+            "Authorization": f"Bearer {self.account.token.access_token}"
+        }
 
         fp = self.file_input.text()
         name = "img_"

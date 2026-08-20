@@ -118,10 +118,12 @@ class DeviceCodePoller(QThread):
                     self.interval += 5
                     log.warning("MS said to slow down! Interval += 5")
                 case _:
-                    self.error.emit("Unexpected error: {error}\n%s" f"{data.get(
+                    self.error.emit(
+                        "Unexpected error: {error}\n%s" f"{data.get(
                             "error_description",
                             "(no description provided)"
-                        )}")
+                        )}"
+                    )
                     log.error("Login error occured: %s", str(error))
                     if data.get("error_description"):
                         log.error("Details: %s", data["error_description"])

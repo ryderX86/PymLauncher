@@ -91,7 +91,9 @@ class NeoForgeInstallWindow(QDialog):
         self.loader_ver_dd.currentTextChanged.connect(
             self._loader_ver_dd_txt_change
         )
-        self.loader_ver_dd.currentTextChanged.connect(self._set_button_disabled)
+        self.loader_ver_dd.currentTextChanged.connect(
+            self._set_button_disabled
+        )
         self.loader_ver_dd.setPlaceholderText("")
         self.game_ver_dd.setPlaceholderText("")
         return

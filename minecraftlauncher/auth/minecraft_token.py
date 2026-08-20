@@ -163,7 +163,9 @@ class MinecraftToken:
             ) from err
         except requests.HTTPError as err:
             if err.response.status_code in (400, 402, 403):
-                log.warning("Malformed request err; defaulting to alt auth url")
+                log.warning(
+                    "Malformed request err; defaulting to alt auth url"
+                )
                 log.debug("returning `cls.auth_alternate(xsts_token)`")
                 return cls.auth_alternate(xsts_token)
             log.error(

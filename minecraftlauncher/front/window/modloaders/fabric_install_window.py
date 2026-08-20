@@ -148,7 +148,9 @@ class FabricInstallWindow(QDialog):
         self.loader_ver_dd.currentTextChanged.connect(
             self._loader_ver_dd_txt_change
         )
-        self.loader_ver_dd.currentTextChanged.connect(self._set_button_disabled)
+        self.loader_ver_dd.currentTextChanged.connect(
+            self._set_button_disabled
+        )
         self.install_button.setText("Install Fabric")
         self.is_loaded = True
         return

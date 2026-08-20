@@ -406,7 +406,9 @@ def load_launcher_profiles():
                     creation_order = []
                     for key in keys_leftover:
                         val = profs_raw[key]
-                        dt_str = val.get("lastUsed", "1970-01-01T00:00:00.000Z")
+                        dt_str = val.get(
+                            "lastUsed", "1970-01-01T00:00:00.000Z"
+                        )
                         try:
                             dt = datetime.fromisoformat(dt_str)
                         except:

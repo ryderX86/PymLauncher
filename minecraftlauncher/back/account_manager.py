@@ -244,7 +244,9 @@ class AccountManager:
             return
 
     def set_active(
-        self, new_account: str | LauncherAccount, ignore_refreshes: bool = False
+        self,
+        new_account: str | LauncherAccount,
+        ignore_refreshes: bool = False,
     ):
         if isinstance(new_account, LauncherAccount):
             if new_account.xuid not in self._accounts:
@@ -378,7 +380,8 @@ class AccountManager:
     ):
         if callback in self._active_callbacks:
             log.warning(
-                "Attempted to add callback %r multiple times", callback.__name__
+                "Attempted to add callback %r multiple times",
+                callback.__name__,
             )
             return
         self._active_callbacks.append(callback)

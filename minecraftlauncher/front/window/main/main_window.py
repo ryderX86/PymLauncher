@@ -169,7 +169,9 @@ class MainWindow(QMainWindow):
         self.sidebar = QListWidget()
         self.sidebar.setBackgroundRole(styles.CRole.Mid)
         self.sidebar.setDragEnabled(False)
-        self.sidebar.setSelectionMode(QListWidget.SelectionMode.SingleSelection)
+        self.sidebar.setSelectionMode(
+            QListWidget.SelectionMode.SingleSelection
+        )
         self.sidebar.setFixedWidth(180)
         # self.sidebar.setProperty("sidebar", True)
         # self.sidebar.setIconSize(QSize(32, 32))

@@ -135,7 +135,9 @@ def get_jvm_version_manifest(version: str) -> dict:
     if not sha1:
         log.warning("SHA1 is missing from JRE version keys.")
 
-    manifest_path = os.path.join(paths.game, "jre", f"{version}.{JAVA_OS}.json")
+    manifest_path = os.path.join(
+        paths.game, "jre", f"{version}.{JAVA_OS}.json"
+    )
 
     if os.path.isfile(manifest_path):
         max_age = time.time() - timedelta(days=7).total_seconds()

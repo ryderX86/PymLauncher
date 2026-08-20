@@ -178,7 +178,9 @@ class ExportProfileDialog(QDialog):
 
         include_saves = QCheckBox("Include Saves")
         include_saves.setEnabled(self.profile.saves)
-        include_saves.setChecked(self.profile.saves and self._includes["saves"])
+        include_saves.setChecked(
+            self.profile.saves and self._includes["saves"]
+        )
         include_saves.checkStateChanged.connect(
             lambda c: self._includes.__setitem__(
                 "saves", c == Qt.CheckState.Checked

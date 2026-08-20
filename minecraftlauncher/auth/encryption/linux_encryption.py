@@ -9,7 +9,9 @@ import json
 
 from cryptography.fernet import Fernet, InvalidToken
 
-logging.getLogger("keyring").setLevel(logging.CRITICAL)  # pylint: disable=C0413
+logging.getLogger("keyring").setLevel(
+    logging.CRITICAL
+)  # pylint: disable=C0413
 import keyring
 
 from minecraftlauncher.constants import LAUNCHER_NAME
@@ -22,7 +24,9 @@ keyring.get_keyring()
 
 enc_key = keyring.get_credential(LAUNCHER_NAME, "encryption-key")
 if not enc_key:
-    log.debug("Creating new encryption key for launcher and storing in keyring")
+    log.debug(
+        "Creating new encryption key for launcher and storing in keyring"
+    )
 
     secret = "".join([secrets.token_urlsafe(32), "==="])
     key = Fernet(secret)

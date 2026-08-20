@@ -51,7 +51,9 @@ class XstsAuthError(BaseAuthenticationException):
                 case 2148916237:
                     reason = "Xbox Live needs adult verification in SK."
                 case 2148916238:
-                    reason = "This account must be added to a Microsoft Family "
+                    reason = (
+                        "This account must be added to a Microsoft Family "
+                    )
                     reason += "by an adult to proceed."
                 case 2148916262:
                     reason = "Error 2148916262"
@@ -120,7 +122,9 @@ class MSABaseAuthenticationException(BaseAuthenticationException):
     trigger: str
     """What triggered the raising of this error"""
 
-    def __init__(self, response: requests.Response, trigger: str | None = None):
+    def __init__(
+        self, response: requests.Response, trigger: str | None = None
+    ):
         super().__init__(response)
         try:
             resp_json: dict = response.json()

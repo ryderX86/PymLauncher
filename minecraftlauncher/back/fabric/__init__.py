@@ -3,7 +3,10 @@ import json
 import os
 
 from minecraftlauncher.paths import paths
-from minecraftlauncher.back.download_helpers import download, file_exists_or_age
+from minecraftlauncher.back.download_helpers import (
+    download,
+    file_exists_or_age,
+)
 from minecraftlauncher.functions.text import indent
 
 log = logging.getLogger(__name__)
@@ -23,7 +26,9 @@ def _ensure_master(force_refresh: bool = False):
     if force_refresh or not _master_manifest:
         log.debug("Loading Fabric manifest...")
         if (
-            file_exists_or_age(os.path.join(paths.data, "fabric-versions.json"))
+            file_exists_or_age(
+                os.path.join(paths.data, "fabric-versions.json")
+            )
             and not force_refresh
         ):
             with open(
@@ -50,7 +55,9 @@ def _ensure_master(force_refresh: bool = False):
         del _master_manifest["intermediary"]
         del _master_manifest["installer"]
         if not _master_manifest:
-            raise RuntimeError("Couldn't get game versions manifest for Fabric")
+            raise RuntimeError(
+                "Couldn't get game versions manifest for Fabric"
+            )
         with open(os.path.join(paths.data, "fabric-versions.json"), "w") as f:
             f.write(response.text)
     return True

@@ -159,7 +159,9 @@ def check_or_download_logging_config(version_json: dict) -> str | None:
     if not logging_info:
         return None
 
-    arg: str = logging_info.get("argument", "-Dlog4j.configurationFile=${path}")
+    arg: str = logging_info.get(
+        "argument", "-Dlog4j.configurationFile=${path}"
+    )
     if "file" not in logging_info:
         log.warning("No 'file' key in logging config, considering it invalid.")
         return None

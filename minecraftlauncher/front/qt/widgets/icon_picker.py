@@ -186,7 +186,9 @@ class IconPicker(QWidget):
             self.view.setRowHidden(1, False)
             self.view.setCurrentRow(1)
             self.view.item(1).setIcon(resources.profile_icon(prof.icon))
-            self.change_icon.emit("<CUSTOM>", resources.profile_icon(prof.icon))
+            self.change_icon.emit(
+                "<CUSTOM>", resources.profile_icon(prof.icon)
+            )
             self.view.setRowHidden(2, True)
         else:
             self._previous = self.view.item(2)

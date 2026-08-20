@@ -5,7 +5,7 @@ version = "1.0.0.31"
 [tool]
 
 [tool.black]
-line-length = 80
+line-length = 79
 extend-exclude = "_resources_bundled.py"
 
 [tool.pyright]

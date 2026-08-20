@@ -1,5 +1,8 @@
 from minecraftlauncher.back import version_manager
-from minecraftlauncher.constants import LATEST_VERSIONS_SET, LATEST_VERSION_TEXT
+from minecraftlauncher.constants import (
+    LATEST_VERSIONS_SET,
+    LATEST_VERSION_TEXT,
+)
 
 from PySide6.QtGui import QValidator
 

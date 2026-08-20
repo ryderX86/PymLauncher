@@ -103,13 +103,17 @@ class WarningDialog(QMessageBox):
             self._checkbox.setChecked(False)
         if button_labels:
             if "ok" in button_labels:
-                self.button(self.StandardButton.Ok).setText(button_labels["ok"])
+                self.button(self.StandardButton.Ok).setText(
+                    button_labels["ok"]
+                )
             if "yes" in button_labels:
                 self.button(self.StandardButton.Yes).setText(
                     button_labels["yes"]
                 )
             if "no" in button_labels:
-                self.button(self.StandardButton.No).setText(button_labels["no"])
+                self.button(self.StandardButton.No).setText(
+                    button_labels["no"]
+                )
 
     def _handle_dismissal(self):
         if self._checkbox.isChecked() or self._show_once:
