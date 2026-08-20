@@ -6,7 +6,7 @@ version = "1.0.0.31"
 
 [tool.black]
 line-length = 80
-extend-exclude = "^/*.*"
+extend-exclude = "_resources_bundled.py"
 
 [tool.pyright]
 pythonPlatform = "All"

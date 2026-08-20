@@ -494,9 +494,10 @@ class LaunchProfile:
     def from_dict(cls, data: dict, uid: str):
         known: list[str] = [
             f.name
-            for f in cls.__dataclass_fields__.values()  # pylint: disable=E1101
+            # pylint: disable-next=E1101
+            for f in cls.__dataclass_fields__.values()
         ]
-        unknown: list[str] = [f.name for f in data.keys() if f not in known]
+        unknown: list[str] = [f for f in data.keys() if f not in known]
         filtered_data = {k: v for k, v in data.items() if k in known}
         if unknown:
             for key in unknown:
@@ -507,11 +508,11 @@ class LaunchProfile:
 
     def has_valid_uuid(self):
         uid_fmt = self.uuid.replace("-", "")
-        chars = "0123456789abdef"
+        chars = "0123456789abcdef"
 
         def valid_chars():
             nonlocal chars, uid_fmt
-            for char in uid_fmt:
+            for char in uid_fmt.lower():
                 if char not in chars:
                     return False
             return True

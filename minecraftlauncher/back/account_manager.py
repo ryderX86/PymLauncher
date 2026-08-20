@@ -24,8 +24,8 @@ class AccountManager:
     # instance attributes
     _accounts: dict[str, LauncherAccount] = {}  # str is XUID
     _active_account: LauncherAccount | None
-    _loaded: bool
-    _active_callbacks: list[Callable[[LauncherAccount], None]] = []
+    _loaded: bool = False
+    _active_callbacks: list[Callable[[LauncherAccount], None]]
 
     def __new__(cls):
         if cls._instance:
@@ -37,9 +37,13 @@ class AccountManager:
             return object.__new__(cls)
 
     def __init__(self):
+        if self._loaded:
+            log.warning("__init__() ran twice!")
+            return
         self._loaded = False
         self._accounts = {}
         self._active_account = None
+        self._active_callbacks = []
         type(self)._instance = self  # singleton
 
     @property
@@ -316,6 +320,7 @@ class AccountManager:
         if self.active and self.active.xuid == xuid:
             self._active_account = None
         del self._accounts[xuid]
+        self.save_accounts()
 
     def __setitem__(self, xuid: str, account: LauncherAccount):
         if xuid in self._accounts:

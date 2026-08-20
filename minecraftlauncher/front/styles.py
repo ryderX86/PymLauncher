@@ -117,7 +117,7 @@ QPushButton {{
     padding: 4px 9px;
     font-weight: 600;
 }}
-QPushButton:hover {{
+QPushButton:hover, QPushButton[keyFocus="true"] {{
     background-color: {BG_SURFACE_LIGHT};
     border-color: {BORDER_LIGHT};
 }}
@@ -163,7 +163,9 @@ QPushButton[play="true"], PlayButton {{
     padding: 12px 32px;
 }}
 QPushButton[play="true"]:hover,
-PlayButton:hover {{
+PlayButton:hover,
+QPushButton[play="true"][keyFocus="true"],
+PlayButton:hover[keyFocus="true"] {{
     border-color: {ACCENT_HOVER};
 }}
 QPushButton[play="true"]:pressed,
@@ -326,6 +328,12 @@ QSpinBox {{
     border: 1px solid {BORDER};
     border-radius: 6px;
     padding: 4px 8px;
+}}
+
+QPushButton[keyFocus="true"],
+QComboBox[keyFocus="true"],
+QMenu::item[keyFocus="true"] {{
+    border: 1px solid {BORDER_LIGHT};
 }}
 
 /* Progress bar

@@ -249,7 +249,7 @@ class LoginWindow(QDialog):
             self.open_browser.setHidden(False)
             return
 
-        if resp.status_code < 200 and resp.status_code > 299:
+        if resp.status_code < 200 or resp.status_code > 299:
             err = resp.json() if resp.text else {}
             desc = err.get(
                 "error_description", err.get("error", resp.text[:50])

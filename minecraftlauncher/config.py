@@ -121,8 +121,15 @@ class ConfigHolder:
                         self.coerce_enum(val, get_type_hints(type(self))[key]),
                     )
                     continue
+                else:
+                    log.warning(
+                        "Unexpected value for %r: %r",
+                        get_type_hints(type(self))[key],
+                        val,
+                    )
+                    continue
             elif isinstance(getattr(self, key), set) and isinstance(val, list):
-                pass  # set() hack
+                val = set(*val)  # set() hack
             elif not isinstance(val, type(getattr(self, key))):
                 log.warning(
                     "Skipping config entry %r due to mismatching type: "
@@ -147,6 +154,7 @@ class ConfigHolder:
                 continue
             elif isinstance(val, set):
                 output[key] = [*val]
+                output[key].sort()
             else:
                 output[key] = val
         return output

@@ -23,6 +23,7 @@ ENABLED: bool
 # we need to account for that; nuitka should trim the match statement but it's
 # not guarenteed unless we replace platform.system() calls
 def run_import():
+    # pylint: disable=import-outside-toplevel
     global encrypt, decrypt, data_load_hook, data_save_hook, ENABLED
     match platform.system():
         case "Windows":
@@ -54,6 +55,12 @@ def run_import():
                         "Please make sure either GNOME Keyring or KDE Wallet "
                         "are installed on your system."
                     )
+                )
+                from .no_encryption import (
+                    encrypt,
+                    decrypt,
+                    data_load_hook,
+                    data_save_hook,
                 )
         case _:
 

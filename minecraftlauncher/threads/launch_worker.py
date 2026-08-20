@@ -30,7 +30,7 @@ from .install_worker import InstallWorker
 
 log = logging.getLogger(__name__)
 
-TEMPLATE_LEFTOVERS_REGEX = re.compile(r"${([a-zA-Z0-9_\-]+)}")
+TEMPLATE_LEFTOVERS_REGEX = re.compile(r"\$\{([a-zA-Z0-9_\-]+)\}")
 
 
 def _substitute(template: str, values: dict[str, str]):

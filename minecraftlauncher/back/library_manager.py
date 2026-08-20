@@ -290,7 +290,7 @@ def get_libraries_download_list(
             # size: int = lib.get("size", 0)
             url, path = parse_lib_path(url, name)
 
-        if sha1 and sha1 in download_list:
+        if sha1 and any(dl.hash == sha1 for dl in download_list):
             log.warning(
                 "Duplicate libary %s; continuing.",
                 lib.get("name", "<unidentified>"),

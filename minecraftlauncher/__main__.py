@@ -18,6 +18,7 @@ from .functions.error_box import error_box
 from .functions import detect_set_clipboard, uisleep
 from .ostools.win32 import setup_app_id
 from .front.styles import STYLESHEET, get_fonts, gen_palette, FontList
+from .front.event_filters import FocusEventFilter
 from .front.window.loading_blocker import LoadingBlockerWindow
 from .front.window.main.main_window import MainWindow
 from .front.window.login import LoginWindow
@@ -77,6 +78,8 @@ class LauncherApp:
             self.qapp.setWindowIcon(QIcon(":/icon.ico"))
         else:
             log.debug("Couldn't set app icon")
+        self._event_filter = FocusEventFilter()
+        self.qapp.installEventFilter(self._event_filter)
 
         self.lb_window = LoadingBlockerWindow()
         self.lb_window.rejected.connect(self._close_event)
@@ -164,6 +167,9 @@ class LauncherApp:
         self.main_window.show()
         # self.lb_window.setParent(self.main_window)
         self.lb_window.hide()
+        focused = QApplication.focusWidget()
+        if focused:
+            focused.clearFocus()
         self.main_window.check_for_launch_arg()
         return self.qapp.exec()
 
