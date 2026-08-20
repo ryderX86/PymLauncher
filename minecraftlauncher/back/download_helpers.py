@@ -425,7 +425,7 @@ class RunnableDownloader(QRunnable):
 
     @property
     def hash(self) -> str | None:
-        return self.hash
+        return self._hash
 
     @property
     def failed(self):
