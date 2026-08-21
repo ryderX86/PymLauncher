@@ -70,8 +70,15 @@ class AccountManager:
         Loads accounts from accounts.bin.
 
         Can raise any of `json.JSONDecodeError`,
-        `minecraftlauncher.exceptions.EncryptedDataDecodeError`,
-        `UnicodeError` (very rarely), or a `BaseAuthenticationException`
+        `EncryptedDataDecodeError`, `UnicodeError` (very rarely), or a
+        `BaseAuthenticationException`.
+
+        If a `UnicodeError` was raised, this will (usually) mean one of two
+        things:
+        1. The accounts store was incorrectly identified as unencrypted
+        (shouldn't be possible but can happen)
+        2. Decryption failed in a spectacular way (it should normally raise
+        `EncryptedDataDecodeError`)
         """
         if self._accounts:
             log.warning(
