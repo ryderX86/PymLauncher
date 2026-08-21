@@ -2,7 +2,6 @@ import sys
 
 from PySide6.QtWidgets import QApplication
 from requests.adapters import HTTPAdapter, Retry
-import requests
 
 from .constants import USER_AGENT
 from .networking import ResilientSession
