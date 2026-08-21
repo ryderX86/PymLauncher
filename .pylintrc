@@ -1,5 +1,5 @@
 [MESSAGES CONTROL]
-disable=invalid-name,
+disable=invalid-name, ; Qt unfortunately uses camalCase :(
         attribute-defined-outside-init,
         missing-function-docstring,
         no-name-in-module,
