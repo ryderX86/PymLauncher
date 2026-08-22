@@ -11,6 +11,8 @@ log = logging.getLogger(__name__)
 
 
 class BaseAuthenticationException(Exception):
+    """Base class for all authentication errors"""
+
     response: requests.Response | None
 
     _msg = "Failed to authenticate due to an unknown error."
@@ -26,6 +28,11 @@ class BaseAuthenticationException(Exception):
 
 
 class XstsAuthError(BaseAuthenticationException):
+    """
+    XSTS error, usually means the account is done for, doesn't exist yet, or
+    needs age verification in SK.
+    """
+
     comment: str
     xerr: int
     redirect: str
@@ -72,6 +79,8 @@ class XstsAuthError(BaseAuthenticationException):
 
 
 class NoConnectionError(BaseAuthenticationException):
+    """No internet connection"""
+
     _msg = "There appears to be a problem with your internet connection."
 
     # instance attributes
@@ -100,10 +109,16 @@ class NoConnectionError(BaseAuthenticationException):
 
 
 class UnauthorizedError(BaseAuthenticationException):
+    """
+    Blanket exception for all invalid token errors.
+    """
+
     _msg = "An issue has occured while authenticating. Please log in again."
 
 
 class MSABaseAuthenticationException(BaseAuthenticationException):
+    """Base class for MSA-based authentication errors"""
+
     default_errcode: str | list[str] | set[str] = "<unknown>"
     """
     The error code that should result in use of this exception.
@@ -179,16 +194,22 @@ class MSABaseAuthenticationException(BaseAuthenticationException):
 
 
 class MSAInvalidRequestError(MSABaseAuthenticationException):
+    """Bad request. If this shows up, it's an issue in our code."""
+
     default_errcode = "invalid_request"
     _msg = "A protocol error has occured. Please submit a bug report."
 
 
 class MSAInvalidSessionError(MSABaseAuthenticationException):
+    """Session expired or token is invalid."""
+
     default_errcode = {"interaction_required", "invalid_grant"}
     _msg = "Session expired. Please log in again."
 
 
 class MSAInvalidScopeError(MSABaseAuthenticationException):
+    """The scopes we defined are bad."""
+
     default_errcode = {"invalid_scope", "unsupported_grant_type"}
     _msg = (
         "The launcher provided the API with invalid information. "
@@ -197,6 +218,8 @@ class MSAInvalidScopeError(MSABaseAuthenticationException):
 
 
 class MSAServerUnavailableError(MSABaseAuthenticationException):
+    """Server is unavailable (either maintenance, overloaded, or down)"""
+
     default_errcode = "temporarily_unavailable"
     _msg = (
         "The Microsoft authentication server is currently unavailable, "
@@ -205,9 +228,17 @@ class MSAServerUnavailableError(MSABaseAuthenticationException):
 
 
 class MSAAccessDeniedError(MSABaseAuthenticationException):
+    """Access denied. Could be a bad client ID"""
+
     default_errcode = {
-        "consent_required",
         "unauthorized_client",
         "invalid_client",
     }
     _msg = "Access denied. Please log in again."
+
+
+class MSAConsentRequiredError(MSABaseAuthenticationException):
+    """User consent is required and they must log in again."""
+
+    default_errcode = "consent_required"
+    _msg = "Please log in again."

@@ -10,6 +10,12 @@ log = logging.getLogger(__name__)
 
 
 class LauncherAccount:
+    """
+    Holder for all of MSA, Xbox, XSTS, and Minecraft tokens.
+
+    Never create an instance manually, use `minecraftlauncher.auth.auth_flow()`
+    """
+
     __slots__ = ("msa", "xbox", "token", "profile", "gamertag", "xuid", "uhs")
     msa: MicrosoftAccount
     xbox: XboxToken | None
@@ -38,7 +44,7 @@ class LauncherAccount:
         *,
         xbox_token: XboxToken | None = None,
         mc_token: MinecraftToken | None = None,
-        profile: MinecraftProfile | None = None
+        profile: MinecraftProfile | None = None,
     ):
         self.msa = msa_token
         self.gamertag = gamertag
@@ -79,6 +85,11 @@ class LauncherAccount:
         return True
 
     def refresh(self):
+        """
+        Checks and reauthenticates in order of MSA->Xbox->XSTS->Mojang, then
+        refreshes the Minecraft profile as well if that hasn't been updated
+        in a while.
+        """
         profile_update = self.profile_needs_update()
         if (
             self.token

@@ -7,6 +7,11 @@ from .xsts_token import XstsToken
 
 
 def auth_flow(msa: MicrosoftAccount):
+    """
+    Complete auth chain from a `MicrosoftAccount` instance.
+
+    Should only be used with new accounts.
+    """
     xbox_account = XboxToken.auth(msa)
     xbox_profile = XstsToken.auth(xbox_account, "http://xboxlive.com")
     gamertag = xbox_profile.gamertag
