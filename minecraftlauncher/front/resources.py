@@ -165,7 +165,7 @@ PROF_ICON_LIST = [
     "Cobblestone",
     "Crafting_Table",
     "Creeper_Head",
-    "Diamong_Block",
+    "Diamond_Block",
     "Diamond_Ore",
     "Dirt",
     "Podzol",
