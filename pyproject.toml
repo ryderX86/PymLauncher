@@ -16,7 +16,6 @@ requires-python = ">= 3.13"
 [project.optional-dependencies]
 dev = [
     "pytest",
-    "pytest-cov"
 ]
 
 [tool]
@@ -30,3 +29,8 @@ pythonPlatform = "All"
 
 [tool.nuitka]
 mode = "standalone"
+enable-plugin = "pyside6"
+include-qt-plugins = ["sensible", "qml"]
+
+[tool.pytest]
+testpaths = ["tests"]

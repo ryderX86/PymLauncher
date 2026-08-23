@@ -1,0 +1,43 @@
+{
+    "profiles": {
+        "00000000000000000000000000000001": {
+            "created": "1970-01-01T00:00:00.000Z",
+            "gameDir": "C:\\Users\\User\\AppData\\Roaming\\.minecraft",
+            "icon": "Dirt",
+            "javaArgs": "-Xms512M -Xmx4G -XX:+UseCompactObjectHeaders -XX:+AlwaysPreTouch -XX:+UseStringDeduplication -XX:+UseZGC",
+            "lastUsed": "2026-08-18T15:49:08.683477",
+            "lastVersionId": "latest-snapshot",
+            "name": "Latest Snapshot",
+            "type": "latest-snapshot"
+        },
+        "00000000000000000000000000000002": {
+            "created": "1970-01-01T00:00:00.000Z",
+            "gameDir": "C:\\Users\\User\\AppData\\Roaming\\.minecraft",
+            "icon": "Dirt",
+            "javaArgs": "-Xms512M -Xmx4G -XX:+UseCompactObjectHeaders -XX:+AlwaysPreTouch -XX:+UseStringDeduplication -XX:+UseZGC",
+            "lastUsed": "2026-08-18T15:49:08.683477",
+            "lastVersionId": "latest-release",
+            "name": "Latest Release",
+            "type": "latest-release"
+        },
+        "00000000000000000000000000000003": {
+            "created": "2026-08-21T04:56:00.000Z",
+            "lastVersionId": "26.2",
+            "name": "CustomProfileTest",
+            "type": "custom"
+        }
+    },
+    "settings": {
+        "crashAssistance": false,
+        "enableAdvanced": true,
+        "enableAnalytics": false,
+        "enableHistorical": true,
+        "enableReleases": true,
+        "enableSnapshots": true,
+        "keepLauncherOpen": false,
+        "showGameLog": false,
+        "showMenu": true,
+        "soundOn": false
+    },
+    "version": 6
+}
