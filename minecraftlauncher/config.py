@@ -129,7 +129,7 @@ class ConfigHolder:
                     )
                     continue
             elif isinstance(getattr(self, key), set) and isinstance(val, list):
-                val = set(*val)  # set() hack
+                val = set(val)  # set() hack
             elif not isinstance(val, type(getattr(self, key))):
                 log.warning(
                     "Skipping config entry %r due to mismatching type: "
@@ -147,7 +147,7 @@ class ConfigHolder:
             log.debug("Loaded config with no issues")
         type(self).active = True
 
-    def dump(self):
+    def as_dict(self):
         output = {}
         for key, val in self.__dict__.items():
             if isinstance(val, Callable):
@@ -160,7 +160,7 @@ class ConfigHolder:
         return output
 
     def save(self):
-        reswrite(paths.config_file, json.dumps(self.dump()))
+        reswrite(paths.config_file, json.dumps(self.as_dict()))
 
 
 config = ConfigHolder()
