@@ -102,6 +102,7 @@ class PathFinder:
             self._game = os.path.join(portable, ".minecraft")
         else:
             self._game = os.path.join(default, ".minecraft")
+        self._game = os.path.realpath(self._game)
         if not is_path_valid(self._game):
             raise ValueError(f"Invalid game directory: {self._game!r}")
 
@@ -115,6 +116,7 @@ class PathFinder:
             self._data = os.path.join(portable, constants.LAUNCHER_NAME)
         else:
             self._data = os.path.join(default, constants.LAUNCHER_NAME)
+        self._data = os.path.realpath(self._data)
         if not is_path_valid(self._data):
             raise ValueError(f"Invalid data directory: {self._data!r}")
         self.ready = True
