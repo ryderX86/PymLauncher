@@ -1,19 +1,18 @@
+import json
+import logging
+import os
+import time
 from collections.abc import Buffer, Callable
 from types import MappingProxyType
 from typing import Any
-import logging
-import json
-import time
-import os
 
-from minecraftlauncher.paths import paths
-from minecraftlauncher.auth import LauncherAccount
+from minecraftlauncher.auth import LauncherAccount, encryption
 from minecraftlauncher.auth.encryption import data_load_hook, data_save_hook
-from minecraftlauncher.auth import encryption
 from minecraftlauncher.auth.exceptions import NoConnectionError
 from minecraftlauncher.exceptions import EncryptedDataDecodeError
 from minecraftlauncher.functions import reswrite
 from minecraftlauncher.offline import offline_man
+from minecraftlauncher.paths import paths
 
 log = logging.getLogger(__name__)
 
@@ -26,6 +25,11 @@ class AccountManager:
     _active_account: LauncherAccount | None
     _loaded: bool = False
     _active_callbacks: list[Callable[[LauncherAccount], None]]
+    _original_text: str | None
+    """
+    Backup of the decrypted text in accounts.bin; used for write-spam
+    prevention
+    """
 
     def __new__(cls):
         if cls._instance:
@@ -44,6 +48,7 @@ class AccountManager:
         self._accounts = {}
         self._active_account = None
         self._active_callbacks = []
+        self._original_text = None
         type(self)._instance = self  # singleton
 
     @property
@@ -122,6 +127,8 @@ class AccountManager:
         else:
             text = file_bytes.decode("utf-8")
 
+        self._original_text = text
+
         # if a JSONDecodeError exists there's not really a point to catching it
         # here, since we handle this in the callers for load_accounts() so that
         # we can notify the user within the GUI instead.
@@ -130,8 +137,17 @@ class AccountManager:
         last_used_xuid: str | None = accounts_bin.get("active")
 
         for cached in raw_accounts:
-            account = LauncherAccount.from_json(cached)
-            self._accounts[account.xuid] = account
+            try:
+                account = LauncherAccount.from_json(cached)
+            except Exception as err:
+                log.warning(
+                    "Failed to load %r from accounts.bin file, skipping",
+                    cached.get("xuid", "<No XUID present>"),
+                    exc_info=err,
+                )
+                continue
+            else:
+                self._accounts[account.xuid] = account
 
         self._loaded = True
 
@@ -149,11 +165,18 @@ class AccountManager:
     def save_accounts(self):
         store = self.dump()
 
+        json_text = json.dumps(store)
+        if self._original_text == json_text:
+            log.debug(
+                "Skipping accounts.bin write since no changes were made."
+            )
+            return
+
         payload: Buffer
         if encryption.ENABLED:
-            payload = data_save_hook(store)
+            payload = data_save_hook(json_text)
         else:
-            payload = json.dumps(store).encode("utf-8")
+            payload = json_text.encode("utf-8")
 
         reswrite(paths.accounts_file, payload)
         log.debug(
@@ -340,7 +363,6 @@ class AccountManager:
         return {
             "active": (self.active.xuid if self.active else None),
             "accounts": [account.serialize() for account in self.list()],
-            "last_saved": time.time(),
         }
 
     def reset_accounts_file(self):
