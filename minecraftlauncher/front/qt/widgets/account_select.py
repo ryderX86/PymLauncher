@@ -11,7 +11,7 @@ from PySide6.QtWidgets import QAbstractItemView, QComboBox
 
 from minecraftlauncher.back.account_manager import account_man
 from minecraftlauncher.front.resources import symbol
-from minecraftlauncher.functions import error_box
+from minecraftlauncher.functions import error_box, suppressable
 from minecraftlauncher.offline import offline_man
 
 log = logging.getLogger(__name__)
@@ -29,7 +29,9 @@ class AccountSelect(QComboBox):
         self.setSizeAdjustPolicy(self.SizeAdjustPolicy.AdjustToContents)
 
         self._previous_index = -1
-        self.currentIndexChanged.connect(self._on_index_changed)
+        self._idx_change_signal = self.currentIndexChanged.connect(
+            self._on_index_changed
+        )
         self.view().setVerticalScrollMode(
             QAbstractItemView.ScrollMode.ScrollPerPixel
         )
@@ -40,7 +42,7 @@ class AccountSelect(QComboBox):
 
     def refresh(self):
         """Reload the account list"""
-        self.blockSignals(True)
+        self._on_index_changed.suppress()
 
         self.clear()
         accounts = account_man.list()
@@ -61,27 +63,28 @@ class AccountSelect(QComboBox):
         self.addItem(symbol("profile-add"), ADD_ACCOUNT_TEXT)
 
         if accounts:
-            self.setCurrentIndex(active_idx)
+            super().setCurrentIndex(active_idx)
             self._previous_index = active_idx
         else:
-            self.setCurrentIndex(self.count() - 1)
+            super().setCurrentIndex(self.count() - 1)
             self._previous_index = self.count() - 1
 
-        self.blockSignals(False)
+        self._on_index_changed.unsuppress()
 
     def revert_selection(self):
         """Revert to previous account"""
         self.blockSignals(True)
         if 0 <= self._previous_index < self.count():
-            self.setCurrentIndex(self._previous_index)
+            super().setCurrentIndex(self._previous_index)
         self.blockSignals(False)
 
     def setCurrentIndex(self, index: int):
         ci = self.currentIndex()
-        if index != ci:
+        if index != ci and ci >= 0:
             self._previous_index = ci
         return super().setCurrentIndex(index)
 
+    @suppressable
     def _on_index_changed(self, index: int):
         if index < 0:
             return

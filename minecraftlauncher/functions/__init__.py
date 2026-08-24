@@ -10,6 +10,7 @@ from PySide6.QtWidgets import QApplication
 from minecraftlauncher import get_qapp
 
 from .error_box import error_box
+from .suppressables import suppressable
 from .text import indent, is_path_valid, pathsafe_str
 
 log = logging.getLogger(__name__)
