@@ -133,23 +133,28 @@ class MSABaseAuthenticationException(BaseAuthenticationException):
     error_uri: str
     trace_id: str
     correlation_id: str
-    original_response: requests.Response
+    original_response: requests.Response | None
     trigger: str
     """What triggered the raising of this error"""
 
     def __init__(
-        self, response: requests.Response, trigger: str | None = None
+        self,
+        response: requests.Response | None = None,
+        trigger: str | None = None,
     ):
         super().__init__(response)
-        try:
-            resp_json: dict = response.json()
-        except Exception as err:
-            log.warning(
-                "Failed to parse response JSON from MS API error: %r",
-                type(err).__name__,
-            )
+        if response:
+            try:
+                resp_json: dict = response.json()
+            except Exception as err:
+                log.warning(
+                    "Failed to parse response JSON from MS API error: %r",
+                    type(err).__name__,
+                )
+                resp_json = {}
+        else:
             resp_json = {}
-        self.error_codes = resp_json.get("error_codes", [-1])
+        self.error_codes = resp_json.get("error_codes", [])
         self.error_primary = resp_json.get("error", "N/A")
         self.description = resp_json.get(
             "error_description", "<Couldn't get error description>"
@@ -164,12 +169,17 @@ class MSABaseAuthenticationException(BaseAuthenticationException):
     def get_exception_type(
         cls,
         response: requests.Response,
-    ) -> type:
+    ) -> type["MSABaseAuthenticationException"]:
         try:
             j: dict = response.json()
         except Exception as err:
-            err.add_note("Failed to get JSON for get_exception_type()")
-            raise err
+            log.error(
+                "Failed to parse JSON response from %r, "
+                "falling back to default exception type",
+                response.url,
+                exc_info=err,
+            )
+            return cls
         primary: str = j.get("error", "N/A")
         subclasses = cls.__subclasses__()
         for subclass in subclasses:

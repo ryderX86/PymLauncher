@@ -5,15 +5,16 @@ import time
 import requests
 import requests.exceptions
 
-from minecraftlauncher.datatypes import decode_jwt
+from minecraftlauncher import SESSION
 from minecraftlauncher.auth.xsts_token import XstsToken
 from minecraftlauncher.constants import (
-    MOJ_AUTH_URL,
     LAUNCH_ENTITLEMENTS_URL,
+    MOJ_AUTH_URL,
     MOJ_AUTH_URL_ALT,
 )
-from minecraftlauncher import SESSION
+from minecraftlauncher.datatypes import decode_jwt
 from minecraftlauncher.offline import offline_man
+
 from .exceptions import NoConnectionError, UnauthorizedError
 
 log = logging.getLogger(__name__)
@@ -125,13 +126,21 @@ class MinecraftToken:
                 MOJ_AUTH_URL, err, original_request=err.request
             ) from err
         except requests.HTTPError as err:
-            log.error(
-                "Failed to get Minecraft Token from %r; response code %d\n"
-                "Full response: %r",
-                MOJ_AUTH_URL_ALT,
-                err.response.status_code,
-                err.response.text,
-            )
+            if err.response:
+                log.error(
+                    "Failed to get Minecraft Token from %r; response code %d\n"
+                    "Full response: %r",
+                    MOJ_AUTH_URL_ALT,
+                    err.response.status_code,
+                    err.response.text,
+                )
+            else:
+                offline_man.check_requests_error(err)
+                log.error(
+                    "Failed to get Minecraft token from %r; no response",
+                    MOJ_AUTH_URL,
+                    exc_info=err,
+                )
             raise UnauthorizedError(err.response) from err
 
         if response is None:
@@ -162,18 +171,23 @@ class MinecraftToken:
                 MOJ_AUTH_URL, err, original_request=err.request
             ) from err
         except requests.HTTPError as err:
-            if err.response.status_code in (400, 402, 403):
-                log.warning(
-                    "Malformed request err; defaulting to alt auth url"
+            if err.response:
+                if err.response.status_code in (400, 402, 403):
+                    log.warning(
+                        "Malformed request err; defaulting to alt auth url"
+                    )
+                    log.debug("returning `cls.auth_alternate(xsts_token)`")
+                    return cls.auth_alternate(xsts_token)
+                log.error(
+                    "Failed to refresh MSA token; response code %d\n"
+                    "Response text: %s",
+                    err.response.status_code,
+                    err.response.text,
                 )
-                log.debug("returning `cls.auth_alternate(xsts_token)`")
-                return cls.auth_alternate(xsts_token)
-            log.error(
-                "Failed to refresh MSA token; response code %d\n"
-                "Response text: %s",
-                err.response.status_code,
-                err.response.text,
-            )
+            else:
+                log.error(
+                    "Failed to refresh MSA token; no response", exc_info=err
+                )
             raise UnauthorizedError(err.response) from err
 
         if response is None:
@@ -195,6 +209,13 @@ class MinecraftToken:
 
     def serialize(self):
         """Returns JSON-serializable dict of this token."""
+        # sort set
+        if self.owned_items:
+            owned_items = [*self.owned_items]
+            owned_items.sort()
+        else:
+            owned_items = None
+
         return {
             "username": self.username,
             "roles": self.roles,
@@ -203,7 +224,7 @@ class MinecraftToken:
             "expires_in": self._expires_in,
             "acquired_at": self.acquired_at,
             "jwt": self.jwt,
-            "owned_items": [*self.owned_items] if self.owned_items else None,
+            "owned_items": owned_items,
         }
 
     def _update_entitlements(self, use_web_request: bool = False):

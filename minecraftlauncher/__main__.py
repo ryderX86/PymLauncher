@@ -1,44 +1,44 @@
-from time import sleep
-from json import JSONDecodeError
-import logging
 import atexit
+import logging
 import sys
+from json import JSONDecodeError
+from time import sleep
 
+import requests
 from PySide6.QtCore import QFile
 from PySide6.QtGui import QIcon
-from PySide6.QtWidgets import QStyleFactory, QApplication
-import requests
+from PySide6.QtWidgets import QApplication, QStyleFactory
 
-from .paths import paths
-from .config import config
-from .offline import offline_man, connectivity_poller
-from . import constants, setup_qapp, get_qapp, logs
-from .launchargs import launchargs
-from .functions.error_box import error_box
-from .functions import detect_set_clipboard, uisleep
-from .ostools.win32 import setup_app_id
-from .front.styles import STYLESHEET, get_fonts, gen_palette, FontList
-from .front.event_filters import FocusEventFilter
-from .front.window.loading_blocker import LoadingBlockerWindow
-from .front.window.main.main_window import MainWindow
-from .front.window.login import LoginWindow
-from .front.window.game_error import ErrorDisplay
-from .front.window.warning import WarningDialog, ButtonConfig
-from .exceptions import EncryptedDataDecodeError
-from .back import (
-    profile_manager,
-    version_manager,
-    java_manager,
-)
-from .back.account_manager import account_man
-from .threads.install_worker import InstallWorker
-from .threads.launch_worker import LaunchWorker
+from . import constants, get_qapp, logs, setup_qapp
 from .auth import LauncherAccount
 from .auth.exceptions import (
-    NoConnectionError,
     BaseAuthenticationException,
     MSAServerUnavailableError,
+    NoConnectionError,
 )
+from .back import (
+    java_manager,
+    profile_manager,
+    version_manager,
+)
+from .back.account_manager import account_man
+from .config import config
+from .exceptions import EncryptedDataDecodeError
+from .front.event_filters import FocusEventFilter
+from .front.styles import STYLESHEET, FontList, gen_palette, get_fonts
+from .front.window.game_error import ErrorDisplay
+from .front.window.loading_blocker import LoadingBlockerWindow
+from .front.window.login import LoginWindow
+from .front.window.main.main_window import MainWindow
+from .front.window.warning import ButtonConfig, WarningDialog
+from .functions import detect_set_clipboard, uisleep
+from .functions.error_box import error_box
+from .launchargs import launchargs
+from .offline import connectivity_poller, offline_man
+from .ostools.win32 import setup_app_id
+from .paths import paths
+from .threads.install_worker import InstallWorker
+from .threads.launch_worker import LaunchWorker
 
 log = logging.getLogger("minecraftlauncher")
 
@@ -92,9 +92,7 @@ class LauncherApp:
         self.main_window.account_page.logout_requested.connect(self.logout)
         self.main_window.home_page.play_requested.connect(self.play)
 
-        self.main_window.account_dropdown.account_changed.connect(
-            self._on_account_changed
-        )
+        account_man.add_switch_callback(self._on_account_changed)
 
         self.main_window.home_page.game_crash.connect(self.show_crash_dialog)
 
@@ -231,7 +229,7 @@ class LauncherApp:
                 clean_exit = True
                 sys.exit()
         except BaseAuthenticationException as err:
-            if account_man.has_accounts:
+            if len(account_man) > 1:
                 self.close_if_login_aborted = False
             else:
                 self.close_if_login_aborted = True
@@ -262,14 +260,23 @@ class LauncherApp:
             self.show_login()
         self._refresh_account_ui()
 
-    def show_login(self):
-        if offline_man.offline:
-            error_box("Cannot log in while offline! Please wait and try again.")
+    def show_login(
+        self, *, reason: str | None = None, automatic: bool = False
+    ):
+        if offline_man.offline and not automatic:
+            error_box(
+                "Cannot log in while offline! Please wait and try again."
+            )
             return self._on_login_abort()
-        dialog = LoginWindow(self.main_window)
+        elif offline_man.offline:  # TODO: confirm this works
+            if len(account_man) > 1:
+                account_man.auto_set_active()
+                return
+        dialog = LoginWindow(self.main_window, reason=reason)
         dialog.login_complete.connect(self._on_login_complete)
         dialog.rejected.connect(self._on_login_abort)
         dialog.exec()
+        return
 
     def _on_login_abort(self):
         global clean_exit
@@ -278,13 +285,14 @@ class LauncherApp:
             clean_exit = True
             sys.exit(1)
         account_man.set_active(active_acc)
-        self._refresh_account_ui()
+        return self._refresh_account_ui()
 
     def show_crash_dialog(self, exit_code: str, stderr: str):
         log.debug("Showing crash dialog to user")
         dialog = ErrorDisplay(self.main_window, exit_code, stderr)
         dialog.show()
         dialog.exec()
+        return
 
     def _on_login_complete(self, account: LauncherAccount):
         if account:
@@ -296,6 +304,7 @@ class LauncherApp:
         account_man.set_active(account.xuid)
         self._refresh_account_ui()
         self.lb_window.hide()
+        return
 
     def logout(self):
         if account_man.active:
@@ -307,7 +316,8 @@ class LauncherApp:
         if not account_man.has_accounts:
             log.info("No accounts left, showing login window.")
             self.close_if_login_aborted = True
-            self.show_login()
+            return self.show_login()
+        return
 
     def play(self):
         if not account_man.active:
@@ -348,7 +358,7 @@ class LauncherApp:
                     return
             except Exception as err:
                 self.main_window.home_page.aborted_launch()
-                dialog = LoginWindow(self.main_window, relog_err=str(err))
+                dialog = LoginWindow(self.main_window, reason=str(err))
                 dialog.exec()
                 return
 
@@ -364,82 +374,70 @@ class LauncherApp:
         self.install_worker.done.connect(self.launch_worker.start_if_success)
         self.install_worker.start()
 
-    def _on_account_changed(self, xuid: str, *, current_retries: int = 0):
-        global clean_exit
+    def _on_account_changed(
+        self, acc: LauncherAccount, *, current_retries: int = 0
+    ) -> None:
         MAX_RETRIES = 5
         if self.lb_window.isVisible():
             self.lb_window.accept()
-        if xuid in account_man:
-            acc = account_man.set_active(xuid, ignore_refreshes=True)
-            if (
-                not acc.token or not acc.token.is_active
-            ) and not offline_man.offline:
-                if not current_retries:
-                    self.lb_window.set_text("Reauthenticating")
-                self.lb_window.open()
-                try:
-                    acc.refresh()
-                except NoConnectionError:
-                    pass  # handled elsewhere already
-                except MSAServerUnavailableError:
-                    if not current_retries or current_retries < MAX_RETRIES:
-                        log.warning(
-                            "Failed to authenticate: Server unavailable; "
-                            "retrying (attempt %i of %i)",
-                            current_retries,
-                            MAX_RETRIES,
-                        )
-                        self.lb_window.set_text(
-                            "Server currently unavailable, "
-                            "waiting to try again (attempt "
-                            f"{current_retries+1} of {MAX_RETRIES+1})"
-                        )
-                        uisleep(5)
-                        self.lb_window.accept()
-                        return self._on_account_changed(
-                            xuid, current_retries=current_retries + 1
-                        )
-                    else:
-                        log.error(
-                            "Failed to authenticate: Server unavailable;"
-                            " max retries exceeded. Notifying user."
-                        )
-                        error_box(
-                            "Failed to authenticate: "
-                            "The server is currently unavailable. "
-                            "Please try again later."
-                        )
-                        self.lb_window.accept()
-                        self.main_window.account_dropdown.next_account()
-                        return
-                except (
-                    BaseAuthenticationException
-                ) as err:  # should only ever be a 402 by this point
-                    log.warning(
-                        "Failed to refresh %r: %r. Prompting user to relog.",
-                        acc.gamertag,
-                        type(err).__name__,
-                    )
-                    dialog = LoginWindow(self.lb_window, relog_err=str(err))
-                    dialog.rejected.connect(
-                        self.main_window.account_dropdown.next_account
-                    )
-                    return dialog.exec()
-                else:
-                    self.lb_window.accept()
-                    account_man.replace_into(acc)
-        else:
-            log.warning("Couldn't find the active account in accounts!")
+        if (
+            not acc.token or not acc.token.is_active
+        ) and not offline_man.offline:
+            if not current_retries:
+                self.lb_window.set_text("Reauthenticating")
+            self.lb_window.open()
             try:
-                account_man.auto_set_active(raise_on_fail=True)
-            except:
-                self.close_if_login_aborted = True
-                self.show_login()
-                if account_man.active:
-                    self.close_if_login_aborted = False
+                acc.refresh()
+            except NoConnectionError:
+                pass  # handled elsewhere already
+            except MSAServerUnavailableError:
+                if not current_retries or current_retries < MAX_RETRIES:
+                    log.warning(
+                        "Failed to authenticate: Server unavailable; "
+                        "retrying (attempt %i of %i)",
+                        current_retries,
+                        MAX_RETRIES,
+                    )
+                    self.lb_window.set_text(
+                        "Server currently unavailable, "
+                        "waiting to try again (attempt "
+                        f"{current_retries+1} of {MAX_RETRIES+1})"
+                    )
+                    uisleep(5)
+                    self.lb_window.accept()
+                    return self._on_account_changed(
+                        acc, current_retries=current_retries + 1
+                    )
                 else:
-                    clean_exit = True
-                    sys.exit(0)
+                    log.error(
+                        "Failed to authenticate: Server unavailable;"
+                        " max retries exceeded. Notifying user."
+                    )
+                    error_box(
+                        "Failed to authenticate: "
+                        "The server is currently unavailable. "
+                        "Please try again later."
+                    )
+                    self.lb_window.accept()
+                    self.main_window.account_dropdown.next_account()
+                    return
+            except (
+                BaseAuthenticationException
+            ) as err:  # should only ever be a 402 by this point
+                log.warning(
+                    "Failed to refresh %r: %r. Prompting user to relog.",
+                    acc.gamertag,
+                    type(err).__name__,
+                )
+                dialog = LoginWindow(self.lb_window, reason=str(err))
+                dialog.rejected.connect(
+                    self.main_window.account_dropdown.next_account
+                )
+                dialog.exec()
+                return
+            else:
+                self.lb_window.accept()
+                account_man.replace_into(acc)
         self._refresh_account_ui()
         return
 
@@ -456,7 +454,7 @@ class LauncherApp:
             except NoConnectionError:
                 pass
             except Exception as err:
-                dialog = LoginWindow(self.main_window, relog_err=str(err))
+                dialog = LoginWindow(self.main_window, reason=str(err))
                 dialog.exec()
                 if not active_account.token_valid:
                     self.main_window.account_dropdown.next_account()

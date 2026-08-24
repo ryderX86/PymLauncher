@@ -1,28 +1,29 @@
-from functools import lru_cache
-from datetime import timedelta
-from pathlib import Path
-from enum import StrEnum
-import logging
 import hashlib
-import uuid
-import time
+import logging
 import os
+import time
+import uuid
+from datetime import timedelta
+from enum import StrEnum
+from functools import lru_cache
+from pathlib import Path
 
-from PySide6.QtCore import Qt
-from PySide6.QtGui import QImage, QIcon, QPixmap, QPainter
 import requests
 import requests.exceptions
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QIcon, QImage, QPainter, QPixmap
 
+from minecraftlauncher import SESSION
 from minecraftlauncher.auth.minecraft_token import MinecraftToken
+from minecraftlauncher.back.download_helpers import download as try_request
 from minecraftlauncher.constants import (
     MOJ_PROF_URL,
     STEVE_SKIN_URL,
 )
-from minecraftlauncher.back.download_helpers import download as try_request
-from minecraftlauncher import SESSION
-from minecraftlauncher.offline import offline_man
 from minecraftlauncher.front import resources
+from minecraftlauncher.offline import offline_man
 from minecraftlauncher.paths import paths
+
 from .exceptions import NoConnectionError, UnauthorizedError
 
 log = logging.getLogger(__name__)
@@ -289,10 +290,16 @@ class MinecraftProfile:
                 MOJ_PROF_URL, err, original_request=err.request
             ) from err
         except requests.HTTPError as err:
-            log.error(
-                "Failed to fetch profile info: HTTP %s",
-                err.response.status_code,
-            )
+            if err.response:
+                log.error(
+                    "Failed to fetch profile info: HTTP %s",
+                    err.response.status_code,
+                )
+            else:
+                offline_man.check_requests_error(err)
+                log.error(
+                    "Failed to fetch profile info; no response", exc_info=err
+                )
             raise err
         except Exception as err:
             log.error(

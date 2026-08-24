@@ -359,6 +359,9 @@ class AccountManager:
             log.debug("Overriding account %r", self[xuid].gamertag)
         self._accounts[xuid] = account
 
+    def __len__(self):
+        return len(self._accounts)
+
     def dump(self):
         return {
             "active": (self.active.xuid if self.active else None),
@@ -404,7 +407,7 @@ class AccountManager:
 
     def add_switch_callback(
         self,
-        callback: Callable[[LauncherAccount], None],
+        callback: Callable[[LauncherAccount], Any],
         destroyed_signal: Any = None,
     ):
         if callback in self._active_callbacks:

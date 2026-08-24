@@ -1,16 +1,16 @@
-from collections.abc import Buffer
 import logging
-import time
 import os
+import time
+from collections.abc import Buffer
 
-from PySide6.QtCore import QSize, QCoreApplication
-from PySide6.QtGui import QClipboard, QImage, QPixmap, QIcon
+from PySide6.QtCore import QCoreApplication, QSize
+from PySide6.QtGui import QClipboard, QIcon, QImage, QPixmap
 from PySide6.QtWidgets import QApplication
 
 from minecraftlauncher import get_qapp
 
-from .text import indent, is_path_valid, pathsafe_str
 from .error_box import error_box
+from .text import indent, is_path_valid, pathsafe_str
 
 log = logging.getLogger(__name__)
 

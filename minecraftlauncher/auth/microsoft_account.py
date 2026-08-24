@@ -1,18 +1,19 @@
+import json
 import logging
 import time
-import json
 
 import requests
 import requests.exceptions
 
+from minecraftlauncher import SESSION
 from minecraftlauncher.constants import (
     AZURE_CLIENT_ID,
     AZURE_SCOPE,
     MSA_REFRESH_URL,
 )
-from minecraftlauncher import SESSION
 from minecraftlauncher.offline import offline_man
-from .exceptions import MSABaseAuthenticationException
+
+from .exceptions import MSABaseAuthenticationException, UnauthorizedError
 
 log = logging.getLogger(__name__)
 
@@ -54,8 +55,13 @@ class MicrosoftAccount:
     instead.
     """
     access_token: str
-    refresh_token: str
+    refresh_token: str | None
     user_id: str
+
+    _other_token_info: dict
+    """
+    Backup of all other data included in the API response, mostly for debugging
+    """
 
     # The following is NOT included in the MS API response:
     acquired_at: float
@@ -67,7 +73,7 @@ class MicrosoftAccount:
         self.scope = msa_info["scope"]
         self._expires_in = msa_info["expires_in"]
         self.access_token = msa_info["access_token"]
-        self.refresh_token = msa_info["refresh_token"]
+        self.refresh_token = msa_info.get("refresh_token", None)
         self.user_id = msa_info["user_id"]
         self._other_token_info = {
             k: v for k, v in msa_info.items() if k not in KNOWN_MSA_DICT_VALS
@@ -131,12 +137,18 @@ class MicrosoftAccount:
         """
         return json.dumps(self._original_token_dict())
 
+    @property
+    def can_refresh(self):
+        return bool(self.refresh_token)
+
     def refresh(self):
+        if not self.refresh_token:
+            raise UnauthorizedError(msg="No refresh token present")
         if self.scope:
             scope = self.scope
             if scope != AZURE_SCOPE:
                 log.warning(
-                    "Current account's MSA scope differs from default! "
+                    "Current account's MSA scope differs from default; "
                     "Default: %r; current: %r",
                     AZURE_SCOPE,
                     scope,
@@ -153,8 +165,6 @@ class MicrosoftAccount:
             "grant_type": "refresh_token",
             "refresh_token": self.refresh_token,
         }
-        # None in place of filename -- `requests.post(files=...)`
-        # is currently the way to submit form data with requests.
 
         try:
             response = SESSION.post(MSA_REFRESH_URL, data=form_data)
@@ -163,21 +173,38 @@ class MicrosoftAccount:
             requests.exceptions.ConnectionError,
             requests.exceptions.ConnectTimeout,
         ) as err:
-            log.warning(
+            log.error(
                 "%s occured while attempting MSA token refresh",
                 type(err).__qualname__,
             )
             offline_man.check_requests_error(err)
             raise err
         except requests.HTTPError as err:
-            log.error(
-                "Failed to refresh MSA token; response code %s",
-                err.response.status_code,
-            )
+            if err.response:
+                log.error(
+                    "Failed to refresh MSA token; response code %d",
+                    err.response.status_code,
+                )
+                if (
+                    err.response.status_code >= 400
+                    and err.response.status_code < 500
+                ):
+                    exc_type = (
+                        MSABaseAuthenticationException.get_exception_type(
+                            err.response
+                        )
+                    )
+                    raise exc_type(err.response) from err
+            else:
+                offline_man.check_requests_error(err)
+                log.error("Failed to refresh MSA token; no response")
             raise err
 
         if len(response.text) < 5:
-            raise RuntimeError
+            exc_type = MSABaseAuthenticationException.get_exception_type(
+                response
+            )
+            raise exc_type(response)
 
         new_token = response.json()
         self.acquired_at = time.time()

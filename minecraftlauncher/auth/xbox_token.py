@@ -1,21 +1,22 @@
-from datetime import datetime
-import logging
 import json
+import logging
 import time
+from datetime import datetime
 
 import requests
 import requests.exceptions
 
+from minecraftlauncher import SESSION
 from minecraftlauncher.auth.microsoft_account import MicrosoftAccount
 from minecraftlauncher.constants import (
     XBOX_AUTH_URL,
 )
-from minecraftlauncher import SESSION
 from minecraftlauncher.offline import offline_man
+
 from .exceptions import (
-    UnauthorizedError,
     BaseAuthenticationException,
     NoConnectionError,
+    UnauthorizedError,
 )
 
 log = logging.getLogger(__name__)
@@ -104,15 +105,23 @@ class XboxToken:
                 XBOX_AUTH_URL, err, original_request=err.request
             ) from err
         except requests.HTTPError as err:
-            log.error(
-                "Failed to refresh MSA token; response code %d",
-                err.response.status_code,
-            )
-            match err.response.status_code:
-                case 401:
-                    raise UnauthorizedError(err.response) from err
-                case _:
-                    raise BaseAuthenticationException(err.response) from err
+            if err.response:
+                log.error(
+                    "Failed to refresh MSA token; response code %d",
+                    err.response.status_code,
+                )
+                match err.response.status_code:
+                    case 401:
+                        raise UnauthorizedError(err.response) from err
+                    case _:
+                        raise BaseAuthenticationException(
+                            err.response
+                        ) from err
+            else:
+                log.error(
+                    "Failed to refresh Xbox token; no response", exc_info=err
+                )
+                raise
         try:
             resp_json = response.json()
         except json.JSONDecodeError as err:

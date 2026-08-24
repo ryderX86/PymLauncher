@@ -1,10 +1,10 @@
 import logging
 
 from minecraftlauncher.auth.microsoft_account import MicrosoftAccount
+from minecraftlauncher.auth.minecraft_profile import MinecraftProfile
+from minecraftlauncher.auth.minecraft_token import MinecraftToken
 from minecraftlauncher.auth.xbox_token import XboxToken
 from minecraftlauncher.auth.xsts_token import XstsToken
-from minecraftlauncher.auth.minecraft_token import MinecraftToken
-from minecraftlauncher.auth.minecraft_profile import MinecraftProfile
 
 log = logging.getLogger(__name__)
 

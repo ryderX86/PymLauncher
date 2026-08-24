@@ -5,39 +5,39 @@ Device code flow window
 import logging
 import time
 
+import requests
 from PySide6.QtCore import Qt, QThread, QUrl, Signal
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
+    QApplication,
+    QCheckBox,
     QDialog,
+    QHBoxLayout,
     QLabel,
     QPushButton,
     QVBoxLayout,
-    QCheckBox,
     QWidget,
-    QHBoxLayout,
-    QApplication,
 )
-import requests
 
-from minecraftlauncher.config import config
-from minecraftlauncher.constants import (
-    AZURE_CLIENT_ID,
-    MS_DEVICE_CODE_URL,
-    MS_TOKEN_URL,
-    AZURE_SCOPE,
-)
-from minecraftlauncher.functions import (
-    copy_to_clipboard,
-    clipboard_present,
-    error_box,
-)
 from minecraftlauncher.auth import MicrosoftAccount, auth_flow
 from minecraftlauncher.auth.exceptions import (
     BaseAuthenticationException,
     NoConnectionError,
 )
-from minecraftlauncher.front.styles import ACCENT, TEXT_SECONDARY
+from minecraftlauncher.config import config
+from minecraftlauncher.constants import (
+    AZURE_CLIENT_ID,
+    AZURE_SCOPE,
+    MS_DEVICE_CODE_URL,
+    MS_TOKEN_URL,
+)
 from minecraftlauncher.front.resources import link_to_qrcode
+from minecraftlauncher.front.styles import ACCENT, TEXT_SECONDARY
+from minecraftlauncher.functions import (
+    clipboard_present,
+    copy_to_clipboard,
+    error_box,
+)
 
 log = logging.getLogger(__name__)
 
@@ -143,7 +143,7 @@ class LoginWindow(QDialog):
     login_complete = Signal(object)
     login_aborted = Signal()
 
-    def __init__(self, parent=None, *, relog_err: str | None = None):
+    def __init__(self, parent=None, *, reason: str | None = None):
         super().__init__(parent)
         self.setWindowTitle("Sign in with Microsoft")
         self.setFixedWidth(420)
@@ -153,8 +153,8 @@ class LoginWindow(QDialog):
         self._poller: DeviceCodePoller | None = None
         self._open_browser = config.open_browser_for_login
         self._build_ui()
-        if relog_err:
-            self.status_label.setText(relog_err)
+        if reason:
+            self.status_label.setText(reason)
             self.status_label.setVisible(True)
 
     def _build_ui(self):  # TODO: turn this into a QStackedWidget

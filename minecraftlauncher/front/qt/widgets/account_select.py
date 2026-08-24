@@ -7,7 +7,7 @@ QComboBox drop-down menu for switching between and adding new accounts.
 import logging
 
 from PySide6.QtCore import Signal
-from PySide6.QtWidgets import QComboBox, QAbstractItemView
+from PySide6.QtWidgets import QAbstractItemView, QComboBox
 
 from minecraftlauncher.back.account_manager import account_man
 from minecraftlauncher.front.resources import symbol
@@ -21,7 +21,6 @@ ADD_ACCOUNT_OFFLINE_ERR_TEXT = "Cannot add account while offline!"
 
 
 class AccountSelect(QComboBox):
-    account_changed = Signal(str)  # XUID
     add_account_requested = Signal()
 
     def __init__(self, parent=None):
@@ -97,9 +96,11 @@ class AccountSelect(QComboBox):
 
         xuid = self.itemData(index)
         if xuid:
-            self.account_changed.emit(xuid)
+            account_man.set_active(xuid)
         else:
             log.warning("No XUID for selected account!")
+            self.revert_selection()
+            self.refresh()
 
     def next_account(self):
         add_idx = self.count() - 2

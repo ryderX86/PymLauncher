@@ -1,18 +1,19 @@
-from datetime import datetime
-import logging
 import json
+import logging
 import time
+from datetime import datetime
 
 import requests
 import requests.exceptions
 
+from minecraftlauncher import SESSION
 from minecraftlauncher.auth.xbox_token import XboxToken
 from minecraftlauncher.constants import (
     XSTS_AUTH_URL,
 )
-from minecraftlauncher import SESSION
 from minecraftlauncher.offline import offline_man
-from .exceptions import XstsAuthError, NoConnectionError
+
+from .exceptions import NoConnectionError, XstsAuthError
 
 log = logging.getLogger(__name__)
 
@@ -104,13 +105,16 @@ class XstsToken:
                 XSTS_AUTH_URL, err, original_request=err.request
             ) from err
         except requests.HTTPError as err:
-            log.error(
-                "Failed to refresh MSA token; response code %d\n"
-                "Response text: %s",
-                err.response.status_code,
-                err.response.text,
-            )
-            raise XstsAuthError(err.response.json()) from err
+            if err.response:
+                log.error(
+                    "Failed to refresh MSA token; response code %d\n"
+                    "Response text: %s",
+                    err.response.status_code,
+                    err.response.text,
+                )
+                raise XstsAuthError(err.response.json()) from err
+            log.error("Failed to refresh MSA token; no response", exc_info=err)
+            raise err
 
         return cls(response.json())
 
