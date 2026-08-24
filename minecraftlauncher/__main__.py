@@ -290,8 +290,7 @@ class LauncherApp:
     def show_crash_dialog(self, exit_code: str, stderr: str):
         log.debug("Showing crash dialog to user")
         dialog = ErrorDisplay(self.main_window, exit_code, stderr)
-        dialog.show()
-        dialog.exec()
+        dialog.open()
         return
 
     def _on_login_complete(self, account: LauncherAccount):
