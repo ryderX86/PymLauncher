@@ -25,7 +25,6 @@ class AccountSelect(QComboBox):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.currentTextChanged.connect(self._correct_size)
         self.setSizeAdjustPolicy(self.SizeAdjustPolicy.AdjustToContents)
 
         self._previous_index = -1
@@ -36,61 +35,48 @@ class AccountSelect(QComboBox):
             QAbstractItemView.ScrollMode.ScrollPerPixel
         )
 
-    def _correct_size(self, t: str):
-        current_size = self.size()
-        current_size.setWidth(current_size.width() + 8)
-
     def refresh(self):
         """Reload the account list"""
         self._on_index_changed.suppress()
 
         self.clear()
-        accounts = account_man.list()
         active_xuid = account_man.active.xuid if account_man.active else None
 
-        active_idx = 0
-        for i, acc in enumerate(accounts):
+        for i, acc in enumerate(account_man):
             gamertag = acc.gamertag
             xuid = acc.xuid
             username = acc.username
             display = username if username else f"No profile ({gamertag})"
             icon = acc.skin_icon()
             self.addItem(icon, display, userData=xuid)
-            if xuid == active_xuid:
-                active_idx = i
+            if xuid and xuid == active_xuid:
+                self._previous_index = self.currentIndex()
+                self.setCurrentIndex(i)
 
         self.insertSeparator(self.count())
         self.addItem(symbol("profile-add"), ADD_ACCOUNT_TEXT)
-
-        if accounts:
-            super().setCurrentIndex(active_idx)
-            self._previous_index = active_idx
-        else:
-            super().setCurrentIndex(self.count() - 1)
-            self._previous_index = self.count() - 1
 
         self._on_index_changed.unsuppress()
 
     def revert_selection(self):
         """Revert to previous account"""
-        self.blockSignals(True)
+        self._on_index_changed.suppress()
         if 0 <= self._previous_index < self.count():
-            super().setCurrentIndex(self._previous_index)
-        self.blockSignals(False)
+            self.setCurrentIndex(self._previous_index)
+        self._on_index_changed.unsuppress()
 
     def setCurrentIndex(self, index: int):
         ci = self.currentIndex()
         if index != ci and ci >= 0:
             self._previous_index = ci
-        return super().setCurrentIndex(index)
+        super().setCurrentIndex(index)
 
     @suppressable
     def _on_index_changed(self, index: int):
         if index < 0:
             return
 
-        text = self.itemText(index)
-        if text == ADD_ACCOUNT_TEXT:
+        if index == (self.count() - 1):
             if offline_man.offline:
                 error_box(ADD_ACCOUNT_OFFLINE_ERR_TEXT)
                 return
@@ -99,11 +85,10 @@ class AccountSelect(QComboBox):
 
         xuid = self.itemData(index)
         if xuid:
-            account_man.set_active(xuid)
+            account_man.set_active(xuid, ignore_refreshes=True)
         else:
             log.warning("No XUID for selected account!")
             self.revert_selection()
-            self.refresh()
 
     def next_account(self):
         add_idx = self.count() - 2

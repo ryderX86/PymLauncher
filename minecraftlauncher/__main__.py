@@ -275,7 +275,7 @@ class LauncherApp:
         dialog = LoginWindow(self.main_window, reason=reason)
         dialog.login_complete.connect(self._on_login_complete)
         dialog.rejected.connect(self._on_login_abort)
-        dialog.exec()
+        dialog.open()
         return
 
     def _on_login_abort(self):
@@ -285,7 +285,7 @@ class LauncherApp:
             clean_exit = True
             sys.exit(1)
         account_man.set_active(active_acc)
-        return self._refresh_account_ui()
+        return
 
     def show_crash_dialog(self, exit_code: str, stderr: str):
         log.debug("Showing crash dialog to user")
@@ -441,7 +441,6 @@ class LauncherApp:
         return
 
     def _refresh_account_ui(self):
-        self.main_window.account_dropdown.refresh()
         if not account_man.active:
             return
         active_account = account_man.active
@@ -460,6 +459,7 @@ class LauncherApp:
                     return
             else:
                 account_man.replace_into(active_account)
+        self.main_window.account_dropdown.refresh()
 
     def _close_event(self):
         self.qapp.exit(0)

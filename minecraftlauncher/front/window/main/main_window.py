@@ -9,32 +9,33 @@ __lazy_imports__ = ["minecraftlauncher.front.ees.KonamiCode"]  # py3.15
 import logging
 import sys
 
-from PySide6.QtCore import Signal, QSize
+from PySide6.QtCore import QSize, Signal
 from PySide6.QtWidgets import (
-    QHBoxLayout,
-    QMainWindow,
-    QStackedWidget,
-    QVBoxLayout,
-    QWidget,
-    QLabel,
-    QStatusBar,
     QFrame,
+    QHBoxLayout,
+    QLabel,
     QListWidget,
     QListWidgetItem,
+    QMainWindow,
+    QStackedWidget,
+    QStatusBar,
+    QVBoxLayout,
+    QWidget,
 )
 
 from minecraftlauncher import set_exiting
-from minecraftlauncher.config import config, PostLaunchBehavior
-from minecraftlauncher.launchargs import launchargs
-from minecraftlauncher.front import styles
 from minecraftlauncher.back import profile_manager
+from minecraftlauncher.config import PostLaunchBehavior, config
 from minecraftlauncher.constants import LAUNCHER_VERSION
-from minecraftlauncher.functions.error_box import error_box
+from minecraftlauncher.front import styles
 from minecraftlauncher.front.qt.widgets import AccountSelect
+from minecraftlauncher.functions.error_box import error_box
+from minecraftlauncher.launchargs import launchargs
+
+from .account_page import AccountPage
 from .home_page import HomePage
 from .profiles_page import ProfilesPage
 from .settings_page import SettingsPage
-from .account_page import AccountPage
 from .utilities_page import UtilitiesPage
 
 log = logging.getLogger(__name__)
