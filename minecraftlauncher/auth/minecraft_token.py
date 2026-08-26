@@ -47,6 +47,7 @@ class MinecraftToken:
         "owned_items",
         "jwt",
         "xuid",
+        "uuid",
     )
     username: str
     """
@@ -66,6 +67,8 @@ class MinecraftToken:
     owned_items: set[str] | None
     jwt: dict
     xuid: str
+    uuid: str
+    """Public facing profile UUID"""
 
     def __init__(self, mc_token: dict):
         self.username = mc_token["username"]
@@ -82,6 +85,7 @@ class MinecraftToken:
         self.xuid = self.jwt.get(
             "xuid", self.jwt.get("xid", _unidentified_xuid())
         )
+        self.uuid = self.jwt["profiles"]["mc"]
         self.owned_items = {*mc_token.get("owned_items", [])} or None
         self.acquired_at = mc_token.get(
             "acquired_at", self.jwt.get("iat", time.time())

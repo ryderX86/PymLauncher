@@ -5,31 +5,32 @@ Handles downloading/filtering Minecraft libraries, extracting native
 JARs, and building the classpath string.
 """
 
-from collections.abc import Callable
 import logging
-import zipfile
 import os
+import zipfile
+from collections.abc import Callable
 
-from PySide6.QtCore import QThreadPool
 from packaging.version import Version, parse
+from PySide6.QtCore import QThreadPool
 
-from minecraftlauncher.functions import is_path_valid
-from minecraftlauncher.paths import paths
+from minecraftlauncher.config import config
 from minecraftlauncher.constants import (
-    OS,
     ARCH,
     CLASSPATH_SEPARATOR,
-    OS_VER,
-    LIBRARIES_URL,
     CPU_THREADS,
+    LIBRARIES_URL,
+    OS,
+    OS_VER,
 )
-from minecraftlauncher.config import config
+from minecraftlauncher.functions import is_path_valid
+from minecraftlauncher.paths import paths
+
 from .download_helpers import (
+    BulkDownloadError,
+    RunnableDownloader,
+    _check_file_sha1,
     download,
     should_download_file,
-    _check_file_sha1,
-    RunnableDownloader,
-    BulkDownloadError,
 )
 
 log = logging.getLogger(__name__)

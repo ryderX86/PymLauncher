@@ -322,7 +322,7 @@ class LauncherApp:
         if not account_man.active:
             error_box("No active account! Please submit a bug report.")
             return
-        active = account_man.auto_set_active()
+        active = account_man.active
         if not active:
             self.main_window.home_page.aborted_launch()
             return

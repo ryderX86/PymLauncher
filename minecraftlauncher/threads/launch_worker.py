@@ -5,32 +5,34 @@ Builds the launch command for Minecraft, performs argument-template
 substitution, and starts the game process.
 """
 
-from collections.abc import Callable
-from string import Template
-import subprocess
 import logging
 import os
+import random
 import re
+import subprocess
+from collections.abc import Callable
+from string import Template
 
 from PySide6.QtCore import QThread, Signal
 
+from minecraftlauncher.auth import LauncherAccount
+from minecraftlauncher.back import java_manager, library_manager
+from minecraftlauncher.config import JarRedownloadBehavior, config
 from minecraftlauncher.constants import (
+    DEV,
     LAUNCHER_NAME,
     LAUNCHER_VERSION,
     OS,
-    DEV,
 )
-from minecraftlauncher.functions import is_path_valid
 from minecraftlauncher.datatypes import LaunchProfile
-from minecraftlauncher.auth import LauncherAccount
-from minecraftlauncher.config import config, JarRedownloadBehavior
+from minecraftlauncher.functions import is_path_valid
 from minecraftlauncher.paths import paths
-from minecraftlauncher.back import library_manager, java_manager
+
 from .install_worker import InstallWorker
 
 log = logging.getLogger(__name__)
 
-TEMPLATE_LEFTOVERS_REGEX = re.compile(r"\$\{([a-zA-Z0-9_\-]+)\}")
+TEMPLATE_LEFTOVERS_REGEX = re.compile(r"${([a-zA-Z0-9_\-]+)}")
 
 
 def _substitute(template: str, values: dict[str, str]):
@@ -274,11 +276,11 @@ def build_launch_command(
             f"Account provided (gt {account.gamertag}) has no profile"
         )
 
-    session = f"token:{account.token.access_token}:{account.token.username}"
+    session = f"token:{account.token.access_token}:{account.token.uuid}"
 
     values = {
         "auth_player_name": account.profile.name,
-        "auth_uuid": account.token.username,
+        "auth_uuid": account.token.uuid,
         "version_name": version_id,
         "version_type": version_json.get("type", "unknown"),
         "auth_access_token": account.token.access_token,
@@ -289,7 +291,7 @@ def build_launch_command(
         "game_assets": os.path.join(paths.game, "assets", "virtual", "legacy"),
         "assets_root": os.path.join(paths.game, "assets"),
         "game_directory": game_dir,
-        "clientid": "0",
+        "clientid": str(random.randint(0, 0xFFFFFF)),
         "auth_xuid": account.xuid,
         "resolution_width": resolution_width,
         "resolution_height": resolution_height,
@@ -311,7 +313,9 @@ def build_launch_command(
     if "arguments" in version_json.keys():
         jvm_args, game_args = _build_args(version_json, values, features)
     else:
-        jvm_args, game_args = _build_legacy_args(version_json, values, features)
+        jvm_args, game_args = _build_legacy_args(
+            version_json, values, features
+        )
 
     if profile.mods_folder:
         mods_folder = profile.mods_folder.strip()
@@ -330,7 +334,9 @@ def build_launch_command(
     if log4j_config:
         cmd.append(log4j_config)
 
-    main_class = version_json.get("mainClass", "net.minecraft.client.main.Main")
+    main_class = version_json.get(
+        "mainClass", "net.minecraft.client.main.Main"
+    )
     cmd.extend([f"-Xms{profile.memory_min}", f"-Xmx{profile.memory_max}"])
     if profile.jvm_args:
         cmd.extend(profile.jvm_args.split(" "))
@@ -374,7 +380,7 @@ def launch_game(command: list[str], cwd: str | os.PathLike | None):
 
 
 class LaunchWorker(QThread):
-    """Background worker for downloading game files and launching."""
+    """Background worker for launching the game."""
 
     progress = Signal(
         str, float, float, bool
