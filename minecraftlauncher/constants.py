@@ -7,10 +7,10 @@ globally referenced will remain (like the
 Azure Client ID)
 """
 
-from typing import Literal
 import os
-import sys
 import platform
+import sys
+from typing import Literal
 
 DEV = not bool(globals().get("__compiled__", False))
 
