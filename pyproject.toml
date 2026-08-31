@@ -19,3 +19,8 @@ include-qt-plugins = ["sensible", "qml"]
 
 [tool.pytest]
 testpaths = ["tests"]
+
+[tool.isort]
+line_length = 79
+profile = "black"
+from_first = true
