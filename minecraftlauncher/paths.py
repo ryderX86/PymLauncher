@@ -3,13 +3,13 @@ Paths for launcher & game data
 """
 
 from socket import gethostname
+import logging
 import os
 import sys
-import logging
 
 from . import constants
-from .launchargs import launchargs
 from .functions import is_path_valid, pathsafe_str
+from .launchargs import launchargs
 
 log = logging.getLogger(__name__)
 
@@ -165,7 +165,7 @@ class PathFinder:
 
     @property
     def jvm_manifest(self):
-        return os.path.join(self._game, "versions", "jvm_manifest.json")
+        return os.path.join(self._game, "versions", "jre_manifest.json")
 
     @property
     def assets(self):
