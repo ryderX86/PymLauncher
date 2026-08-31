@@ -1,8 +1,8 @@
+import logging
+import tomllib
 from argparse import ArgumentParser
 from enum import IntFlag
 from pathlib import Path
-import logging
-import tomllib
 
 
 class BuildFlags(IntFlag):
@@ -19,7 +19,9 @@ VENV_PATH = CWD / ".venv"
 
 _parser = ArgumentParser("Build-script")
 _parser.add_argument("-d", "--debug", action="store_true", default=False)
-_parser.add_argument("-r", "--build-report", action="store_true", default=False)
+_parser.add_argument(
+    "-r", "--build-report", action="store_true", default=False
+)
 _parser.add_argument(
     "-e", "--exe", "--executable", action="store_true", default=False
 )
@@ -157,11 +159,7 @@ BASE_ARGS = [
     "--standalone",
     "--show-anti-bloat-changes",
     # source changes are console debug args anyways, no reason not to show them
-    (
-        "--show-source-changes=minecraftlauncher"
-        if not DEBUG
-        else "--show-source-changes=*"
-    ),
+    "--show-source-changes=*",
     "--python-flag=-m",
     # don't include libs from the user's python install
     "--python-flag=isolated",

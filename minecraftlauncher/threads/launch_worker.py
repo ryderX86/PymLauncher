@@ -5,25 +5,20 @@ Builds the launch command for Minecraft, performs argument-template
 substitution, and starts the game process.
 """
 
+from collections.abc import Callable
+from string import Template
 import logging
 import os
 import random
 import re
 import subprocess
-from collections.abc import Callable
-from string import Template
 
 from PySide6.QtCore import QThread, Signal
 
+from minecraftlauncher import constants
 from minecraftlauncher.auth import LauncherAccount
 from minecraftlauncher.back import java_manager, library_manager
 from minecraftlauncher.config import JarRedownloadBehavior, config
-from minecraftlauncher.constants import (
-    DEV,
-    LAUNCHER_NAME,
-    LAUNCHER_VERSION,
-    OS,
-)
 from minecraftlauncher.datatypes import LaunchProfile
 from minecraftlauncher.functions import is_path_valid
 from minecraftlauncher.paths import paths
@@ -34,13 +29,24 @@ log = logging.getLogger(__name__)
 
 TEMPLATE_LEFTOVERS_REGEX = re.compile(r"${([a-zA-Z0-9_\-]+)}")
 
+MAXIMUM_LOG_LINES = 1024
+MAXIMUM_LINE_LENGTH = 65536
+
+LEGACY_LAUNCH_ARGS_DEFAULT = (
+    "--username ${auth_player_name} --session ${auth_session} "
+    "--versionName ${version_name} "
+    "--accessToken ${auth_access_token} --gameDir ${game_directory} "
+    "--assetsDir ${assets_root} --userProperties {} "
+    "--userType msa"
+)
+
 
 def _substitute(template: str, values: dict[str, str]):
     values = {k: v for k, v in values.items() if v is not None}
     t = Template(template)
     subbed = t.safe_substitute(values)
     # unfrozen only so auth tokens don't get leaked into logs when built:
-    if DEV and "${" in subbed:
+    if constants.DEV and "${" in subbed:
         leftovers: list[str] = TEMPLATE_LEFTOVERS_REGEX.findall(subbed)
         if "xuid" in leftovers:
             leftovers.remove("xuid")
@@ -162,13 +168,14 @@ def _build_legacy_args(
 ):
     """Builds JVM and game args. Returns a tuple in order of `(jvm, game)`"""
     raw_game_args: str = version_json.get(
-        "minecraftArguments",
-        "--username ${auth_player_name} --session ${auth_session} "
-        "--versionName ${version_name} "
-        "--accessToken ${auth_access_token} --gameDir ${game_directory} "
-        "--assetsDir ${assets_root} --userProperties {} "
-        "--userType msa",
+        "minecraftArguments", LEGACY_LAUNCH_ARGS_DEFAULT
     )
+    if "minecraftArguments" not in version_json:
+        log.debug(
+            "Using default launch args for legacy game versions. "
+            "(minecraftArguments is empty)"
+        )
+
     game_args = _substitute(raw_game_args, values).split()
 
     jar_path = os.path.join(
@@ -180,8 +187,8 @@ def _build_legacy_args(
 
     default_jvm_args = [
         f"-Djava.library.path={values["natives_directory"]}",
-        f"-Dminecraft.launcher.brand={LAUNCHER_NAME}",
-        f"-Dminecraft.launcher.version={LAUNCHER_VERSION}",
+        f"-Dminecraft.launcher.brand={constants.LAUNCHER_NAME}",
+        f"-Dminecraft.launcher.version={constants.LAUNCHER_VERSION}",
         f"-Dminecraft.client.jar={jar_path}",
         "-cp",
         values["classpath"],
@@ -298,8 +305,8 @@ def build_launch_command(
         "natives_directory": natives_dir,
         "classpath": classpath,
         "library_directory": os.path.join(paths.game, "libraries"),
-        "launcher_name": LAUNCHER_NAME,
-        "launcher_version": LAUNCHER_VERSION,
+        "launcher_name": constants.LAUNCHER_NAME,
+        "launcher_version": constants.LAUNCHER_VERSION,
         "jar_path": jar_path,
         **kwargs,
     }
@@ -327,7 +334,7 @@ def build_launch_command(
 
     cmd: list[str] = [java_path]
 
-    if OS == "windows":
+    if constants.OS == "windows":
         cmd.extend(["-Dos.name=Windows 10", "-Dos.version=10.0"])
 
     cmd.extend(jvm_args)
@@ -351,34 +358,6 @@ def build_launch_command(
     return cmd
 
 
-def launch_game(command: list[str], cwd: str | os.PathLike | None):
-    if not cwd:
-        cwd = paths.game
-
-    log.info("Launching Minecraft")
-    kwargs = {}
-
-    if OS == "windows":
-        si = subprocess.STARTUPINFO()  # type: ignore
-        si.dwFlags |= subprocess.STARTF_USESHOWWINDOW  # type: ignore
-        si.wShowWindow = 1
-        kwargs["startupinfo"] = si
-
-    process = subprocess.Popen(
-        command,
-        cwd=cwd,
-        stdin=subprocess.DEVNULL,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-        universal_newlines=True,
-        bufsize=1,
-        **kwargs,
-    )
-    log.info("Minecraft started; PID: %d", process.pid)
-    return process
-
-
 class LaunchWorker(QThread):
     """Background worker for launching the game."""
 
@@ -398,7 +377,12 @@ class LaunchWorker(QThread):
     log = log.getChild("LaunchWorker")
 
     # instance attributes
+    _ready_for_launch: bool
     installer: InstallWorker
+    cwd: str | os.PathLike
+    cmd: list[str]
+    _p: subprocess.Popen[str] | None
+    _callback: Callable[[str], None] | None
 
     def __init__(
         self,
@@ -407,98 +391,91 @@ class LaunchWorker(QThread):
         parent=None,
     ):
         super().__init__(parent)
-        self._hook = log_hook
-        self._p: subprocess.Popen
+        self._ready_for_launch = False
+        self._callback = log_hook
         self.installer = installer
+        self._p = None
 
-    def run(self):
-        version_json = self.installer.version_json
-        launch_profile = self.installer.launch_profile
-        account = self.installer.account
-        java_executable_path = self.installer.java_executable_path
-        jar_path = self.installer.jar_path
-        log4j_cfg_path = self.installer.log4j_cfg_path
-        libraries = self.installer.libraries
-        natives_dir = self.installer.natives_dir
+    def startup_process(self):
+        if not self._ready_for_launch:
+            raise RuntimeError(
+                "startup_process() called on LaunchWorker before "
+                "_ready_to_launch is True"
+            )
+        log.info("Launching Minecraft...")
 
-        # this is probably the one thing that can't catastrophically fail
-        classpath = library_manager.build_classpath(libraries, jar_path)
+        kwargs: dict = {}
 
-        # DO NOT add reauthentication logic here. we do this in LauncherApp
-        # before even the thought of running this is conjured.
+        if constants.OS == "windows":
+            si = subprocess.STARTUPINFO()
+            si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+            si.wShowWindow = 1
+            kwargs["startupinfo"] = si
 
-        # assert statements to shut the type checker up
-        assert account.profile
-        assert account.token
-
-        self.status.emit("Launching Minecraft...")
-        cmd = build_launch_command(
-            version_json,
-            account,
-            java_executable_path,
-            log4j_cfg_path,
-            classpath,
-            launch_profile,
-            natives_dir=natives_dir,
+        self._p = subprocess.Popen(
+            self.cmd,
+            cwd=self.cwd,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            universal_newlines=True,
+            bufsize=1,
+            **kwargs,
         )
-        logged_cmd = " ".join(cmd).replace(
-            account.token.access_token, "[REDACTED]"
-        )
-        if OS == "windows":
-            logged_cmd.replace("", "")
-        self.log.info("Launch command: '%s'", logged_cmd)
 
-        sub_logger = logging.getLogger(os.path.split(cmd[0])[1])
-        self._p = launch_game(cmd, cwd=launch_profile.game_dir)
+        log.info("Minecraft started; PID: %d", self._p.pid)
+        return
+
+    def post_launch_loop(self):
+        """
+        Establishes the logging loop and waiting after the game launches.
+        """
+        assert self._p is not None
+
         if self._p.poll() is None:
             self.done.emit(True, "Minecraft launched successfully.")
         else:
-            self.log.warning("Game hasn't given a return code, did it launch?")
-            self.done.emit(True, "Unknown status")
-
-        if DEV and config.post_launch_option < 1:
-            game_log_func = sub_logger.debug
-        else:
-
-            def game_log_func(msg: object, *args): ...
+            if not self._p.returncode:
+                self.log.warning(
+                    "Game hasn't given a return code, did it launch?"
+                )
+                self.done.emit(True, "Unknown status")
+            else:
+                self.done.emit(
+                    False, "Unknown error (return %d)", self._p.returncode
+                )
 
         # reverse this when reading:
         stdout_cache: list[str] = []
 
-        if config.show_logs_on_home and not self._hook:
-            self._hook = self.game_log.emit
+        if config.show_logs_on_home and not self._callback:
+            self._callback = self.game_log.emit
+        elif not self._callback:
 
-        if self._hook:
+            def callback(*args): ...
 
-            def loop(self):
-                nonlocal stdout_cache
-                if self._p.stdout:
-                    for line in iter(self._p.stdout.readline, ""):
-                        stdout_cache.insert(0, line[:-1])
-                        self._hook(line[:-1])
+            self._callback = callback
 
-                        self._p.stdout.flush()
-                        stdout_cache = stdout_cache[:255]
-                self._p.wait()
+        line_count = MAXIMUM_LOG_LINES - 1
+        line_length = MAXIMUM_LINE_LENGTH - 1
 
-        else:
+        def loop(self):
+            nonlocal stdout_cache
+            if self._p.stdout:
+                for line in iter(self._p.stdout.readline, ""):
+                    trimmed_line = line[:line_length]
+                    stdout_cache.insert(0, trimmed_line)
+                    self._callback(trimmed_line)
 
-            def loop(self):
-                nonlocal stdout_cache
-                if self._p.stdout:
-                    for line in iter(self._p.stdout.readline, ""):
-                        game_log_func(line[:-1])  # skip newline
-                        stdout_cache.insert(0, line[:-1])
-
-                        # memory usage
-                        self._p.stdout.flush()
-                        stdout_cache = stdout_cache[:255]  # 256 lines
-                self._p.wait()
+                    self._p.stdout.flush()
+                    stdout_cache = stdout_cache[:line_count]
+            self._p.wait()
 
         loop(self)
 
         stdout_cache.reverse()
-        stdout = "\n".join(stdout_cache)
+        stdout = "".join(stdout_cache)
 
         self.log.info("Game process returned with code %d", self._p.returncode)
         if self._p.returncode == 0:
@@ -506,8 +483,110 @@ class LaunchWorker(QThread):
                 config.redownload_option = JarRedownloadBehavior.NEVER
         self.game_closed.emit(str(self._p.returncode), stdout)
 
-    def start_if_success(self, success: bool, *args):
+    def run(self):
+        """
+        Main process. Cannot be run before the installer (self.installer) is
+        finished (a check is in `start()` for this.)
+        """
+        self.version_json = self.installer.version_json
+        self.launch_profile = self.installer.launch_profile
+        self.account = self.installer.account
+        self.java_executable_path = self.installer.java_executable_path
+        self.jar_path = self.installer.jar_path
+        self.log4j_cfg_path = self.installer.log4j_cfg_path
+        self.libraries = self.installer.libraries
+        self.natives_dir = self.installer.natives_dir
+
+        # this is probably the one thing that can't catastrophically fail
+        classpath = library_manager.build_classpath(
+            self.libraries, self.jar_path
+        )
+
+        # DO NOT add reauthentication logic here. we do this in LauncherApp
+        # before even the thought of running this is conjured.
+
+        # assert statements to shut the type checker up
+        assert self.account.profile
+        assert self.account.token
+
+        self.status.emit("Launching Minecraft...")
+        self.cmd = build_launch_command(
+            self.version_json,
+            self.account,
+            self.java_executable_path,
+            self.log4j_cfg_path,
+            classpath,
+            self.launch_profile,
+            natives_dir=self.natives_dir,
+        )
+        logged_cmd = " ".join(self.cmd).replace(
+            self.account.token.access_token, "[REDACTED]"
+        )
+        if constants.OS == "windows":
+            logged_cmd.replace("", "")
+        self.log.info("Launch command: '%s'", logged_cmd)
+
+        # store the CWD for debugging crashes:
+        if self.launch_profile.game_dir:
+            self.cwd = self.launch_profile.game_dir
+        else:
+            self.cwd = paths.game
+
+        self._ready_for_launch = True
+
+        self.startup_process()
+        self.post_launch_loop()
+        return
+
+    def start_if_success(self, success: bool):
         if success:
             self.start()
         else:
             return
+
+    def _get_hspid_log(self):
+        if not self._p:
+            log.warning(
+                "_get_hspid_log() called too early! "
+                "No Popen() instance present."
+            )
+            return
+        pid = self._p.pid
+        game_dir: str = self.launch_profile.game_dir or paths.game
+        pattern = f"hs_err_pid{pid}.log"
+        hserr_log_paths = (
+            os.path.join(game_dir, pattern),
+            os.path.join(constants.JVM_TEMP_DIR, pattern),
+            # only if the argument is supplied (remove if that doesn't get
+            # implemented):
+            os.path.join(game_dir, "crash-reports", pattern),
+        )
+        log_file: str | None = None
+        for path in hserr_log_paths:
+            if os.path.isfile(path):
+                # compare timestamp, we want the newest one:
+                if log_file is not None:
+                    existing_lstat = os.lstat(log_file)
+                    new_lstat = os.lstat(path)
+                    if existing_lstat.st_mtime > new_lstat.st_mtime:
+                        continue
+                log_file = path
+
+        if not log_file:
+            log.warning(
+                "Couldn't get JVM crash log! Locations checked:\n%s",
+                "\n".join(f'"  {x}"' for x in hserr_log_paths),
+            )
+
+        return log_file
+
+    def start(
+        self, /, priority: QThread.Priority = QThread.Priority.NormalPriority
+    ) -> None:
+        """
+        Simple override to add a check that the installer passed at init() is
+        done before launching
+        """
+        if not self.installer.isFinished():
+            raise RuntimeError("InstallWorker hasn't finished yet!")
+        return super().start(priority)

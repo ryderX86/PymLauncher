@@ -1,13 +1,14 @@
+from json import JSONDecodeError
+from time import sleep
 import atexit
 import logging
 import sys
-from json import JSONDecodeError
-from time import sleep
+import warnings
 
-import requests
 from PySide6.QtCore import QFile
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QApplication, QStyleFactory
+import requests
 
 from . import constants, get_qapp, logs, setup_qapp
 from .auth import LauncherAccount
@@ -24,13 +25,14 @@ from .back import (
 from .back.account_manager import account_man
 from .config import config
 from .exceptions import EncryptedDataDecodeError
+from .exceptions.encryption import EncryptionUnavailableWarning
 from .front.event_filters import FocusEventFilter
 from .front.styles import STYLESHEET, FontList, gen_palette, get_fonts
 from .front.window.game_error import ErrorDisplay
 from .front.window.loading_blocker import LoadingBlockerWindow
 from .front.window.login import LoginWindow
 from .front.window.main.main_window import MainWindow
-from .front.window.warning import ButtonConfig, WarningDialog
+from .front.window.warning import ButtonConfig, WarningDialog, WarningType
 from .functions import detect_set_clipboard, uisleep
 from .functions.error_box import error_box
 from .launchargs import launchargs
@@ -109,7 +111,7 @@ class LauncherApp:
         for page in self.main_window.page_list:
             page.build()
 
-    def run(self) -> int:
+    def bootstrap(self):
         global clean_exit
         log.debug("Attempting to get version manifest set up...")
         self.lb_window.set_text("Fetching version list")
@@ -156,7 +158,7 @@ class LauncherApp:
                 profile_manager.load_launcher_profiles()
             else:
                 clean_exit = True
-                sys.exit()
+                self.qapp.exit(0)
         self.lb_window.set_text("Loading UI data...")
         self.buildall()
         self.load_accounts()
@@ -169,6 +171,30 @@ class LauncherApp:
         if focused:
             focused.clearFocus()
         self.main_window.check_for_launch_arg()
+
+    def run(self) -> int:
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", UserWarning)
+            try:
+                self.bootstrap()
+            except EncryptionUnavailableWarning as err:
+                WarningDialog(
+                    err.args[0],
+                    WarningType.ACCOUNTS_BIN_ENCRYPTION,
+                    parent=self.lb_window,
+                )
+            except UserWarning as err:
+                WarningDialog(
+                    "\n".join((str(a) for a in err.args)),
+                    parent=self.lb_window,
+                )
+            except Exception as err:
+                log.error("Error occured in bootstrap process:", exc_info=err)
+                error_box(
+                    f"Error occured in bootstrap: {err}\n"
+                    "Startup cannot continue"
+                )
+                raise
         return self.qapp.exec()
 
     def load_accounts(self):
@@ -186,7 +212,8 @@ class LauncherApp:
                 "Please make sure you are using the right account with the "
                 "necessary permissions."
             )
-            sys.exit(-1)
+            self.qapp.exit(1)
+            return
         except AttributeError as err:
             log.error("AttributeError in account loading:", exc_info=err)
             if err.obj is not None:
@@ -197,7 +224,8 @@ class LauncherApp:
                 log.debug("Missing key: %r", err.name)
             else:
                 log.debug("Can't retrieve key name from exception")
-            sys.exit(-1)
+            self.qapp.exit(1)
+            return
         except (JSONDecodeError, EncryptedDataDecodeError) as err:
             # get user input before proceeding, if True then the user answered
             # yes to deleting the accounts.bin file
@@ -227,7 +255,8 @@ class LauncherApp:
                 account_man.load_accounts()
             else:
                 clean_exit = True
-                sys.exit()
+                self.qapp.exit()
+                return
         except BaseAuthenticationException as err:
             if len(account_man) > 1:
                 self.close_if_login_aborted = False
@@ -244,14 +273,15 @@ class LauncherApp:
                         "credentials. Exiting."
                     )
                     clean_exit = True
-                    sys.exit()
+                    self.qapp.exit(0)
+                    return
         except Exception as err:
             log.error("Unexpected error in account loading:", exc_info=err)
             error_box(
                 "Failed to read accounts from storage.\n"
                 "The launcher cannot continue loading and will now close."
             )
-            sys.exit(-1)
+            self.qapp.exit(1)
         if account_man.has_accounts:
             self.close_if_login_aborted = False
         else:
@@ -283,7 +313,8 @@ class LauncherApp:
         active_acc = account_man.active
         if self.close_if_login_aborted or not active_acc:
             clean_exit = True
-            sys.exit(1)
+            self.qapp.exit(1)
+            return
         account_man.set_active(active_acc)
         return
 
@@ -371,6 +402,7 @@ class LauncherApp:
             self.install_worker, self.launch_worker
         )
         self.install_worker.done.connect(self.launch_worker.start_if_success)
+        self.install_worker.error.connect(self._on_install_error)
         self.install_worker.start()
 
     def _on_account_changed(
@@ -460,6 +492,10 @@ class LauncherApp:
             else:
                 account_man.replace_into(active_account)
         self.main_window.account_dropdown.refresh()
+
+    def _on_install_error(self, err: Exception):
+        log.debug("Notifying user of error in game launch process")
+        error_box(str(err))
 
     def _close_event(self):
         self.qapp.exit(0)

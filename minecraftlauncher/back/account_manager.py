@@ -190,29 +190,45 @@ class AccountManager:
         return output
 
     def auto_set_active(
-        self, preferred_xuid: str | None = None, raise_on_fail: bool = False
+        self,
+        preferred_xuid: str | None = None,
+        raise_on_fail: bool = False,
+        ignore_refreshes: bool = False,
     ) -> LauncherAccount | None:
         set_account = False
         if preferred_xuid and preferred_xuid in self._accounts:
             account = self._accounts[preferred_xuid]
-            try:
-                self._check_refresh_token(account)
-            except Exception as err:
-                log.debug(
-                    "Ignoring %r exception while refreshing tokens for %r",
-                    type(err).__name__,
-                    account.gamertag,
-                )
-            else:
-                log.debug(
-                    "Switching account from %r to %r",
-                    (
-                        self._active_account.gamertag
-                        if self._active_account
-                        else None
-                    ),
-                    account.gamertag,
-                )
+
+            # we should ignore all refresh needs when calling this from the GUI
+            # so that we don't refresh the tokens without showing the user any
+            # indicators, since that would end up freezing the GUI needlessly
+            if not ignore_refreshes and not account.token_valid:
+                try:
+                    self._check_refresh_token(account)
+                except Exception as err:
+                    log.debug(
+                        "Ignoring %r exception while refreshing tokens for %r",
+                        type(err).__name__,
+                        account.gamertag,
+                    )
+            # after we determine token refresh status, if it's valid we can
+            # simply set the account and exit before starting a loop
+            if account.token_valid:
+                if self._active_account:
+                    log.debug(
+                        "Switching account from %r to %r",
+                        (
+                            self._active_account.gamertag
+                            if self._active_account
+                            else None
+                        ),
+                        account.gamertag,
+                    )
+                else:
+                    log.debug(
+                        "Automatically setting active account to %r",
+                        account.gamertag,
+                    )
                 self._active_account = account
                 if self.active:
                     for callback in self._active_callbacks:

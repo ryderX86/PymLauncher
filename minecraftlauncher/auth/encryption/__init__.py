@@ -6,11 +6,13 @@ found in the implemented platform types.
 """
 
 __all__ = ["encrypt", "decrypt", "data_load_hook", "data_save_hook"]
+import logging
 import platform
 import warnings
-import logging
 
-from .exceptions import EncryptionUnavailableWarning
+from minecraftlauncher.exceptions.encryption import (
+    EncryptionUnavailableWarning,
+)
 
 log = logging.getLogger(__name__)
 
@@ -28,20 +30,20 @@ def run_import():
     match platform.system():
         case "Windows":
             from .win32_encryption import (
-                encrypt,
-                decrypt,
                 data_load_hook,
                 data_save_hook,
+                decrypt,
+                encrypt,
             )
 
             ENABLED = True
         case "Linux":
             try:
                 from .linux_encryption import (
-                    encrypt,
-                    decrypt,
                     data_load_hook,
                     data_save_hook,
+                    decrypt,
+                    encrypt,
                 )
 
                 ENABLED = True
@@ -57,18 +59,18 @@ def run_import():
                     )
                 )
                 from .no_encryption import (
-                    encrypt,
-                    decrypt,
                     data_load_hook,
                     data_save_hook,
+                    decrypt,
+                    encrypt,
                 )
         case _:
 
             from .no_encryption import (
-                encrypt,
-                decrypt,
                 data_load_hook,
                 data_save_hook,
+                decrypt,
+                encrypt,
             )
 
             ENABLED = False

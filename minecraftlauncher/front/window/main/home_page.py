@@ -7,35 +7,35 @@ Home page, play button, profile info, progress bar, all that stuff.
 import logging
 import os
 
-from PySide6.QtCore import Qt, Signal, QUrl, QItemSelection, QSize
+from PySide6.QtCore import QItemSelection, QSize, Qt, QUrl, Signal
 from PySide6.QtGui import QDesktopServices, QIcon, QPalette
 from PySide6.QtWidgets import (
+    QComboBox,
     QFrame,
     QHBoxLayout,
     QLabel,
+    QListView,
+    QPlainTextEdit,
     QProgressBar,
     QPushButton,
     QVBoxLayout,
     QWidget,
-    QComboBox,
-    QPlainTextEdit,
-    QListView,
 )
 
-from minecraftlauncher.functions import error_box, is_path_valid
-from minecraftlauncher.back.profile_manager import LaunchProfile
-from minecraftlauncher.threads.launch_worker import LaunchWorker
-from minecraftlauncher.threads.install_worker import InstallWorker
 from minecraftlauncher.back import profile_manager
+from minecraftlauncher.back.profile_manager import LaunchProfile
+from minecraftlauncher.config import config
 from minecraftlauncher.exceptions.datatypes import InvalidVersionIdError
-from minecraftlauncher.paths import paths
 from minecraftlauncher.front import resources
 from minecraftlauncher.front.qt.models import ProfileSelectionModel
 from minecraftlauncher.front.qt.widgets import Header1, SecondaryLabel
 from minecraftlauncher.front.styles import get_fonts
 from minecraftlauncher.front.window.text_popup import TextPopup
-from minecraftlauncher.config import config
+from minecraftlauncher.functions import error_box, is_path_valid
 from minecraftlauncher.offline import offline_man
+from minecraftlauncher.paths import paths
+from minecraftlauncher.threads.install_worker import InstallWorker
+from minecraftlauncher.threads.launch_worker import LaunchWorker
 
 log = logging.getLogger(__name__)
 
@@ -149,7 +149,9 @@ class HomePage(QWidget):
         profile_action_row.addWidget(open_save_button, 0)
 
         open_mods_button = QPushButton("Mods")
-        open_mods_button.clicked.connect(lambda: self._open_prof_folder("mods"))
+        open_mods_button.clicked.connect(
+            lambda: self._open_prof_folder("mods")
+        )
         open_mods_button.setProperty("mini", True)
         profile_action_row.addWidget(open_mods_button, 0)
 
@@ -226,7 +228,9 @@ class HomePage(QWidget):
         self.play_button.setDisabled(True)
 
         play_layout = QHBoxLayout()
-        play_layout.addWidget(self.play_button, 0, Qt.AlignmentFlag.AlignCenter)
+        play_layout.addWidget(
+            self.play_button, 0, Qt.AlignmentFlag.AlignCenter
+        )
         layout.addLayout(play_layout)
 
     def _refresh_profiles(self):
@@ -239,7 +243,9 @@ class HomePage(QWidget):
         for prof in profs:
             if prof.icon:
                 ico = resources.profile_icon(prof.icon)
-                self.profile_dropdown.addItem(ico, prof.name or prof.uuid, prof)
+                self.profile_dropdown.addItem(
+                    ico, prof.name or prof.uuid, prof
+                )
             else:
                 self.profile_dropdown.addItem(
                     self._no_icon, prof.name or prof.uuid, prof
@@ -305,7 +311,9 @@ class HomePage(QWidget):
             self.play_button.setText("Installing...")
         self.play_requested.emit()
 
-    def prep_for_launch(self, installer: InstallWorker, launcher: LaunchWorker):
+    def prep_for_launch(
+        self, installer: InstallWorker, launcher: LaunchWorker
+    ):
         # ui stuff
         self.progress_bar.setValue(0)
         self.progress_frame.setVisible(True)
@@ -426,7 +434,7 @@ class HomePage(QWidget):
                 self,
             )
 
-    def _on_install_finished(self, success: bool, message: str | None = None):
+    def _on_install_finished(self, success: bool):
         if success:
             self.play_button.setText("Launching...")
             self.play_button.setEnabled(False)
@@ -435,12 +443,6 @@ class HomePage(QWidget):
             self.progress_bar.setValue(0)
         else:
             self.aborted_launch()
-            TextPopup(
-                message or "No content provided",
-                "Failed to install game",
-                "Installation Error",
-                self,
-            )
 
     def _reset_play_button(self):
         profile = profile_manager.get_current_profile()

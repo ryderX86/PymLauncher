@@ -4,26 +4,25 @@ minecraftlauncher.front.window.game_error
 Module containing a class with a window to show game errors/logs.
 """
 
-from pathlib import Path
 import logging
 import os
+from pathlib import Path
 
 from PySide6.QtCore import Qt, QUrl
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
+    QApplication,
     QDialog,
-    QPushButton,
+    QFrame,
+    QHBoxLayout,
     QLabel,
     QPlainTextEdit,
+    QPushButton,
     QVBoxLayout,
-    QHBoxLayout,
-    QFrame,
-    QApplication,
 )
 
-from minecraftlauncher.functions import copy_to_clipboard, clipboard_present
+from minecraftlauncher.front.resources import symbol
 from minecraftlauncher.front.styles import get_fonts
-from minecraftlauncher import constants
 
 log = logging.getLogger(__name__)
 
@@ -73,6 +72,7 @@ class ErrorDisplay(QDialog):
         self.activateWindow()
 
     def _build_ui(self):
+        self.clipboard = QApplication.clipboard()
         self._layout = QVBoxLayout(self)
         self._layout.setContentsMargins(32, 32, 32, 32)
         self._layout.setSpacing(16)
@@ -82,9 +82,19 @@ class ErrorDisplay(QDialog):
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._layout.addWidget(title)
 
-        exit_code = QLabel(f"Exit code: {self._exit_code}")
+        exit_code_row = QHBoxLayout()
+        exit_code = QLabel(f"Exit code: {self._exit_code or "<unspecified>"}")
         exit_code.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._layout.addWidget(exit_code)
+        exit_code_row.addWidget(exit_code, stretch=0)
+        copy_code_button = QPushButton()
+        copy_code_button.setIcon(symbol("clipboard"))
+        copy_code_button.clicked.connect(
+            lambda: self.clipboard.setText(self._exit_code)
+        )
+        copy_code_button.setProperty("small", True)
+        copy_code_button.setMaximumWidth(34)
+        exit_code_row.addWidget(copy_code_button, stretch=0)
+        self._layout.addLayout(exit_code_row)
 
         self._log_display = QPlainTextEdit()
         self._log_display.setPlainText(self._log)
@@ -100,19 +110,19 @@ class ErrorDisplay(QDialog):
         buttons_parent = QFrame()
         buttons_layout = QHBoxLayout(buttons_parent)
 
-        clipboard_button = QPushButton()
-        clipboard_button.setText("Copy to Clipboard")
-        clipboard_button.clicked.connect(self._copy_logs_to_clipboard)
+        self.clipboard_button = QPushButton()
+        self.clipboard_button.setText("Copy to Clipboard")
+        self.clipboard_button.clicked.connect(self._copy_logs_to_clipboard)
         if not self._log:
-            clipboard_button.setDisabled(True)
-            clipboard_button.setText("No logs to copy...")
-            clipboard_button.setStyleSheet(
-                clipboard_button.styleSheet() + " font: italic;"
+            self.clipboard_button.setDisabled(True)
+            self.clipboard_button.setText("No logs to copy...")
+            self.clipboard_button.setStyleSheet(
+                self.clipboard_button.styleSheet() + " font: italic;"
             )
-        elif not clipboard_present:
+        elif not self.clipboard:
             log.warning("No clipboard found")
-            clipboard_button.setDisabled(True)
-        buttons_layout.addWidget(clipboard_button)
+            self.clipboard_button.setDisabled(True)
+        buttons_layout.addWidget(self.clipboard_button)
 
         open_log_button = QPushButton()
         open_log_button.setText("Open Log File")
@@ -159,7 +169,7 @@ class ErrorDisplay(QDialog):
         self._log = "\n".join(logs[crash_start_index : crash_end_index + 1])
 
     def _copy_logs_to_clipboard(self):
-        copy_to_clipboard(self._log)
+        self.clipboard.setText(self._log)
         log.debug("Copied game crash log to clipboard.")
         return
 

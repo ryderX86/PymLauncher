@@ -183,3 +183,11 @@ FLAG_ENABLE_JUMP_LISTS: bool = (
 
 # average CPU has 4 cores now and most post-2010 CPUs have 2 threads per core
 CPU_THREADS = os.cpu_count() or 8
+
+JVM_TEMP_DIR: str
+"""The temporary directory used by the JVM"""
+match PLATFORM:
+    case "Windows":
+        JVM_TEMP_DIR = os.getenv("TMP", os.getenv("TEMP", ""))
+    case _:
+        JVM_TEMP_DIR = os.path.normpath("/tmp")
