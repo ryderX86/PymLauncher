@@ -1,7 +1,8 @@
 import sys
 
 from PySide6.QtWidgets import QApplication
-from requests.adapters import HTTPAdapter, Retry
+from requests.adapters import HTTPAdapter
+from urllib3.util import Retry
 
 from .constants import USER_AGENT
 from .networking import ResilientSession
