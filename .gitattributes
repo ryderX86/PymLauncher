@@ -1,0 +1,29 @@
+*       text=auto
+*.txt   text
+
+# scripts
+
+#   POSIX
+*.sh    text eol=lf
+#   Win32
+*.bat   text eol=crlf
+*.cmd   text eol=crlf
+*.ps1   text eol=crlf
+*.nsi   text eol=crlf
+
+# archives
+*.zip   binary
+
+# visual items
+*.jpg   binary
+*.png   binary
+*.jpeg  binary
+*.ico   binary
+*.webp  binary
+*.gif   binary
+*.ttf   binary
+*.otf   binary
+*.eot   binary
+
+# qt resource file
+_resources_bundled.py   -diff linguist-generated=true
