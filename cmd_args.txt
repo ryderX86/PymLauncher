@@ -1,1 +1,0 @@
--Dforge.forceNoStencil=True | Black screen on old intel iGPUs
