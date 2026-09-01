@@ -1,15 +1,19 @@
 *       text=auto
+
+# text items
 *.txt   text
+*.md    text linguist-language=Markdown
+*.qml   text linguist-language=QML
 
 # scripts
 
 #   POSIX
-*.sh    text eol=lf
+*.sh    text eol=lf linguist-language=Shell
 #   Win32
-*.bat   text eol=crlf
-*.cmd   text eol=crlf
-*.ps1   text eol=crlf
-*.nsi   text eol=crlf
+*.bat   text eol=crlf linguist-language=Batchfile
+*.cmd   text eol=crlf linguist-language=Batchfile
+*.ps1   text eol=crlf linguist-language=PowerShell
+*.nsi   text eol=crlf linguist-language=NSIS
 
 # archives
 *.zip   binary
@@ -20,6 +24,7 @@
 *.jpeg  binary
 *.ico   binary
 *.webp  binary
+*.svg   binary
 *.gif   binary
 *.ttf   binary
 *.otf   binary
