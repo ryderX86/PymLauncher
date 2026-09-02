@@ -5,8 +5,8 @@ import logging
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import (
     QApplication,
-    QMessageBox,
     QCheckBox,
+    QMessageBox,
 )
 
 from minecraftlauncher.config import config
@@ -101,6 +101,8 @@ class WarningDialog(QMessageBox):
                     self._checkbox = QCheckBox(CHECKBOX_TEXT_YESNO)
             self.setCheckBox(self._checkbox)
             self._checkbox.setChecked(False)
+        else:
+            self._checkbox = None
         if button_labels:
             if "ok" in button_labels:
                 self.button(self.StandardButton.Ok).setText(
@@ -116,7 +118,7 @@ class WarningDialog(QMessageBox):
                 )
 
     def _handle_dismissal(self):
-        if self._checkbox.isChecked() or self._show_once:
+        if self._checkbox and (self._checkbox.isChecked() or self._show_once):
             if not isinstance(self._warning_type, WarningType):
                 log.warning(
                     "Checkbox was checked without a warning type! Ignoring."
