@@ -1,7 +1,7 @@
+from collections.abc import Buffer
 import logging
 import os
 import time
-from collections.abc import Buffer
 
 from PySide6.QtCore import QCoreApplication, QSize
 from PySide6.QtGui import QClipboard, QIcon, QImage, QPixmap
@@ -11,7 +11,7 @@ from minecraftlauncher import get_qapp
 
 from .error_box import error_box
 from .suppressables import suppressable
-from .text import indent, is_path_valid, pathsafe_str
+from .text import indent, is_path_valid, pathsafe_str, truncate
 
 log = logging.getLogger(__name__)
 

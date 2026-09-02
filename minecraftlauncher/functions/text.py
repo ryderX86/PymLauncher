@@ -2,11 +2,11 @@
 Helper functions for text stuff
 """
 
-from string import digits, ascii_letters
-import platform
+from string import ascii_letters, digits
 import json
-import re
 import os
+import platform
+import re
 
 
 def indent(text: str | dict | list, amount: int = 2):
@@ -29,6 +29,16 @@ def indent(text: str | dict | list, amount: int = 2):
         lines[i] = line  # type: ignore
 
     return "\n".join(lines)
+
+
+def truncate(
+    text: str,
+    max_length: int,
+    placeholder: str = "...",
+) -> str:
+    if len(text) > max_length:
+        text = "".join((text[: max_length + 1], placeholder))
+    return text
 
 
 _WIN_PATH_REGEX = (
