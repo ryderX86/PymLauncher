@@ -20,7 +20,7 @@ from minecraftlauncher.auth import LauncherAccount
 from minecraftlauncher.back import java_manager, library_manager
 from minecraftlauncher.config import JarRedownloadBehavior, config
 from minecraftlauncher.datatypes import LaunchProfile
-from minecraftlauncher.functions import is_path_valid
+from minecraftlauncher.functions import is_path_valid, truncate
 from minecraftlauncher.paths import paths
 
 from .install_worker import InstallWorker
@@ -458,13 +458,12 @@ class LaunchWorker(QThread):
             self._callback = callback
 
         line_count = MAXIMUM_LOG_LINES - 1
-        line_length = MAXIMUM_LINE_LENGTH - 1
 
         def loop(self):
             nonlocal stdout_cache
             if self._p.stdout:
                 for line in iter(self._p.stdout.readline, ""):
-                    trimmed_line = line[:line_length]
+                    trimmed_line = truncate(line, MAXIMUM_LINE_LENGTH, "...\n")
                     stdout_cache.insert(0, trimmed_line)
                     self._callback(trimmed_line)
 
@@ -483,7 +482,7 @@ class LaunchWorker(QThread):
                 config.redownload_option = JarRedownloadBehavior.NEVER
         self.game_closed.emit(str(self._p.returncode), stdout)
 
-    def run(self):
+    def bootstrap(self):
         """
         Main process. Cannot be run before the installer (self.installer) is
         finished (a check is in `start()` for this.)
@@ -505,9 +504,14 @@ class LaunchWorker(QThread):
         # DO NOT add reauthentication logic here. we do this in LauncherApp
         # before even the thought of running this is conjured.
 
-        # assert statements to shut the type checker up
-        assert self.account.profile
-        assert self.account.token
+        if not self.account.token:
+            raise RuntimeError(
+                "LaunchWorker started whilst the passed account has no token"
+            )
+        if not self.account.profile:
+            raise RuntimeError(
+                "LaunchWorker started whilst the passed account has no profile"
+            )
 
         self.status.emit("Launching Minecraft...")
         self.cmd = build_launch_command(
@@ -537,6 +541,12 @@ class LaunchWorker(QThread):
         self.startup_process()
         self.post_launch_loop()
         return
+
+    def run(self):
+        try:
+            self.bootstrap()
+        except Exception as err:
+            log.error("Error in LaunchWorker bootstrap():", exc_info=err)
 
     def start_if_success(self, success: bool):
         if success:
