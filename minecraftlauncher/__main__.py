@@ -1,5 +1,6 @@
 from json import JSONDecodeError
 from time import sleep
+from typing import NoReturn
 import atexit
 import logging
 import sys
@@ -63,7 +64,10 @@ class LauncherApp:
     install_worker: InstallWorker
     launch_worker: LaunchWorker
 
+    event_loop_running: bool
+
     def __init__(self):
+        self.event_loop_running = False
         self.qapp = get_qapp()
         self.fonts = get_fonts()
         detect_set_clipboard()
@@ -158,7 +162,7 @@ class LauncherApp:
                 profile_manager.load_launcher_profiles()
             else:
                 clean_exit = True
-                self.qapp.exit(0)
+                sys.exit()
         self.lb_window.set_text("Loading UI data...")
         self.buildall()
         self.load_accounts()
@@ -195,6 +199,7 @@ class LauncherApp:
                     "Startup cannot continue"
                 )
                 raise
+        self.event_loop_running = True
         return self.qapp.exec()
 
     def load_accounts(self):
@@ -212,8 +217,7 @@ class LauncherApp:
                 "Please make sure you are using the right account with the "
                 "necessary permissions."
             )
-            self.qapp.exit(1)
-            return
+            self.exit()
         except AttributeError as err:
             log.error("AttributeError in account loading:", exc_info=err)
             if err.obj is not None:
@@ -224,8 +228,7 @@ class LauncherApp:
                 log.debug("Missing key: %r", err.name)
             else:
                 log.debug("Can't retrieve key name from exception")
-            self.qapp.exit(1)
-            return
+            self.exit()
         except (JSONDecodeError, EncryptedDataDecodeError) as err:
             # get user input before proceeding, if True then the user answered
             # yes to deleting the accounts.bin file
@@ -255,8 +258,7 @@ class LauncherApp:
                 account_man.load_accounts()
             else:
                 clean_exit = True
-                self.qapp.exit()
-                return
+                self.exit()
         except BaseAuthenticationException as err:
             if len(account_man) > 1:
                 self.close_if_login_aborted = False
@@ -273,15 +275,14 @@ class LauncherApp:
                         "credentials. Exiting."
                     )
                     clean_exit = True
-                    self.qapp.exit(0)
-                    return
+                    self.exit()
         except Exception as err:
             log.error("Unexpected error in account loading:", exc_info=err)
             error_box(
                 "Failed to read accounts from storage.\n"
                 "The launcher cannot continue loading and will now close."
             )
-            self.qapp.exit(1)
+            self.exit()
         if account_man.has_accounts:
             self.close_if_login_aborted = False
         else:
@@ -313,8 +314,7 @@ class LauncherApp:
         active_acc = account_man.active
         if self.close_if_login_aborted or not active_acc:
             clean_exit = True
-            self.qapp.exit(1)
-            return
+            self.exit()
         account_man.set_active(active_acc)
         return
 
@@ -498,7 +498,17 @@ class LauncherApp:
         error_box(str(err))
 
     def _close_event(self):
-        self.qapp.exit(0)
+        self.exit()
+
+    def exit(self, return_code: int = 0) -> NoReturn:
+        global clean_exit
+        if return_code == 0:
+            clean_exit = True
+        if self.event_loop_running:
+            self.qapp.exit(return_code)
+            raise SystemExit()
+        else:
+            sys.exit(return_code)
 
 
 def on_exit():

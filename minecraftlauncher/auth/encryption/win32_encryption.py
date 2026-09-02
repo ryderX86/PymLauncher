@@ -4,19 +4,23 @@ crypt32.dll based encryption for accounts.bin
 
 __all__ = ["encrypt", "decrypt", "data_load_hook", "data_save_hook"]
 from collections.abc import Buffer
-import logging
 import json
+import logging
+import socket
 
 from win32 import win32crypt
 import pywintypes  # type: ignore
 
 from minecraftlauncher.constants import LAUNCHER_NAME
+
 from .winerr_codes import WinErrorCode
 
 log = logging.getLogger(__name__)
 
-ENTROPY = b"WTF IS A KILOMETER!!!!!!!!!!"
-DESCRIPTION = f"Accounts data for {LAUNCHER_NAME}"
+HOST_NAME = socket.gethostname()
+ENTROPY = b"PymLauncher accounts store"
+DESCRIPTION_PREFIX = f"Accounts data for {LAUNCHER_NAME} on "
+DESCRIPTION = "".join((DESCRIPTION_PREFIX, HOST_NAME))
 
 
 def encrypt(data: str | bytes) -> Buffer:
@@ -52,7 +56,15 @@ def decrypt(data: bytes) -> str:
         new.add_note(f"Function called: {func}")
         raise new from err
 
-    if data_desc != DESCRIPTION:
+    file_host_name = data_desc.replace(DESCRIPTION_PREFIX, "")
+    if DESCRIPTION_PREFIX in data_desc and file_host_name != HOST_NAME:
+        log.warning(
+            "Last host name to save this file is different: "
+            "Current host: %r, file's host: %r",
+            HOST_NAME,
+            file_host_name,
+        )
+    elif data_desc != DESCRIPTION:
         log.warning(
             "Encrypted data description doesn't match.\n"
             "Default description: '%s'\nEncryption description: '%s'",
