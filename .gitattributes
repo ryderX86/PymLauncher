@@ -32,3 +32,4 @@
 
 # qt resource file
 _resources_bundled.py   -diff linguist-generated=true
+distributed-license.txt -diff linguist-generated=true

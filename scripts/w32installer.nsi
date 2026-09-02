@@ -21,6 +21,7 @@ InstallDir "$PROGRAMFILES64\${NAME}"
 !define MUI_WELCOMEPAGE_TITLE "${SLUG} Installation"
 
 !insertmacro MUI_PAGE_WELCOME
+!insertmacro MUI_PAGE_LICENSE "..\resources\dist\distributed-license.txt"
 !insertmacro MUI_PAGE_DIRECTORY
 !insertmacro MUI_PAGE_INSTFILES
 Function makeDesktopShortcut

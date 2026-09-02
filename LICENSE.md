@@ -1,3 +1,7 @@
+# Notice
+This software and its developer are not affiliated with Mojang Studios or
+Microsoft Corporation.
+
 # License (BSD-3-Clause)
 All original works from this repository and contributions are licensed under
 the 3-Clause BSD License unless stated otherwise in their respective files:
@@ -49,9 +53,13 @@ under the [BSD 3-Clause License](
 https://github.com/mhammond/pywin32/blob/main/win32/License.txt).
 - **[jaraco/keyring](https://github.com/jaraco/keyring)** - Licensed under the
 [MIT License](https://opensource.org/license/mit)
+- **[Bootstrap Icons](https://github.com/twbs/icons) - Licensed under the [MIT
+License](https://github.com/twbs/icons/blob/main/LICENSE)
 ## Other Third-Party Components
 These components have no licensing info (that I can find), but are listed here
-for credit, as I likely wouldn't have been able to make this project happen
-without them:
+for credit:
 - **[NSIS-ApplicationID](
 https://github.com/connectiblutz/NSIS-ApplicationID)**
+
+The full version of all third-party licenses are additionally located in
+`resources/acknowledgements.txt`.

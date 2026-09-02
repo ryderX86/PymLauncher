@@ -82,6 +82,8 @@
         <file alias="wool.png">icon/profile_icons/wool.png</file>
     </qresource>
     <qresource prefix="/">
+        <file>acknowledgements.txt</file>
+        <file alias="icon.ico">dist/icon.ico</file>
         <file>icon/symbol/add.svg</file>
         <file>icon/symbol/add-dark.svg</file>
         <file>icon/symbol/alt-toggle-on.svg</file>
@@ -246,8 +248,6 @@
         <file>icon/symbol/trash-dark.svg</file>
         <file>icon/symbol/trash-disabled.svg</file>
         <file>icon/symbol/trash-disabled-dark.svg</file>
-        <file>acknowledgements.txt</file>
-        <file alias="icon.ico">dist/icon.ico</file>
     </qresource>
     <qresource prefix="/3d/steve">
         <file alias="Steve.qml">3d/steve/Steve.qml</file>

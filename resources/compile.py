@@ -1,9 +1,8 @@
 from pathlib import Path
 from xml.etree import ElementTree
 import logging
-import subprocess
 import platform
-
+import subprocess
 
 TEXT_PRIMARY = "#e0e0e0"
 
@@ -13,7 +12,7 @@ WORKDIR = Path(__file__).parent
 
 PROJ_LICENSE = WORKDIR / "project_license.txt"
 OTHER_LICENSE = WORKDIR / "acknowledgements.txt"
-INSTALLER_LICENSE = WORKDIR / "dist" / "license.txt"
+INSTALLER_LICENSE = WORKDIR / "dist" / "distributed-license.txt"
 
 project_license = PROJ_LICENSE.read_text()
 other_license = OTHER_LICENSE.read_text()
