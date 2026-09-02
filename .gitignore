@@ -45,3 +45,4 @@ pip-delete-this-directory.txt
 
 .minecraft/
 *.xml
+.azure-client-id

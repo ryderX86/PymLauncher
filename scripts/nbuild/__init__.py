@@ -1,8 +1,9 @@
-import logging
-import tomllib
 from argparse import ArgumentParser
 from enum import IntFlag
 from pathlib import Path
+import logging
+import os
+import tomllib
 
 
 class BuildFlags(IntFlag):
@@ -28,6 +29,7 @@ _parser.add_argument(
 _parser.add_argument("-i", "--installer", action="store_true", default=False)
 _parser.add_argument("-s", "--resources", action="store_true", default=False)
 _parser.add_argument("-n", "--no-bump", action="store_true", default=False)
+_parser.add_argument("-aci", "--azure-client-id", type=str, default=None)
 
 _args = _parser.parse_args()
 
@@ -37,6 +39,8 @@ EXECUTABLE_BUILD: bool = _args.exe
 INSTALLER_BUILD: bool = _args.installer
 RESOURCES_BUILD: bool = _args.resources
 BUMP: bool = not _args.no_bump
+AZURE_CLIENT_ID: str | None = _args.azure_client_id
+CLIENT_ID_FP = Path(__file__).parent.parent.parent / ".azure-client-id"
 
 FLAGS = BuildFlags.ALL
 if EXECUTABLE_BUILD or INSTALLER_BUILD or RESOURCES_BUILD:
@@ -49,6 +53,11 @@ if EXECUTABLE_BUILD or INSTALLER_BUILD or RESOURCES_BUILD:
         FLAGS |= BuildFlags.RESOURCES
 if not BUMP:
     FLAGS |= BuildFlags.NO_BUILD_BUMP
+if AZURE_CLIENT_ID:
+    os.environ["AZURE_CLIENT_ID"] = AZURE_CLIENT_ID
+elif CLIENT_ID_FP.exists() and CLIENT_ID_FP.is_file():
+    client_id = CLIENT_ID_FP.read_text()
+    os.environ["AZURE_CLIENT_ID"] = client_id
 
 if DEBUG:
     logging.basicConfig(level=logging.DEBUG)

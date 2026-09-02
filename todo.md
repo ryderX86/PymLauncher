@@ -1,34 +1,16 @@
 # TODO
-## Frontend/UI
-### Login Window
-`minecraftlauncher.front.window.login.__init__`
+Things that need doing
+## User-end QoL changes
+- Disable version list refresh button upon going into offline mode
+## Dev-end QoL changes
+- Subclass `QPushButton` and create a copy-to-clipboard button for easy re-use
+## Structural changes
+- Split profiles page into the page itself, and two widgets:
+    1. Individual profile editor
+    2. Profile selector
 
----
-- `QStackedWidget` w/ multiple "pages" for layout
-    - (need to adjust size when switching "pages"/ui states)
-## Backend
-### Account management
-`minecraftlauncher.back.account_manager`
-
-`minecraftlauncher.auth.launcher_account.LauncherAccount`
-
-`minecraftlauncher.auth.microsoft_account.MicrosoftAccount`
-
-`minecraftlauncher.auth.xsts_token.XstsToken`
-
-
----
-- ***DONE!*** ~~Change E-mail-based account selection to XUID-based~~
-    - ~~Requires changes in `MicrosoftAccount`, `LauncherAccount`, `XstsToken`,
-    and `account_manager`.~~
-### Downloads
-literally anything to do with downloads/`requests`
-
----
-- Change `requests.X` to `minecraftlauncher.session.X`
-    - obviously excluding `requests.exceptions` objects
-
----
-### General
-- **DONE** ~~Implement Packaging package: https://packaging.pypa.io/en/latest/version.html#packaging.version.Version~~
-- Look into the stdlib `tempfile` module for replacing the other methods of making temp files
+    Afterward, investigate whether the QSelectionModel should be replaced or
+    subclassed.
+- Create a class for profile management as in `account_manager.py`
+- Create classes for game versions, libraries/natives, JRE versions, etc., and
+change the managers for those accordingly.

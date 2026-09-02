@@ -7,10 +7,10 @@ globally referenced will remain (like the
 Azure Client ID)
 """
 
+from typing import Literal
 import os
 import platform
 import sys
-from typing import Literal
 
 DEV = not bool(globals().get("__compiled__", False))
 
@@ -21,19 +21,17 @@ AUTHOR_USR = "ryderX86"
 EMAIL = "ryder@r86.me"
 APP_SLUG = f"{AUTHOR_USR}.{LAUNCHER_NAME}"
 
-# Authentication URLs
-MOJANG_CLIENT_ID = "00000000402B5328"  # Official MC launcher client ID
-# "000000004C12AE6F" ?
-AZURE_CLIENT_ID = MOJANG_CLIENT_ID
-# AZURE_CLIENT_ID = "1c1a9297-d019-48d4-9417-85ea36cf4c1f"
+DEFAULT_CLIENT_ID = "00000000402B5328"
+AZURE_CLIENT_ID = os.environ.get("AZURE_CLIENT_ID", DEFAULT_CLIENT_ID)
 AZURE_SCOPE = "XboxLive.signin XboxLive.offline_access"
-if AZURE_CLIENT_ID != MOJANG_CLIENT_ID:
+# Authentication URLs
+if AZURE_CLIENT_ID != DEFAULT_CLIENT_ID:
     MS_DEVICE_CODE_URL = (
         "https://login.microsoftonline.com/consumers/oauth2/v2.0/devicecode"
     )
 else:
     MS_DEVICE_CODE_URL = "https://login.live.com/oauth20_connect.srf"
-if AZURE_CLIENT_ID != MOJANG_CLIENT_ID:
+if AZURE_CLIENT_ID != DEFAULT_CLIENT_ID:
     MS_TOKEN_URL = (
         "https://login.microsoftonline.com/consumers/oauth2/v2.0/token"
     )

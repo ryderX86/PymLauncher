@@ -2,11 +2,14 @@
   variables:
     setup_code: 
       - "import tomllib"
+      - "import os"
       - "f = open('./pyproject.toml', 'r')"
       - "pt = tomllib.loads(f.read())"
       - "version = pt['project']['version']"
+      - "azure_client_id = os.environ.get('AZURE_CLIENT_ID')"
     declarations:
       "version": "version"
+      "azure_client_id": "azure_client_id"
   anti-bloat:
     - description: "Override \"dev\" in LAUNCHER_VERSION with actual version"
       replacements:
@@ -14,6 +17,10 @@
     - description: "Override 'DEV' constant and remove runtime calculation"
       replacements_plain:
         'DEV = not bool(globals().get("__compiled__", False))': "DEV = False"
+    - description: "Replace Azure client ID when it's provided"
+      replacements:
+        'AZURE_CLIENT_ID = os.environ.get("AZURE_CLIENT_ID", DEFAULT_CLIENT_ID)': '"AZURE_CLIENT_ID = %r" % get_variable("azure_client_id")'
+      when: "get_variable('azure_client_id') is not None"
 - module-name: "minecraftlauncher.auth.encryption"
   variables:
     setup_code:

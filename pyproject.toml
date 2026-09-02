@@ -1,6 +1,6 @@
 [project]
 name = "MinecraftLauncher-py"
-version = "1.0.0.31"
+version = "1.0.0.32"
 requires-python = ">= 3.13"
 
 [tool]
