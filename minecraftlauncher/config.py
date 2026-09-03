@@ -2,13 +2,14 @@
 Class/instance of a config loader/saver
 """
 
+from enum import EnumType, IntEnum
 from typing import Any, Callable, get_type_hints
-from enum import IntEnum, EnumType
 import json
 import logging
+import os
 
-from .paths import paths
 from .functions import reswrite
+from .paths import paths
 
 log = logging.getLogger(__name__)
 
@@ -91,6 +92,14 @@ class ConfigHolder:
         return type_(val)
 
     def load(self):
+        if not os.path.isfile(paths.config_file):
+            log.debug("Config file doesn't exist, creating it.")
+            if not os.path.isdir(os.path.dirname(paths.config_file)):
+                os.makedirs(os.path.dirname(paths.config_file), exist_ok=True)
+            self.save()
+            type(self).active = True
+            return
+
         log.debug("Loading config file from %r...", paths.config_file)
         with open(paths.config_file) as file:
             text = file.read()
