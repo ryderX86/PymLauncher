@@ -3,11 +3,11 @@
 !include MUI2.nsh
 !include "LogicLib.nsh"
 
-!define NAME "Minecraft Launcher (Python)"
+!define NAME "PymLauncher"
 !define APPFILE "launcher.exe"
 !define VERSION ${PROG_VERSION}
 !define SLUG "${NAME} v${VERSION}"
-!define AUMID "ryderX86.minecraftlauncher-python"
+!define AUMID "ryderX86.pymlauncher"
 !define PUBLISHER "ryderX86"
 
 !define MUI_FINISHPAGE_NOAUTOCLOSE ; no value

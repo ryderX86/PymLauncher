@@ -14,7 +14,7 @@ import sys
 
 DEV = not bool(globals().get("__compiled__", False))
 
-LAUNCHER_NAME = "minecraftlauncher-python"
+LAUNCHER_NAME = "pymlauncher"
 # LAUNCHER_VERSION is replaced at compile-time
 LAUNCHER_VERSION = "dev"
 AUTHOR_USR = "ryderX86"
