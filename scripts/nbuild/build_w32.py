@@ -1,17 +1,18 @@
-import subprocess
 import logging
+import os
+import subprocess
 import sys
 
 from . import (
+    BASE_ARGS,
     CWD,
-    VENV_PATH,
+    FLAGS,
+    ICO_PATH,
     NOINCLUDE_DATA,
     NOINCLUDE_LIBS,
-    RESOURCE_COMPILE_SCRIPT,
-    ICO_PATH,
     PROJECT_TOML,
-    BASE_ARGS,
-    FLAGS,
+    RESOURCE_COMPILE_SCRIPT,
+    VENV_PATH,
     BuildFlags,
 )
 
@@ -90,7 +91,33 @@ if FLAGS & BuildFlags.EXECUTABLE:
         log.error("Build unsuccessful. Exiting early.")
         sys.exit(1)
 
-log.info("Running MakeNSIS")
+log.debug("Checking for NSIS installation")
+makensis = None
+PATH = os.environ["PATH"].split(";")
+for p in PATH:
+    file_name = os.path.splitext(os.path.split(p)[-1])[0]
+    nsis_dir = os.path.split(p)[-1]
+    if file_name.lower() == "makensis":
+        makensis = p
+        break
+    elif nsis_dir.upper() == "NSIS":
+        file_name = os.path.join(nsis_dir, "makensis.exe")
+        if os.path.isfile(file_name):
+            makensis = file_name
+            break
+if not makensis:
+    PROGFILES = os.environ["PROGRAMFILES"]
+    PROGFILES86 = os.environ["PROGRAMFILES(X86)"]
+    MAKENSIS_PROGFILES_PATH = ("NSIS", "makensis.exe")
+    makensis_path_64 = os.path.join(PROGFILES, *MAKENSIS_PROGFILES_PATH)
+    makensis_path_32 = os.path.join(PROGFILES86, *MAKENSIS_PROGFILES_PATH)
+    if os.path.isfile(makensis_path_32):
+        makensis = makensis_path_32
+    elif os.path.isfile(makensis_path_64):
+        makensis = makensis_path_64
+if not makensis:  # we still don't have it at this point, can't run
+    log.warning("No NSIS installation found, not building an installer.")
+    FLAGS = FLAGS & ~BuildFlags.INSTALLER
 
 nsis_args = [
     "makensis",
@@ -105,6 +132,7 @@ nsis_args = [
 nsis_cwd = CWD / "scripts"
 
 if FLAGS & BuildFlags.INSTALLER:
+    log.info("Running MakeNSIS")
     p = subprocess.run(
         nsis_args,
         cwd=nsis_cwd,

@@ -37,6 +37,9 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ## Third-Party Components
 The software included in this repository uses the following libraries, which
 are governed by their respective licenses:
+- **[Python](https://python.org)** - Licensed under various licenses, including
+(but not limited to) the
+[Python Software Foundation License v2](https://docs.python.org/3/license.html)
 - **[PySide6](https://doc.qt.io/qtforpython-6/index.html)** - Licensed under
 the [GNU LGPL v3 License](https://www.gnu.org/licenses/lgpl-3.0#license-text)
 - **[python-qrcode](https://github.com/lincolnloop/python-qrcode)** - Licensed

@@ -1,5 +1,5 @@
 [project]
-name = "MinecraftLauncher-py"
+name = "PymLauncher"
 version = "1.0.0.32"
 requires-python = ">= 3.13"
 

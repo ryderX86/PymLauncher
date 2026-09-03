@@ -1,7 +1,17 @@
-# ryderX86/Minecraft Launcher
-Minecraft Launcher written in Python with a focus on stability & speed whilst
-also aiming to be compatible with the official launcher in launch profile
-storage.
+# PymLauncher
+A custom cross-platform Minecraft Launcher written in Python with a focus on
+stability & speed whilst also aiming to be compatible with the official
+launcher in launch profile storage, while also providing misc. utilities such
+as a built-in Fabric installer, customizable launch profile sorting, built-in
+skin changing w/ a 3D preview, encrypted account storage (requires *KDE Wallet*
+or *GNOME Keyring* on Linux/Unix-based systems), etc.
+
+## Operating System Support
+| OS      | Status          | Notes                                           |
+|---------|-----------------|-------------------------------------------------|
+| Windows | Fully supported |                                                 |
+| Linux   | Fully supported | Encryption requires GNOME Keyring or KDE Wallet |
+| macOS   | Support planned | Haven't began testing in macOS yet.             |
 
 ## Building from source (WIP)
 It is *highly* reccommended you use your own Azure Client ID when building the
@@ -12,6 +22,7 @@ file at the root directory called `.azure-client-id`
 
 For testing pre-build without having to re-sign in constantly, add the client
 ID under the environment variable `AZURE_CLIENT_ID`.
+*(See [constants.py](./minecraftlauncher/constants.py#L25))*
 ### Windows
 #### Prerequesites
 - Python (3.13 or newer): https://python.org
@@ -45,7 +56,7 @@ folder you cloned into. `installer.exe` will be the installer NSIS created, and
 ## Launch arguments
 ### Launch Profile
 ```
-launcher --launch-profile={profile ID}
+--launch-profile={profile ID}
 ```
 To launch straight into the game via profile ID, copy the profile ID either by
 right clicking on the profile in the profile list or open
@@ -53,21 +64,11 @@ right clicking on the profile in the profile list or open
 use the following command, replacing `{profile ID}` with your copied profile
 ID.
 ## Developer/debug launch arguments
-### Debug splash screen
-```
-launcher --debug-splash-screen
-```
-Pauses on the splash screen for 5 seconds. Useful for developers only.
 ### Debug logging
 ```
-launcher --debug
+--debug
 ```
-More verbose logging saved to file.
-
-`--resource-debug` for logging resource caching functions.
-
-`--debug-exports` `--debug-imports` `--exp` `--imp` for profile
-export/importing debug logging.
+More verbose logging in console & log files.
 ### Change launcher data folder
 ```
 launcher --workDir={YOUR DIRECTORY}

@@ -14,11 +14,11 @@ import sys
 
 DEV = not bool(globals().get("__compiled__", False))
 
-LAUNCHER_NAME = "pymlauncher"
+LAUNCHER_NAME = "PymLauncher"
 # LAUNCHER_VERSION is replaced at compile-time
 LAUNCHER_VERSION = "dev"
 AUTHOR_USR = "ryderX86"
-EMAIL = "ryder@r86.me"
+EMAIL = "me@ryderm.net"
 APP_SLUG = f"{AUTHOR_USR}.{LAUNCHER_NAME}"
 
 DEFAULT_CLIENT_ID = "00000000402B5328"

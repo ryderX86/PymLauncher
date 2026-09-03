@@ -7,14 +7,14 @@
 !define APPFILE "launcher.exe"
 !define VERSION ${PROG_VERSION}
 !define SLUG "${NAME} v${VERSION}"
-!define AUMID "ryderX86.pymlauncher"
+!define AUMID "ryderX86.PymLauncher"
 !define PUBLISHER "ryderX86"
 
 !define MUI_FINISHPAGE_NOAUTOCLOSE ; no value
 !define MUI_UNFINISHPAGE_NOAUTOCLOSE ; no value
 
 Name "${NAME}"
-OutFile "${NAME}_install.exe"
+OutFile "${NAME}-installer.exe"
 InstallDir "$PROGRAMFILES64\${NAME}"
 
 !define MUI_ICON "..\resources\dist\icon.ico"

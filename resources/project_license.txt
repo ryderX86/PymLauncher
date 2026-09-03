@@ -1,7 +1,7 @@
 This software and its developer are not affiliated with Mojang Studios or
 Microsoft Corporation.
 
-All original works (found at https://github.com/ryderX86/minecraftlauncher-py
+All original works (found at https://github.com/ryderX86/PymLauncher
 - not including third-party libraries included with the software) are licensed
 under the 3-Clause BSD License:
 
