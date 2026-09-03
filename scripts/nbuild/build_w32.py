@@ -120,7 +120,7 @@ if not makensis:  # we still don't have it at this point, can't run
     FLAGS = FLAGS & ~BuildFlags.INSTALLER
 
 nsis_args = [
-    "makensis",
+    makensis,
     "/V3",
     "/NOCD",
     f"/DPROG_NAME={PROJECT_TOML["project"]["name"]}",
