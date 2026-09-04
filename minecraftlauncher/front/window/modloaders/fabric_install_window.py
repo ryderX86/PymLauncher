@@ -1,36 +1,56 @@
 import logging
 
-from PySide6.QtCore import Qt, Signal, QSize, QThread
+from PySide6.QtCore import QSize, Qt, QThread, Signal
 from PySide6.QtGui import QCloseEvent
 from PySide6.QtWidgets import (
+    QCheckBox,
+    QComboBox,
     QDialog,
+    QHBoxLayout,
     QLabel,
+    QMessageBox,
     QPushButton,
     QVBoxLayout,
     QWidget,
-    QComboBox,
-    QHBoxLayout,
-    QCheckBox,
-    QMessageBox,
 )
-
 
 from minecraftlauncher.back import fabric
 from minecraftlauncher.front.window import (
+    ButtonConfig,
     WarningDialog,
     WarningType,
-    ButtonConfig,
 )
+from minecraftlauncher.functions import error_box
+from minecraftlauncher.offline import offline_man
 
 log = logging.getLogger(__name__)
 
 
 class FabricLoadThread(QThread):
     loaded = Signal()
+    error = Signal(Exception)
+    log = log.getChild(__name__)
 
     def run(self):
-        self.game_versions = fabric.get_game_versions_list()
-        self.loader_versions = fabric.get_loader_versions_list()
+        try:
+            self.game_versions = fabric.get_game_versions_list()
+        except Exception as err:
+            self.log.error(
+                "Error occured getting fabric game versions list:",
+                exc_info=err,
+            )
+            offline_man.check_requests_error(err)
+            self.error.emit(err)
+            return
+        try:
+            self.loader_versions = fabric.get_loader_versions_list()
+        except Exception as err:
+            self.log.error(
+                "Error occured getting fabric loader list:", exc_info=err
+            )
+            offline_man.check_requests_error(err)
+            self.error.emit(err)
+            return
         self.loaded.emit()
         return
 
@@ -131,6 +151,19 @@ class FabricInstallWindow(QDialog):
         self.loader_thread = None
         self.load()
 
+    def loader_error(self, err: Exception):
+        assert self.loader_thread
+        log.warning(
+            "Failed to load Fabric manifests, notifying user and exiting."
+        )
+        error_box(
+            f"Unexpected {type(err).__name__!r} error occured while trying to "
+            "get Fabric info."
+        )
+        self.loader_thread.deleteLater()
+        self.loader_thread = None
+        self.close()
+
     def load(self):
         log.debug("Adding game and fabric items to combo boxes...")
         self.game_ver_dd.addItem("")
@@ -162,6 +195,7 @@ class FabricInstallWindow(QDialog):
                 log.debug("Starting new FabricLoadThread()")
                 self.loader_thread = FabricLoadThread(self)
                 self.loader_thread.loaded.connect(self.loader_finished)
+                self.loader_thread.error.connect(self.loader_error)
                 self.loader_thread.start()
         elif not self.is_loaded and not self.loader_thread.isRunning():
             self.loader_thread.start()
