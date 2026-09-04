@@ -169,7 +169,7 @@ class ConfigHolder:
         return output
 
     def save(self):
-        reswrite(paths.config_file, json.dumps(self.as_dict()))
+        reswrite(paths.config_file, json.dumps(self.as_dict(), indent=2))
 
 
 config = ConfigHolder()
