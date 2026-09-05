@@ -14,15 +14,26 @@ or *GNOME Keyring* on Linux/Unix-based systems), etc.
 | macOS   | Support planned | Haven't began testing in macOS yet.             |
 
 ## Building from source (WIP)
-It is *highly* reccommended you use your own Azure Client ID when building the
-launcher. You can register one by following the instructions at
-https://minecraft.wiki/w/Microsoft_authentication, then adding the following
-parameter when building: `--azure-client-id={CLIENT_ID}`, or paste it into a
-file at the root directory called `.azure-client-id`
+You are more than free to fork, redistribute, or create/provide custom builds
+of this launcher, under the license (BSD 3-clause), however, please take the
+following courtesies if you are to do so:
+1. **Distinct naming**: Make it clear that your project is not associated with,
+or endorsed by mine (PymLauncher)
+2. **API Keys**: Edit constants.py to remove the existing Azure Client ID and
+replace it with your own, or set it to an empty string.
 
-For testing pre-build without having to re-sign in constantly, add the client
-ID under the environment variable `AZURE_CLIENT_ID`.
-*(See [constants.py](./minecraftlauncher/constants.py#L25))*
+**API Key notice**
+This repository includes a default Azure Client ID to facilitate authentication
+behavior "out-of-the-box". If you build/distribute this software without
+either removing or replacing the provided Client ID, you are legally accepting
+the [Microsoft Identity Platform Terms of Use](
+learn.microsoft.com/en-us/legal/microsoft-identity-platform/terms-of-use
+).
+
+If you do not agree with the terms, then simply remove the associated client ID
+and any other API keys from
+[constants.py](./minecraftlauncher/constants.py#L25) by setting them to an
+empty string.
 ### Windows
 #### Prerequesites
 - Python (3.13 or newer): https://python.org
