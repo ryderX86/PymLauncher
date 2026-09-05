@@ -2,24 +2,24 @@
 Common functions for downloading files.
 """
 
-from typing import Literal, Callable, TypeVar, Iterable
 from collections import Counter
 from datetime import timedelta
-from types import FunctionType
 from pathlib import Path
-import logging
+from types import FunctionType
+from typing import Callable, Iterable, Literal, TypeVar
 import hashlib
-import time
+import logging
 import lzma
 import os
+import time
 
-import requests
 from PySide6.QtCore import QRunnable
+import requests
 
 from minecraftlauncher import SESSION, get_exit_status
-from minecraftlauncher.offline import offline_man
 from minecraftlauncher.config import config
 from minecraftlauncher.functions import is_path_valid
+from minecraftlauncher.offline import offline_man
 
 log = logging.getLogger(__name__)
 T = TypeVar("T")
@@ -366,7 +366,7 @@ class RunnableDownloader(QRunnable):
                 self.log.debug("Current wait time: %f", self.sleep_time)
                 return self.download()
             else:
-                self.log.error("HTTPError in download")
+                self.log.error("HTTPError in download", exc_info=err)
                 type(self).sleep_time += 0.2
                 if not offline_man.offline:
                     return self.download()
