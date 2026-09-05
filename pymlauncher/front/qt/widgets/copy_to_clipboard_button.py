@@ -7,6 +7,7 @@ from PySide6.QtWidgets import QApplication, QPushButton, QWidget
 
 from pymlauncher import constants
 from pymlauncher.front.resources import symbol
+from pymlauncher.functions import truncate
 
 log = logging.getLogger(__name__)
 
@@ -19,7 +20,7 @@ class CopyToClipboardButton(QPushButton):
 
     def __init__(
         self,
-        parent: QWidget,
+        parent: QWidget | None,
         get_content_func: Callable,
         content_type: ContentType = ContentType.TEXT,
         is_icon_button: bool = True,
@@ -77,7 +78,7 @@ class CopyToClipboardButton(QPushButton):
                 exc_info=err,
             )
         else:
-            log.debug("Copied %r to clipboard.", content)
+            log.debug("Copied %r to clipboard.", truncate(content, 80))
             self._animation()
 
     def copy_img(self):
@@ -144,7 +145,7 @@ class CopyToClipboardButton(QPushButton):
         self.setDisabled(False)
 
     def _animate_text(self):
-        self.setText("<i>Copied!</i>")
+        self.setText("Copied!")
         self.setDisabled(True)
         QTimer.singleShot(
             constants.DONE_VISUAL_DELAY, self._animate_text_finish
