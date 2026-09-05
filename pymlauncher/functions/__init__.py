@@ -7,7 +7,7 @@ from PySide6.QtCore import QCoreApplication, QSize
 from PySide6.QtGui import QClipboard, QIcon, QImage, QPixmap
 from PySide6.QtWidgets import QApplication
 
-from minecraftlauncher import get_qapp
+from pymlauncher import get_qapp
 
 from .error_box import error_box
 from .suppressables import suppressable
