@@ -57,7 +57,7 @@ class MainWindow(QMainWindow):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Minecraft Launcher")
+        self.setWindowTitle("PymLauncher")
         self.setMinimumSize(960, 620)
         width = config.window_size[0]
         height = config.window_size[1]

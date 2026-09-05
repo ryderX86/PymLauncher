@@ -18,8 +18,8 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
+from pymlauncher.front.qt.widgets import CopyToClipboardButton
 from pymlauncher.front.styles import get_fonts
-from pymlauncher.functions import copy_to_clipboard
 
 log = logging.getLogger(__name__)
 
@@ -89,10 +89,11 @@ class TextPopup(QDialog):
         buttons_parent = QFrame()
         buttons_layout = QHBoxLayout(buttons_parent)
 
-        clipboard_button = QPushButton()
-        clipboard_button.setText("Copy to Clipboard")
-        clipboard_button.clicked.connect(self._copy_to_clipboard)
+        clipboard_button = CopyToClipboardButton(
+            None, lambda: self._text, is_icon_button=False
+        )
         if not self._text:
+            clipboard_button = QPushButton()
             clipboard_button.setDisabled(True)
             clipboard_button.setText("Nothing to copy...")
             clipboard_button.setStyleSheet(
@@ -110,8 +111,3 @@ class TextPopup(QDialog):
         close_button.clicked.connect(self.close)
         close_button.setMaximumWidth(200)
         self._layout.addWidget(close_button, 0, Qt.AlignmentFlag.AlignCenter)
-
-    def _copy_to_clipboard(self):
-        copy_to_clipboard(self._text)
-        log.debug("Copied text to clipboard.")
-        return
