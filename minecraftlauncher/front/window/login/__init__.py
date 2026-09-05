@@ -3,10 +3,8 @@ Device code flow window
 """
 
 import logging
-import time
 
-import requests
-from PySide6.QtCore import Qt, QThread, QUrl, Signal
+from PySide6.QtCore import Qt, QUrl, Signal
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
     QApplication,
@@ -18,10 +16,10 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+import requests
 
 from minecraftlauncher.auth import MicrosoftAccount, auth_flow
 from minecraftlauncher.auth.exceptions import (
-    BaseAuthenticationException,
     NoConnectionError,
 )
 from minecraftlauncher.config import config
@@ -29,108 +27,20 @@ from minecraftlauncher.constants import (
     AZURE_CLIENT_ID,
     AZURE_SCOPE,
     MS_DEVICE_CODE_URL,
-    MS_TOKEN_URL,
 )
 from minecraftlauncher.front.resources import link_to_qrcode
 from minecraftlauncher.front.styles import ACCENT, TEXT_SECONDARY
 from minecraftlauncher.functions import (
-    clipboard_present,
-    copy_to_clipboard,
     error_box,
+)
+from minecraftlauncher.threads.device_code_poller import DeviceCodePoller
+from minecraftlauncher.threads.login_redirect_webserver import (
+    LoginRedirectWebserver,
 )
 
 log = logging.getLogger(__name__)
 
 # DEVICE_CODE_SCOPE = "openid email XboxLive.signin XboxLive.offline_access"
-GRANT_TYPE = "urn:ietf:params:oauth:grant-type:device_code"
-
-
-class DeviceCodePoller(QThread):
-    """Poller for MSA token endpoint"""
-
-    token_recieved = Signal(dict)
-    error = Signal(str)
-    status = Signal(str)
-    log = log.getChild("DeviceCodePoller")
-
-    def __init__(
-        self,
-        device_code: str,
-        interval: int = 5,
-        expires_in: int = 900,
-        parent=None,
-    ):
-        super().__init__(parent)
-        self.device_code = device_code
-        self.interval = max(interval, 5)
-        self.expires_in = expires_in
-        self._cancelled = False
-
-    def cancel(self):
-        self.log.info("Cancelling operation")
-        self._cancelled = True
-
-    def run(self):
-        deadline = time.time() + self.expires_in
-
-        while time.time() < deadline and not self._cancelled:
-            time.sleep(self.interval)
-            if self._cancelled:
-                self.log.info("Login cancelled. Exiting.")
-                return
-
-            try:
-                resp = requests.post(
-                    MS_TOKEN_URL,
-                    data={
-                        "grant_type": GRANT_TYPE,
-                        "client_id": AZURE_CLIENT_ID,
-                        "device_code": self.device_code,
-                        "scope": AZURE_SCOPE,
-                    },
-                    timeout=30,
-                )
-            except requests.RequestException as exc:
-                self.status.emit(f"Connection error: {exc}")
-                continue
-
-            data = resp.json()
-
-            if "access_token" in data:
-                self.token_recieved.emit(data)
-                return
-
-            error = data.get("error", "")
-            match error:
-                case "authorization_pending":
-                    self.status.emit("Waiting for authorization...")
-                case "authorization_declined":
-                    self.status.emit("Authorization declined.")
-                    log.debug("Login denied by user on MSA page.")
-                    self._cancelled = True
-                    return
-                case "expired_token":
-                    self.error.emit("Device code expired. Please try again.")
-                    log.debug("Login token expired")
-                    self._cancelled = True
-                    return
-                case "slow_down":
-                    self.interval += 5
-                    log.warning("MS said to slow down! Interval += 5")
-                case _:
-                    self.error.emit(
-                        "Unexpected error: {error}\n%s" f"{data.get(
-                            "error_description",
-                            "(no description provided)"
-                        )}"
-                    )
-                    log.error("Login error occured: %s", str(error))
-                    if data.get("error_description"):
-                        log.error("Details: %s", data["error_description"])
-                    return
-
-        if not self._cancelled:
-            self.error.emit("Login window timed out.")
 
 
 class LoginWindow(QDialog):
@@ -151,6 +61,7 @@ class LoginWindow(QDialog):
         self.setWindowFlags(Qt.WindowType.Dialog)
         self.setModal(True)
         self._poller: DeviceCodePoller | None = None
+        self._thread: LoginRedirectWebserver | None = None
         self._open_browser = config.open_browser_for_login
         self._build_ui()
         if reason:
@@ -171,8 +82,7 @@ class LoginWindow(QDialog):
         layout.addWidget(title)
 
         self.instruction_label = QLabel(
-            "Click the button below to start the sign-in process.\n"
-            "A code will be generated for you to enter on Microsoft's website.",
+            "Click the button below to start the sign-in process.",
             alignment=Qt.AlignmentFlag.AlignCenter,
             wordWrap=True,
         )
@@ -220,12 +130,30 @@ class LoginWindow(QDialog):
 
         self.start_button = QPushButton("Sign in")
         self.start_button.setProperty("accent", True)
-        self.start_button.clicked.connect(self._start_device_code)
+        self.start_button.clicked.connect(self._start_login_process)
         layout.addWidget(self.start_button)
 
         cancel_button = QPushButton("Cancel")
         cancel_button.clicked.connect(self._cancel)
         layout.addWidget(cancel_button)
+
+    def _start_login_process(self):
+        if self._open_browser:
+            return self._start_web_login()
+        else:
+            return self._start_device_code()
+
+    def _start_web_login(self):
+        self.start_button.setEnabled(False)
+        self.open_browser.setHidden(True)
+        self.status_label.setText("Spinning up web server...")
+        self._thread = LoginRedirectWebserver()
+        self._thread.token_recieved.connect(self._on_token)
+        self._thread.error.connect(self._on_error)
+        self._thread.status.connect(self.status_label.setText)
+        self._thread.start()
+        QDesktopServices.openUrl(QUrl(self._thread.url))
+        log.debug("Opened login URL in default web browser...")
 
     def _start_device_code(self):
         self.start_button.setEnabled(False)
@@ -279,8 +207,8 @@ class LoginWindow(QDialog):
 
         display_uri = verification_uri
 
-        if verification_uri == "https://www.microsoft.com/link":
-            verification_uri = "".join([verification_uri, "?otc=", user_code])
+        # if verification_uri == "https://www.microsoft.com/link":
+        #     verification_uri = "".join([verification_uri, "?otc=", user_code])
 
         qr = link_to_qrcode(verification_uri)
         # self.code_qr_w.load(qr)
@@ -312,9 +240,12 @@ class LoginWindow(QDialog):
         self.status_label.setText("Waiting for sign-in to complete...")
 
         if display_uri == verification_uri:
-            if clipboard_present:
-                copy_to_clipboard(user_code)
-                log.debug("Verification code should be in clipboard.")
+            clipboard = QApplication.clipboard()
+            if clipboard:
+                clipboard.setText(user_code)
+                log.debug(
+                    "Verification code (%r) should be in clipboard.", user_code
+                )
             else:
                 log.warning("Couldn't get clipboard!")
 
@@ -326,9 +257,7 @@ class LoginWindow(QDialog):
         self._poller = DeviceCodePoller(device_code, interval, expires_in)
         self._poller.token_recieved.connect(self._on_token)
         self._poller.error.connect(self._on_error)
-        self._poller.status.connect(
-            lambda msg: self.status_label.setText(msg)  # pylint: disable=W0108
-        )
+        self._poller.status.connect(self.status_label.setText)
         self._poller.start()
 
     def _on_token(self, token_data: dict):
@@ -358,10 +287,10 @@ class LoginWindow(QDialog):
             self.status_label.setText("Logged in successfully.")
             log.info("Logged in as %s", lp.gamertag)
             self.login_complete.emit(lp)
-            self.accept()
             self.start_button.setEnabled(True)
             self.open_browser.setHidden(False)
             self.code_qr_w.setHidden(True)
+            self.accept()
 
     def _on_error(self, message: str):
         log.error("Login error: %s", message)
@@ -374,12 +303,23 @@ class LoginWindow(QDialog):
         if self._poller:
             self._poller.cancel()
             self._poller.deleteLater()
+            self._poller = None
+        if self._thread:
+            self._thread.cancel()
+            self._thread.deleteLater()
         self.reject()
 
     def closeEvent(self, a0):
         if self._poller:
             self._poller.cancel()
+            self._poller.wait()
             self._poller.deleteLater()
+            self._poller = None
+        if self._thread:
+            self._thread.cancel()
+            self._thread.wait()
+            self._thread.deleteLater()
+            self._thread = None
         super().closeEvent(a0)
 
     def _set_open_browser(self, a0: Qt.CheckState):

@@ -26,6 +26,7 @@ KNOWN_MSA_DICT_VALS = {
     "id_token",
     "acquired_at",
     "user_id",
+    "ext_expires_in",
 }
 
 
@@ -38,6 +39,7 @@ class MicrosoftAccount:
         "refresh_token",
         "acquired_at",
         "user_id",
+        "_ext_expires_in",
         "_other_token_info",
     )
     token_type: str  # Always "Bearer"
@@ -54,9 +56,15 @@ class MicrosoftAccount:
     it *never* needs to be. Use `acquired_at` (float)
     instead.
     """
+    _ext_expires_in: int
+    """
+    Usually the same as `expires_in`, it's meant for server outages. It *can*
+    be longer than `expires_in`, but usually isn't from what I can tell.
+    """
     access_token: str
     refresh_token: str | None
-    user_id: str
+    user_id: str | None
+    """Can appear inside the token, unknown why or purpose."""
 
     _other_token_info: dict
     """
@@ -66,15 +74,19 @@ class MicrosoftAccount:
     # The following is NOT included in the MS API response:
     acquired_at: float
 
-    def __init__(self, msa_info: dict):
-        self.acquired_at = msa_info.get("acquired_at", time.time())
+    def __init__(self, msa_info: dict, acquired_at: int | float | None = None):
+        if acquired_at is not None:
+            self.acquired_at = float(acquired_at)
+        else:
+            self.acquired_at = msa_info.get("acquired_at", time.time())
 
         self.token_type = msa_info["token_type"]
         self.scope = msa_info["scope"]
         self._expires_in = msa_info["expires_in"]
         self.access_token = msa_info["access_token"]
         self.refresh_token = msa_info.get("refresh_token", None)
-        self.user_id = msa_info["user_id"]
+        self._ext_expires_in = msa_info.get("ext_expires_in", self._expires_in)
+        self.user_id = msa_info.get("user_id", None)
         self._other_token_info = {
             k: v for k, v in msa_info.items() if k not in KNOWN_MSA_DICT_VALS
         }
@@ -119,7 +131,7 @@ class MicrosoftAccount:
                 "refresh_token": self.refresh_token,
                 "uuid": uuid,
                 "username": username,
-                "user_id": self.user_id,
+                "ext_expires_in": self._ext_expires_in,
                 **self._other_token_info,
             }.items()
             if v

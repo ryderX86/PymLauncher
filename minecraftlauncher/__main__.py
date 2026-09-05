@@ -6,7 +6,7 @@ import logging
 import sys
 import warnings
 
-from PySide6.QtCore import QFile
+from PySide6.QtCore import QEventLoop, QFile
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QApplication, QStyleFactory
 import requests
@@ -70,8 +70,9 @@ class LauncherApp:
         self.event_loop_running = False
         self.qapp = get_qapp()
         self.fonts = get_fonts()
+        self.login_dialog = None
         detect_set_clipboard()
-        self.qapp.setApplicationName("Minecraft Launcher")
+        self.qapp.setApplicationName("PymLauncher")
         match constants.OS:
             case "windows":
                 pass
@@ -166,6 +167,10 @@ class LauncherApp:
         self.lb_window.set_text("Loading UI data...")
         self.buildall()
         self.load_accounts()
+        if self.login_dialog and self.login_dialog.isVisible():
+            loop = QEventLoop(self.qapp)
+            self.login_dialog.finished.connect(loop.quit)
+            loop.exec(QEventLoop.ProcessEventsFlag.AllEvents)
 
         log.info("Finished loading. Showing main window")
         self.main_window.show()
@@ -215,9 +220,10 @@ class LauncherApp:
                 "Failed to read accounts from storage.\n"
                 "The launcher cannot continue loading and will close.\n"
                 "Please make sure you are using the right account with the "
-                "necessary permissions."
+                "necessary permissions.\n"
+                f"Error type: {type(err).__name__}"
             )
-            self.exit()
+            self.exit(1)
         except AttributeError as err:
             log.error("AttributeError in account loading:", exc_info=err)
             if err.obj is not None:
@@ -228,7 +234,8 @@ class LauncherApp:
                 log.debug("Missing key: %r", err.name)
             else:
                 log.debug("Can't retrieve key name from exception")
-            self.exit()
+            error_box(str(err))
+            self.exit(1)
         except (JSONDecodeError, EncryptedDataDecodeError) as err:
             # get user input before proceeding, if True then the user answered
             # yes to deleting the accounts.bin file
@@ -303,10 +310,13 @@ class LauncherApp:
             if len(account_man) > 1:
                 account_man.auto_set_active()
                 return
-        dialog = LoginWindow(self.main_window, reason=reason)
-        dialog.login_complete.connect(self._on_login_complete)
-        dialog.rejected.connect(self._on_login_abort)
-        dialog.open()
+        self.login_dialog = LoginWindow(self.main_window, reason=reason)
+        self.login_dialog.login_complete.connect(self._on_login_complete)
+        self.login_dialog.rejected.connect(self._on_login_abort)
+        self.login_dialog.open()
+        self.login_dialog.finished.connect(
+            lambda: setattr(self, "login_dialog", None)
+        )
         return
 
     def _on_login_abort(self):

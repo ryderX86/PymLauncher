@@ -5,7 +5,7 @@ Things that need doing
 - Download "<...>.sha1" files for bulk downloads when there's no SHA1 in the
 manifest
 ## Dev-end QoL changes
-*None currently*
+- Rework `LoginRedirectWebserver` to be more clearly named & more stable.
 ## Structural changes
 - Split profiles page into the page itself, and two widgets:
     1. Individual profile editor

@@ -6,7 +6,7 @@ Page with account info, skin management, log out button.
 
 import logging
 
-from PySide6.QtCore import Qt, Signal, QTimer
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QGridLayout,
     QGroupBox,
@@ -18,14 +18,11 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from minecraftlauncher.front.resources import symbol
 from minecraftlauncher.auth import LauncherAccount
-from minecraftlauncher.functions.error_box import error_box
-from minecraftlauncher import functions
-from minecraftlauncher.constants import CHECKMARK_DELAY
+from minecraftlauncher.back.account_manager import account_man
+from minecraftlauncher.front.qt.widgets import CopyToClipboardButton
 from minecraftlauncher.front.window.skin_change import SkinChange
 from minecraftlauncher.offline import offline_man
-from minecraftlauncher.back.account_manager import account_man
 
 log = logging.getLogger(__name__)
 
@@ -83,13 +80,9 @@ class AccountPage(QWidget):
             Qt.TextInteractionFlag.TextSelectableByMouse
         )
         uuid_row.addWidget(self.uuid_label)
-        icon = symbol("clipboard")
-        self.copy_uuid_button = QPushButton()
-        self.copy_uuid_button.setIcon(icon)
-        self.copy_uuid_button.setFixedWidth(40)
-        self.copy_uuid_button.setFixedHeight(40)
-        self.copy_uuid_button.clicked.connect(self._copy_uuid)
-        self.copy_uuid_button.setEnabled(functions.clipboard_present)
+        self.copy_uuid_button = CopyToClipboardButton(
+            self, self.uuid_label.text
+        )
         uuid_row.addWidget(self.copy_uuid_button)
 
         info_layout.addLayout(uuid_row, 1, 1)
@@ -162,22 +155,6 @@ class AccountPage(QWidget):
         self.title.setText(username)
         self.xuid_label.setText(info.xuid)
         self.change_skin_button.setDisabled(info.demo_mode)
-
-    def _copy_uuid(self):
-        uuid_text = self.uuid_label.text()
-        if uuid_text and uuid_text != "<uuid>":
-            if not functions.clipboard_present:
-                error_box("Failed to get clipboard instance to copy to.")
-                log.warning("Couldn't get clipboard instance!")
-                return
-            functions.copy_to_clipboard(uuid_text)
-            self.copy_uuid_button.setIcon(symbol("clipboard-checked"))
-
-        def reset_button():
-            nonlocal self
-            self.copy_uuid_button.setIcon(symbol("clipboard"))
-
-        QTimer.singleShot(CHECKMARK_DELAY, reset_button)
 
     def _on_logout(self):
         self.log.debug("User pressed logout button, opening dialog.")

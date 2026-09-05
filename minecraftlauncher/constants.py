@@ -21,23 +21,24 @@ AUTHOR_USR = "ryderX86"
 EMAIL = "me@ryderm.net"
 APP_SLUG = f"{AUTHOR_USR}.{LAUNCHER_NAME}"
 
-DEFAULT_CLIENT_ID = "00000000402B5328"
-AZURE_CLIENT_ID = os.environ.get("AZURE_CLIENT_ID", DEFAULT_CLIENT_ID)
+AZURE_CLIENT_ID = "1c1a9297-d019-48d4-9417-85ea36cf4c1f"
 AZURE_SCOPE = "XboxLive.signin XboxLive.offline_access"
+AZURE_GRANT_TYPE = "urn:ietf:params:oauth:grant-type:device_code"
+AZURE_REDIRECT_URL = "http://localhost:38686"
+AZURE_REDIRECT_PORT = 38686
+AZURE_TOKEN_URL = (
+    "https://login.microsoftonline.com/consumers/oauth2/v2.0/token"
+)
 # Authentication URLs
-if AZURE_CLIENT_ID != DEFAULT_CLIENT_ID:
-    MS_DEVICE_CODE_URL = (
-        "https://login.microsoftonline.com/consumers/oauth2/v2.0/devicecode"
-    )
-else:
-    MS_DEVICE_CODE_URL = "https://login.live.com/oauth20_connect.srf"
-if AZURE_CLIENT_ID != DEFAULT_CLIENT_ID:
-    MS_TOKEN_URL = (
-        "https://login.microsoftonline.com/consumers/oauth2/v2.0/token"
-    )
-else:
-    MS_TOKEN_URL = "https://login.live.com/oauth20_token.srf"
-MSA_REFRESH_URL = "https://login.live.com/oauth20_token.srf"
+MS_DEVICE_CODE_URL = (
+    "https://login.microsoftonline.com/consumers/oauth2/v2.0/devicecode"
+)
+MS_WEB_LOGIN_URL = (
+    "https://login.microsoftonline.com/consumers/oauth2/v2.0/authorize"
+)
+MS_TOKEN_URL = "https://login.microsoftonline.com/consumers/oauth2/v2.0/token"
+# MSA_REFRESH_URL = "https://login.live.com/oauth20_token.srf"
+MSA_REFRESH_URL = MS_TOKEN_URL
 
 XBOX_AUTH_URL = "https://user.auth.xboxlive.com/user/authenticate"
 XSTS_AUTH_URL = "https://xsts.auth.xboxlive.com/xsts/authorize"
@@ -168,7 +169,11 @@ STEVE_SKIN_URL = (
 SKIN_URL_BASE = "http://textures.minecraft.net/texture/"
 
 # UI stuff
-CHECKMARK_DELAY = 1500  # milliseconds
+DONE_VISUAL_DELAY = 1500  # milliseconds
+"""
+How long we should display a "Done!" icon or message, in for example a "Copy to
+clipboard" button.
+"""
 
 
 # feature flags
