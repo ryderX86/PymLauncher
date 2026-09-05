@@ -20,6 +20,7 @@ from minecraftlauncher import SESSION, get_exit_status
 from minecraftlauncher.config import config
 from minecraftlauncher.functions import is_path_valid
 from minecraftlauncher.offline import offline_man
+from minecraftlauncher.paths import paths
 
 log = logging.getLogger(__name__)
 T = TypeVar("T")
@@ -193,10 +194,10 @@ class RunnableDownloader(QRunnable):
 
     _url: str
     """File download URL"""
-    _path: str | os.PathLike
-    """File download URL for game versions using the legacy assets format"""
+    _path: str
+    """File final path"""
     _vpath: str | os.PathLike | None
-    """File final location"""
+    """File final location for legacy assets"""
     _hash: str | None
     """File hash to check against"""
     _override: bool
@@ -210,6 +211,8 @@ class RunnableDownloader(QRunnable):
     last_exception: BaseException | None
     success: bool | None
     _invalid_download_count: int
+    _failed_downloads: int
+    """How many times the download generically failed."""
     _downloaded_file: bool
 
     log = log.getChild("RunnableDownloader")
@@ -243,7 +246,7 @@ class RunnableDownloader(QRunnable):
         """
         super().__init__()
         self._url = url
-        self._path = path
+        self._path = str(path)
         self._vpath = vpath
         if not is_path_valid(self._path):
             raise ValueError(f"Invalid path: {self._path!r}")
@@ -266,6 +269,7 @@ class RunnableDownloader(QRunnable):
         self.last_exception = None
         self.success = None
         self._invalid_download_count = 0
+        self._failed_downloads = 0
         self._downloaded_file = False
         if self._should_check_hash and not self._hash:
             raise ValueError(
@@ -365,9 +369,40 @@ class RunnableDownloader(QRunnable):
                 type(self).sleep_time += 5
                 self.log.debug("Current wait time: %f", self.sleep_time)
                 return self.download()
+            elif (
+                err.args
+                and isinstance(err.args[0], str)
+                and err.args[0].startswith("404")
+            ):
+                log.error(
+                    "404 client error trying to get the file at %r", self._url
+                )
+                if self.file_exists():
+                    log.info(
+                        "File from %r already exists at %r; have to assume it works.",
+                        self._url,
+                        self._path.replace(paths.game, "<default game dir>"),
+                    )
+                self.success = True
+                self._downloaded_file = False
+                if self._callback:
+                    self._callback(1)
+                return
             else:
-                self.log.error("HTTPError in download", exc_info=err)
+                self.log.error(
+                    "HTTPError in download; status code %r",
+                    err.response.status_code if err.response else "<unknown>",
+                    exc_info=err,
+                )
                 type(self).sleep_time += 0.2
+                self._failed_downloads += 1
+                if self._failed_downloads > 2:
+                    log.warning(
+                        "Failed to download %d times, stopping process.",
+                        self._failed_downloads,
+                    )
+                    self.last_exception = err
+                    return None
                 if not offline_man.offline:
                     return self.download()
                 raise
@@ -422,6 +457,9 @@ class RunnableDownloader(QRunnable):
         if self._callback:
             self._callback(1)
         return
+
+    def file_exists(self):
+        return os.path.isfile(self._path)
 
     @property
     def hash(self) -> str | None:
