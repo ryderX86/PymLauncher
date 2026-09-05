@@ -2,8 +2,10 @@
 Things that need doing
 ## User-end QoL changes
 - Disable version list refresh button upon going into offline mode
+- Download "<...>.sha1" files for bulk downloads when there's no SHA1 in the
+manifest
 ## Dev-end QoL changes
-- Subclass `QPushButton` and create a copy-to-clipboard button for easy re-use
+*None currently*
 ## Structural changes
 - Split profiles page into the page itself, and two widgets:
     1. Individual profile editor
@@ -14,3 +16,6 @@ Things that need doing
 - Create a class for profile management as in `account_manager.py`
 - Create classes for game versions, libraries/natives, JRE versions, etc., and
 change the managers for those accordingly.
+- Rework QSS/QStyles logic for less complexity
+- Rework profile exporting/importing & remove feature flag requirement
+*(lowest priority)*
