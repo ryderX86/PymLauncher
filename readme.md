@@ -10,8 +10,11 @@ or *GNOME Keyring* on Linux/Unix-based systems), etc.
 | OS      | Status          | Notes                                           |
 |---------|-----------------|-------------------------------------------------|
 | Windows | Fully supported |                                                 |
-| Linux   | Fully supported | Encryption requires GNOME Keyring or KDE Wallet |
+| Linux   | Fully supported*| Encryption requires GNOME Keyring or KDE Wallet |
 | macOS   | Support planned | Haven't began testing in macOS yet.             |
+
+<sub>\*Linux functionality has not been tested since some major structural
+changes have gone underway; stability is expected but not guaranteed.</sub>
 
 ## Building from source (WIP)
 You are more than free to fork, redistribute, or create/provide custom builds
