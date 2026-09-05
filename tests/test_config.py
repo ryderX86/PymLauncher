@@ -1,9 +1,9 @@
 from collections.abc import Callable
 
-from minecraftlauncher.config import (
+from pymlauncher.config import (
     ConfigHolder,
-    PostLaunchBehavior,
     JarRedownloadBehavior,
+    PostLaunchBehavior,
 )
 
 

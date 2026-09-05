@@ -1,6 +1,6 @@
 import timeit
 
-from minecraftlauncher.functions import suppressable
+from pymlauncher.functions import suppressable
 
 
 class WrapperTimer:

@@ -1,6 +1,6 @@
 import os
 
-from minecraftlauncher.paths import paths
+from pymlauncher.paths import paths
 
 BASE_DIR = os.path.dirname(__file__)
 paths.setup(

@@ -1,6 +1,6 @@
 import pytest
 
-from minecraftlauncher.paths import PathFinder
+from pymlauncher.paths import PathFinder
 
 
 def test_valueerror():

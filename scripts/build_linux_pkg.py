@@ -1,6 +1,6 @@
 import logging
 
-from minecraftlauncher import constants
+from pymlauncher import constants
 
 log = logging.getLogger(__name__)
 
