@@ -53,7 +53,8 @@ python -m venv .venv
 ```
 (Note that running the build script in its current state will fail without
 creating a virtual environment)
-3. Run `pip install -r requirements.txt`
+3. Run `pip install -r requirements.txt` (replace `requirements.txt` with
+`requirements-dev.txt` if you plan to use `pytest`)
 4. (optional, recommended) Ensure Visual Studio with the MSVC package is
 installed if using MSVC (NOT VSCode): https://visualstudio.microsoft.com/
 5. Add `makensis` from the NSIS install directory (default:
