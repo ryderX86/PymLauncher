@@ -1,6 +1,6 @@
 import pytest
 
-from pymlauncher.paths import PathFinder
+from launcher.paths import PathFinder
 
 
 def test_valueerror():

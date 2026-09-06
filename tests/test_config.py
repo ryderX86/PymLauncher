@@ -1,6 +1,6 @@
 from collections.abc import Callable
 
-from pymlauncher.config import (
+from launcher.config import (
     ConfigHolder,
     JarRedownloadBehavior,
     PostLaunchBehavior,

@@ -1,4 +1,4 @@
-- module-name: "minecraftlauncher.constants"
+- module-name: "launcher.constants"
   variables:
     setup_code: 
       - "import tomllib"
@@ -21,7 +21,7 @@
       replacements:
         'AZURE_CLIENT_ID = os.environ.get("AZURE_CLIENT_ID", DEFAULT_CLIENT_ID)': '"AZURE_CLIENT_ID = %r" % get_variable("azure_client_id")'
       when: "get_variable('azure_client_id') is not None"
-- module-name: "minecraftlauncher.auth.encryption"
+- module-name: "launcher.auth.encryption"
   variables:
     setup_code:
       - "import platform"
@@ -53,7 +53,7 @@
       append_result:
         '"ENABLED = %s" % get_variable("enabled")'
       when: "not linux"
-- module-name: "minecraftlauncher.back.java_manager"
+- module-name: "launcher.back.java_manager"
   anti-bloat:
     - description: "Remove executable mark function code on win32"
       change_function:

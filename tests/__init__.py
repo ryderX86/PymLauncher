@@ -1,6 +1,6 @@
 import os
 
-from pymlauncher.paths import paths
+from launcher.paths import paths
 
 BASE_DIR = os.path.dirname(__file__)
 paths.setup(

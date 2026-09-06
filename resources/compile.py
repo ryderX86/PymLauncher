@@ -75,10 +75,7 @@ for file in ICON_DIR.rglob("*.svg"):
 
 qrc_name = ICON_DIR.parent / "resources.qrc"
 output_res_file = (
-    ICON_DIR.parent.parent
-    / "minecraftlauncher"
-    / "front"
-    / "_resources_bundled.py"
+    ICON_DIR.parent.parent / "pymlauncher" / "front" / "_resources_bundled.py"
 )
 cmd = [
     "cmd.exe",

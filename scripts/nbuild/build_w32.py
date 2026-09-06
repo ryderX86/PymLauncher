@@ -68,7 +68,7 @@ args = [
     f"--product-version={PROJECT_TOML["project"]["version"]}",
     f"--product-name={PROJECT_TOML["project"]["name"]}",
     # this should probably come from pyproject.toml as well?
-    "--file-description=Minecraft Launcher (python)",
+    f"--file-description={PROJECT_TOML["project"]["name"]}",
     "--user-package-configuration-file=./scripts/nuitka.yaml",
 ]
 
@@ -80,7 +80,7 @@ for d in NOINCLUDE_LIBS:
     arg = f"--noinclude-dlls={d.lower()}.dll"
     args.append(arg)
 
-args.append("minecraftlauncher")
+args.append("launcher")
 
 if FLAGS & BuildFlags.EXECUTABLE:
     log.info("Running Nuitka")

@@ -5,7 +5,7 @@ from . import CWD, PROJECT_TOML
 log = logging.getLogger(__name__)
 log.info("Starting pre-build hooks")
 
-module_dir = CWD / "minecraftlauncher"
+module_dir = CWD / "launcher"
 
 toml_p = CWD / "pyproject.toml"
 ver_mod_path = module_dir / "__version__.py"

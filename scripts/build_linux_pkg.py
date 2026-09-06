@@ -1,6 +1,6 @@
 import logging
 
-from pymlauncher import constants
+from launcher import constants
 
 log = logging.getLogger(__name__)
 

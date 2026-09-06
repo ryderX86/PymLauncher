@@ -1,6 +1,6 @@
 import timeit
 
-from pymlauncher.functions import suppressable
+from launcher.functions import suppressable
 
 
 class WrapperTimer:
