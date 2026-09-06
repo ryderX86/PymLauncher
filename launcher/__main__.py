@@ -43,7 +43,7 @@ from .paths import paths
 from .threads.install_worker import InstallWorker
 from .threads.launch_worker import LaunchWorker
 
-log = logging.getLogger("minecraftlauncher")
+log = logging.getLogger("launcher")
 
 # we use this to detect crashes somewhat, allowing us to not write garbage data
 # or bad configs, etc.
