@@ -6,11 +6,10 @@ from PySide6.QtWidgets import QLabel
 from launcher.config import config
 from launcher.front import resources
 
-_instances = []
-
 
 class TooltipHint(QLabel):
     hide_all = Signal(bool)
+    _instances = []
 
     def __init__(self, tooltip: str | None = None, parent=None):
         super().__init__(parent)
@@ -24,12 +23,12 @@ class TooltipHint(QLabel):
         self.setAlignment(Qt.AlignmentFlag.AlignVCenter)
         self.hide_all.connect(self._hide_all_sig)
         self.ref = weakref.ref(self)
-        _instances.append(self.ref)
+        self._instances.append(self.ref)
         if not config.tooltip_icons_enabled:
             self.setHidden(not config.tooltip_icons_enabled)
 
     def deleteLater(self) -> None:
-        _instances.remove(self.ref)
+        self._instances.remove(self.ref)
         return super().deleteLater()
 
     def _hide_all_sig(self, hide: bool):
@@ -60,10 +59,10 @@ class TooltipHint(QLabel):
             return
         raise ValueError("Missing height argument!")
 
-    @staticmethod
-    def refresh_visibility():
+    @classmethod
+    def refresh_visibility(cls):
         _remove = []
-        for ref in _instances:
+        for ref in cls._instances:
             obj = ref()
             if not obj:
                 _remove.append(ref)
@@ -71,5 +70,5 @@ class TooltipHint(QLabel):
             obj.setHidden(not config.tooltip_icons_enabled)
         if _remove:
             for ref in _remove:
-                _instances.remove(ref)
+                cls._instances.remove(ref)
         return

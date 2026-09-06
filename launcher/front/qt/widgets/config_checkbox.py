@@ -7,7 +7,7 @@ from launcher.config import config
 
 from .tooltip_hint import TooltipHint
 
-LOGGER = logging.getLogger(__name__)
+log = logging.getLogger(__name__)
 
 
 class ConfigCheckbox(QWidget):
@@ -55,7 +55,7 @@ class ConfigCheckbox(QWidget):
             case Qt.CheckState.Unchecked:
                 self.check_state_changed.emit(False)
             case _:
-                LOGGER.warning("Unknown check state: %r", check_state)
+                log.warning("Unknown check state: %r", check_state)
                 self.check_state_changed.emit(False)
 
     def _init_tooltip(self):
@@ -64,7 +64,7 @@ class ConfigCheckbox(QWidget):
 
     def _rm_tooltip(self):
         if self._tooltip is None:
-            LOGGER.warning("_rm_tooltip() called without a tooltip existing")
+            log.warning("_rm_tooltip() called without a tooltip existing")
             return
         self._lo.removeWidget(self._tooltip)
         self._tooltip.deleteLater()
