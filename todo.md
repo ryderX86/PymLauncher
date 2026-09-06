@@ -6,6 +6,8 @@ Things that need doing
 manifest
 ## Dev-end QoL changes
 - Rework `LoginRedirectWebserver` to be more clearly named & more stable.
+- Move web request logic from `launcher.front.skin_change` to a module/class in
+`launcher.auth` (probably `MinecraftProfile`)
 ## Structural changes
 - Split profiles page into the page itself, and two widgets:
     1. Individual profile editor

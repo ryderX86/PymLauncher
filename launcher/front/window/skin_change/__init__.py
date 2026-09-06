@@ -10,7 +10,7 @@ import hashlib
 import logging
 import os
 
-from PySide6.QtCore import QObject, QSize, Qt, QTimer, QUrl, Signal
+from PySide6.QtCore import QObject, QSize, Qt, QUrl, Signal
 from PySide6.QtGui import QCloseEvent, QImage, QPixmap, QSurfaceFormat
 from PySide6.QtQuickWidgets import QQuickWidget
 from PySide6.QtWidgets import (
@@ -28,7 +28,8 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
-import requests
+from requests.exceptions import ConnectionError as RequestsConnectionError
+from requests.exceptions import ConnectTimeout, HTTPError
 
 from launcher import SESSION
 from launcher.auth import LauncherAccount, SkinModel
@@ -41,6 +42,7 @@ from launcher.constants import (
 )
 from launcher.front import resources
 from launcher.functions.error_box import error_box
+from launcher.offline import offline_man
 
 log = logging.getLogger(__name__)
 
@@ -367,10 +369,7 @@ class SkinChange(QDialog):
                 payload = {"capeId": self.current_cape}
                 resp = SESSION.put(CAPE_URL, headers=headers, json=payload)
                 resp.raise_for_status()
-            except (
-                requests.exceptions.ConnectionError,
-                requests.exceptions.ConnectTimeout,
-            ) as err:
+            except (RequestsConnectionError, ConnectTimeout) as err:
                 log.warning(
                     "Cape PUT request failed to open connection:", exc_info=err
                 )
@@ -380,21 +379,33 @@ class SkinChange(QDialog):
                     "If the error persists and you are definitely online, "
                     "please create a bug report."
                 )
-            except requests.exceptions.HTTPError as err:
-                log.warning(
-                    "Cape PUT request returned HTTP %d:\nDetails: %s",
-                    err.response.status_code,
-                    err.response.text,
-                )
-                c = self.cape_list.currentItem().text()
-                if "profile does not own cape" in err.response.text:
-                    error_box(
-                        f'Failed to set cape to "{c}": You do not own it.'
+            except HTTPError as err:
+                offline_man.check_requests_error(err)
+                cape = self.cape_list.currentItem().text()
+                if err.response:
+                    log.warning(
+                        "Cape PUT request (change to %r) returned HTTP %d:\nDetails: %s",
+                        cape,
+                        err.response.status_code,
+                        err.response.text,
                     )
+                    if "profile does not own cape" in err.response.text:
+                        error_box(
+                            f'Failed to set cape to "{cape}": ""You do not own it.'
+                        )
+                    else:
+                        error_box(
+                            f'Failed to set cape to "{cape}": '
+                            "An unknown error occured.\n"
+                            f"Details: {err.response.text}"
+                        )
                 else:
+                    log.warning(
+                        "Cape PUT request yielded no response, details:",
+                        exc_info=err,
+                    )
                     error_box(
-                        f'Failed to set cape to "{c}": An unknown error '
-                        "occured."
+                        f'Failed to set cape to "{cape}": {type(err).__name__}'
                     )
             else:
                 return True
@@ -402,6 +413,18 @@ class SkinChange(QDialog):
             try:
                 resp = SESSION.delete(CAPE_URL, headers=headers)
                 resp.raise_for_status()
+            except HTTPError as err:
+                log.error(
+                    "Failed to remove cape from player: "
+                    "Connection to %r failed:",
+                    CAPE_URL,
+                    exc_info=err,
+                )
+                error_box(
+                    "Failed to remove cape: "
+                    f'Connection to "{CAPE_URL}" failed.\n'
+                    "Please check your connection and try again."
+                )
             except Exception as err:
                 log.error("Failed to remove cape from player:", exc_info=err)
                 raise
