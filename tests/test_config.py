@@ -12,7 +12,7 @@ def test_config():
 
     # these values should all be basically anything EXCEPT what's default
     config.window_size = [2, 4]
-    config.open_browser_for_login = True
+    config.use_device_code_for_logins = True
     config.copy_code_for_login = False
     config.post_launch_option = PostLaunchBehavior.KEEP_OPEN
     config.redownload_option = JarRedownloadBehavior.NEVER

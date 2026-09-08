@@ -24,7 +24,7 @@ APP_SLUG = f"{AUTHOR_USR}.{LAUNCHER_NAME}"
 AZURE_CLIENT_ID = "1c1a9297-d019-48d4-9417-85ea36cf4c1f"
 AZURE_SCOPE = "XboxLive.signin XboxLive.offline_access"
 AZURE_GRANT_TYPE = "urn:ietf:params:oauth:grant-type:device_code"
-AZURE_REDIRECT_URL = "http://localhost:38686"
+AZURE_REDIRECT_URL = "http://localhost"
 AZURE_REDIRECT_PORT = 38686
 AZURE_TOKEN_URL = (
     "https://login.microsoftonline.com/consumers/oauth2/v2.0/token"
@@ -181,6 +181,7 @@ FLAG_ENABLE_EXPORTING = DEV  # not ready for prod
 FLAG_ENABLE_JUMP_LISTS: bool = (
     OS == "windows" and float(OS_VER[:5].rstrip(".")) >= 6.1
 )
+FLAG_ENABLE_WEBVIEW: bool = OS in {"windows", "osx"}
 
 # other
 

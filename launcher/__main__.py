@@ -546,7 +546,6 @@ def main():
         return
     else:
         launchargs.get_args()
-        setup_qapp()
         setup_app_id()
     try:
         paths.setup()
@@ -568,6 +567,12 @@ def main():
     except Exception as err:
         log.error("Failed to load config file:", exc_info=err)
         error_box("Failed to load config file! Config will be regenerated.")
+    if constants.FLAG_ENABLE_WEBVIEW:
+        # pylint: disable-next=import-outside-toplevel
+        from PySide6.QtWebView import QtWebView
+
+        QtWebView.initialize()
+    setup_qapp()
     app = LauncherApp()
     atexit.register(on_exit)
     code = app.run()

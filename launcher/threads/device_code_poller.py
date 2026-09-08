@@ -1,20 +1,18 @@
 import logging
 import time
 
-from PySide6.QtCore import QThread, Signal
 from requests.exceptions import RequestException
 
 from launcher import SESSION, constants
 
+from .base_login_thread import BaseLoginThread
+
 log = logging.getLogger(__name__)
 
 
-class DeviceCodePoller(QThread):
+class DeviceCodePoller(BaseLoginThread):
     """Poller for MSA token endpoint"""
 
-    token_recieved = Signal(dict)
-    error = Signal(str)
-    status = Signal(str)
     log = log.getChild("DeviceCodePoller")
 
     def __init__(
@@ -37,7 +35,9 @@ class DeviceCodePoller(QThread):
     def run(self):
         deadline = time.time() + self.expires_in
 
-        while time.time() < deadline and not self._cancelled:
+        while time.time() < deadline and not (
+            self._cancelled or self.isInterruptionRequested()
+        ):
             time.sleep(self.interval)
             if self._cancelled:
                 self.log.info("Login cancelled. Exiting.")
@@ -61,7 +61,7 @@ class DeviceCodePoller(QThread):
             data = resp.json()
 
             if "access_token" in data:
-                self.token_recieved.emit(data)
+                self.token_received.emit(data)
                 return
 
             error = data.get("error", "")

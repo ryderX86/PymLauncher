@@ -36,7 +36,7 @@ class ConfigHolder:
 
     # config items
     window_size: list[int]
-    open_browser_for_login: bool
+    use_device_code_for_logins: bool
     copy_code_for_login: bool
     post_launch_option: PostLaunchBehavior
     redownload_option: JarRedownloadBehavior
@@ -64,14 +64,20 @@ class ConfigHolder:
     """
     show_old_releases: bool
     """
-    Whether or not old releases (pre-alpha, alpha, beta, etc.) should be shown in
-    the versions list.
+    Whether or not old releases (pre-alpha, alpha, beta, etc.) should be shown
+    in the versions list.
+    """
+    use_webview_for_login: bool
+    """
+    Whether or not to use a webview for login dialogs. If `True`, the default
+    web browser won't be opened, and a pop-up window with a QWebView will be
+    used instead.
     """
 
     def __init__(self):
-        # config items
+        # config items; defaults
         self.window_size = [1100, 700]
-        self.open_browser_for_login = False
+        self.use_device_code_for_logins = False
         self.copy_code_for_login = True
         self.post_launch_option = PostLaunchBehavior.HIDE
         self.redownload_option = JarRedownloadBehavior.REDOWNLOAD
@@ -86,6 +92,7 @@ class ConfigHolder:
         self.enforce_json_spec = False
         self.show_snapshots = True
         self.show_old_releases = True
+        self.use_webview_for_login = False
 
     @classmethod
     def coerce_enum(cls, val: int | str, type_: EnumType):

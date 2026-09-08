@@ -80,15 +80,13 @@ class SettingsPage(QWidget):
 
         behavior.addWidget(post_launch_w)
 
-        open_browser_for_login = QCheckBox(
-            "Open browser automatically for sign-in"
-        )
+        login_device_code = QCheckBox("Use device code for logins")
         self.mapper.add_mapping(
-            open_browser_for_login,
-            saver=lambda c: setattr(config, "open_browser_for_login", c),
+            login_device_code,
+            saver=lambda c: setattr(config, "use_device_code_for_logins", c),
         )
-        open_browser_for_login.setChecked(config.open_browser_for_login)
-        behavior.addWidget(open_browser_for_login)
+        login_device_code.setChecked(config.use_device_code_for_logins)
+        behavior.addWidget(login_device_code)
 
         copy_code_for_login = QCheckBox("Copy sign-in code to clipboard")
         self.mapper.add_mapping(

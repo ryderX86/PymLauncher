@@ -4,7 +4,7 @@ Device code flow window
 
 import logging
 
-from PySide6.QtCore import Qt, QUrl, Signal
+from PySide6.QtCore import Qt, QTimer, QUrl, Signal
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
     QApplication,
@@ -26,6 +26,7 @@ from launcher.config import config
 from launcher.constants import (
     AZURE_CLIENT_ID,
     AZURE_SCOPE,
+    FLAG_ENABLE_WEBVIEW,
     MS_DEVICE_CODE_URL,
 )
 from launcher.front.resources import link_to_qrcode
@@ -33,14 +34,15 @@ from launcher.front.styles import ACCENT, TEXT_SECONDARY
 from launcher.functions import (
     error_box,
 )
+from launcher.threads.base_login_thread import BaseLoginThread
 from launcher.threads.device_code_poller import DeviceCodePoller
 from launcher.threads.login_redirect_webserver import (
     LoginRedirectWebserver,
 )
 
-log = logging.getLogger(__name__)
+from .loginwebview import LoginWebViewDialog, is_webview_available
 
-# DEVICE_CODE_SCOPE = "openid email XboxLive.signin XboxLive.offline_access"
+log = logging.getLogger(__name__)
 
 
 class LoginWindow(QDialog):
@@ -53,6 +55,10 @@ class LoginWindow(QDialog):
     login_complete = Signal(object)
     login_aborted = Signal()
 
+    # instance
+    webdialog: LoginWebViewDialog | None
+    _thread: BaseLoginThread | None
+
     def __init__(self, parent=None, *, reason: str | None = None):
         super().__init__(parent)
         self.setWindowTitle("Sign in with Microsoft")
@@ -60,9 +66,9 @@ class LoginWindow(QDialog):
         self.setSizeGripEnabled(False)
         self.setWindowFlags(Qt.WindowType.Dialog)
         self.setModal(True)
-        self._poller: DeviceCodePoller | None = None
-        self._thread: LoginRedirectWebserver | None = None
-        self._open_browser = config.open_browser_for_login
+        self._thread = None
+        self.webdialog = None
+        self._use_device_code = config.use_device_code_for_logins
         self._build_ui()
         if reason:
             self.status_label.setText(reason)
@@ -122,10 +128,12 @@ class LoginWindow(QDialog):
         open_browser_w = QWidget()
         open_browser_l = QHBoxLayout(open_browser_w)
         open_browser_l.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.open_browser = QCheckBox("Open default browser")
-        self.open_browser.checkStateChanged.connect(self._set_open_browser)
-        self.open_browser.setChecked(self._open_browser)
-        open_browser_l.addWidget(self.open_browser)
+        self.use_device_code = QCheckBox("Device code login")
+        self.use_device_code.checkStateChanged.connect(
+            self._set_use_device_code
+        )
+        self.use_device_code.setChecked(self._use_device_code)
+        open_browser_l.addWidget(self.use_device_code)
         layout.addWidget(open_browser_w)
 
         self.start_button = QPushButton("Sign in")
@@ -138,26 +146,48 @@ class LoginWindow(QDialog):
         layout.addWidget(cancel_button)
 
     def _start_login_process(self):
-        if self._open_browser:
-            return self._start_web_login()
-        else:
+        if self._use_device_code:
             return self._start_device_code()
+        else:
+            return self._start_web_login()
 
     def _start_web_login(self):
         self.start_button.setEnabled(False)
-        self.open_browser.setHidden(True)
+        self.use_device_code.setHidden(True)
         self.status_label.setText("Spinning up web server...")
         self._thread = LoginRedirectWebserver()
-        self._thread.token_recieved.connect(self._on_token)
+        self._thread.token_received.connect(self._on_token)
         self._thread.error.connect(self._on_error)
         self._thread.status.connect(self.status_label.setText)
         self._thread.start()
-        QDesktopServices.openUrl(QUrl(self._thread.url))
-        log.debug("Opened login URL in default web browser...")
+        if (
+            config.use_webview_for_login
+            and FLAG_ENABLE_WEBVIEW
+            and is_webview_available()
+        ):
+            log.debug("Starting native web view...")
+            self.webdialog = LoginWebViewDialog(self._thread.url, self)
+            self.webdialog.show()
+            self.webdialog.rejected.connect(self._cancel)
+            self.webdialog.error.connect(self._on_wv_fail)
+            self._thread.auth_code_received.connect(self.webdialog.accept)
+        else:
+            if config.use_webview_for_login and not is_webview_available():
+                log.warning("Couldn't get WebView to load...")
+            QDesktopServices.openUrl(self._thread.url)
+            log.debug("Opened login URL in default web browser...")
+
+    def _on_wv_fail(self, info: str):
+        log.warning("WebView failed to load: %r", info)
+        log.info("Closing webview and switching to external browser")
+        if self.webdialog:
+            self.webdialog.accept()
+        if isinstance(self._thread, LoginRedirectWebserver):
+            QDesktopServices.openUrl(self._thread.url)
 
     def _start_device_code(self):
         self.start_button.setEnabled(False)
-        self.open_browser.setHidden(True)
+        self.use_device_code.setHidden(True)
         self.status_label.setText("Requesting device code...")
 
         try:
@@ -176,7 +206,7 @@ class LoginWindow(QDialog):
                 f"An unexpected {type(err).__name__} error occured."
             )
             self.start_button.setEnabled(True)
-            self.open_browser.setHidden(False)
+            self.use_device_code.setHidden(False)
             return
 
         if resp.status_code < 200 or resp.status_code > 299:
@@ -192,7 +222,7 @@ class LoginWindow(QDialog):
             )
             self.status_label.setText(f"HTTP {resp.status_code}")
             self.start_button.setEnabled(True)
-            self.open_browser.setHidden(False)
+            self.use_device_code.setHidden(False)
             return
 
         data = resp.json()
@@ -225,7 +255,7 @@ class LoginWindow(QDialog):
                 f"Description: {error_desc}\n"
                 f'<a href="{error_uri}">More info</a>'
             )
-            self.open_browser.setHidden(False)
+            self.use_device_code.setHidden(False)
             self.start_button.setEnabled(True)
             self.code_qr_w.setHidden(True)
             return
@@ -249,16 +279,12 @@ class LoginWindow(QDialog):
             else:
                 log.warning("Couldn't get clipboard!")
 
-        if self._open_browser:
-            QDesktopServices.openUrl(QUrl(verification_uri))
-            log.debug("Opened URL in default browser.")
-
         log.debug("Starting up poller")
-        self._poller = DeviceCodePoller(device_code, interval, expires_in)
-        self._poller.token_recieved.connect(self._on_token)
-        self._poller.error.connect(self._on_error)
-        self._poller.status.connect(self.status_label.setText)
-        self._poller.start()
+        self._thread = DeviceCodePoller(device_code, interval, expires_in)
+        self._thread.token_received.connect(self._on_token)
+        self._thread.error.connect(self._on_error)
+        self._thread.status.connect(self.status_label.setText)
+        self._thread.start()
 
     def _on_token(self, token_data: dict):
         self.status_label.setText("Authenticating with Xbox Live...")
@@ -273,7 +299,7 @@ class LoginWindow(QDialog):
             log.error("Auth chain failed! Details:\n%s", str(err))
             self.status_label.setText("Authentication failed")
             self.start_button.setEnabled(True)
-            self.open_browser.setHidden(False)
+            self.use_device_code.setHidden(False)
             return
         try:
             lp.minecraft_auth()
@@ -282,46 +308,45 @@ class LoginWindow(QDialog):
             log.error("Auth chain failed!", exc_info=err)
             self.status_label.setText(f"Auth failed: {err}")
             self.start_button.setEnabled(True)
-            self.open_browser.setHidden(False)
+            self.use_device_code.setHidden(False)
         else:
             self.status_label.setText("Logged in successfully.")
             log.info("Logged in as %s", lp.gamertag)
             self.login_complete.emit(lp)
             self.start_button.setEnabled(True)
-            self.open_browser.setHidden(False)
+            self.use_device_code.setHidden(False)
             self.code_qr_w.setHidden(True)
             self.accept()
 
-    def _on_error(self, message: str):
-        log.error("Login error: %s", message)
-        self.status_label.setText(message)
-        self.start_button.setEnabled(True)
-        self.open_browser.setHidden(False)
-        self.code_qr_w.setHidden(True)
-
-    def _cancel(self):
-        if self._poller:
-            self._poller.cancel()
-            self._poller.deleteLater()
-            self._poller = None
+    def cleanup(self):
+        if self.webdialog:
+            self.webdialog.accept()
+            self.webdialog.deleteLater()
+            self.webdialog = None
         if self._thread:
             self._thread.cancel()
-            self._thread.deleteLater()
-        self.reject()
-
-    def closeEvent(self, a0):
-        if self._poller:
-            self._poller.cancel()
-            self._poller.wait()
-            self._poller.deleteLater()
-            self._poller = None
-        if self._thread:
-            self._thread.cancel()
+            self._thread.requestInterruption()
             self._thread.wait()
             self._thread.deleteLater()
             self._thread = None
+
+    def _on_error(self, message: str):
+        log.error("Login error: %s", message)
+        self.status_label.setText(f"Error: {message}")
+        self.start_button.setEnabled(True)
+        self.use_device_code.setHidden(False)
+        self.code_qr_w.setHidden(True)
+        self.cleanup()
+
+    def _cancel(self):
+        self.status_label.setText("Cancelling login")
+        self.cleanup()
+        self.reject()
+
+    def closeEvent(self, a0):
+        self.cleanup()
         super().closeEvent(a0)
 
-    def _set_open_browser(self, a0: Qt.CheckState):
-        checked = self.open_browser.isChecked()
-        self._open_browser = config.open_browser_for_login = checked
+    def _set_use_device_code(self, a0: Qt.CheckState):
+        checked = self.use_device_code.isChecked()
+        self._use_device_code = config.use_device_code_for_logins = checked

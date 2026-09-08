@@ -14,7 +14,9 @@ or *GNOME Keyring* on Linux/Unix-based systems), etc.
 | macOS   | Support planned | Haven't began testing in macOS yet.             |
 
 <sub>\*Linux functionality has not been tested since some major structural
-changes have gone underway; stability is expected but not guaranteed.</sub>
+changes have gone underway; stability is expected but not guaranteed.
+Additionally, QWebView support is not included, since the Chromium binaries
+needed for Linux add bloat.</sub>
 
 ## Building from source (WIP)
 You are more than free to fork, redistribute, or create/provide custom builds

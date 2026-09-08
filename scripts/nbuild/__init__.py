@@ -3,16 +3,18 @@ from enum import IntFlag
 from pathlib import Path
 import logging
 import os
+import platform
 import tomllib
 
 
 class BuildFlags(IntFlag):
-    NONE = 0b0000
-    NO_BUILD_BUMP = 0b1000
-    EXECUTABLE = 0b0001
-    INSTALLER = 0b0010
-    RESOURCES = 0b0100
-    ALL = 0b0111
+    NONE = 0b00000
+    NO_BUILD_BUMP = 0b01000
+    EXECUTABLE = 0b00001
+    INSTALLER = 0b00010
+    RESOURCES = 0b00100
+    WEBVIEW = 0b10000
+    ALL = 0b11111
 
 
 CWD = Path(__file__).parent.parent.parent
@@ -30,6 +32,7 @@ _parser.add_argument("-i", "--installer", action="store_true", default=False)
 _parser.add_argument("-s", "--resources", action="store_true", default=False)
 _parser.add_argument("-n", "--no-bump", action="store_true", default=False)
 _parser.add_argument("-aci", "--azure-client-id", type=str, default=None)
+_parser.add_argument("--noinclude-webview", action="store_true", default=False)
 
 _args = _parser.parse_args()
 
@@ -41,6 +44,7 @@ RESOURCES_BUILD: bool = _args.resources
 BUMP: bool = not _args.no_bump
 AZURE_CLIENT_ID: str | None = _args.azure_client_id
 CLIENT_ID_FP = Path(__file__).parent.parent.parent / ".azure-client-id"
+INCLUDE_WEBVIEW: bool = not _args.noinclude_webview
 
 FLAGS = BuildFlags.ALL
 if EXECUTABLE_BUILD or INSTALLER_BUILD or RESOURCES_BUILD:
@@ -51,8 +55,14 @@ if EXECUTABLE_BUILD or INSTALLER_BUILD or RESOURCES_BUILD:
         FLAGS |= BuildFlags.INSTALLER
     if RESOURCES_BUILD:
         FLAGS |= BuildFlags.RESOURCES
+    if INCLUDE_WEBVIEW:
+        FLAGS |= BuildFlags.WEBVIEW
 if not BUMP:
     FLAGS |= BuildFlags.NO_BUILD_BUMP
+for flag in BuildFlags:
+    if FLAGS & flag:
+        print(f"Flag {flag.name} present")
+
 if AZURE_CLIENT_ID:
     os.environ["AZURE_CLIENT_ID"] = AZURE_CLIENT_ID
 elif CLIENT_ID_FP.exists() and CLIENT_ID_FP.is_file():
@@ -103,7 +113,6 @@ NOINCLUDE_DATA = {
     "PySide6/qml/QtTextToSpeech/*",
     "PySide6/qml/QtWebChannel/*",
     "PySide6/qml/QtWebSockets/*",
-    "PySide6/qml/QtWebView/*",
     "PySide6/qml/Qt/*",
     "PySide6/qml/QtCore/*",
     "PySide6/qml/QtNetwork/*",
@@ -130,6 +139,8 @@ NOINCLUDE_DATA = {
     "PySide6/qml/QtQuick/SpacialAudio/*",
     "PySide6/qml/QtQuick/Xr/*",
 }
+if platform.system() not in ["Windows", "Darwin"]:
+    NOINCLUDE_DATA.add("PySide6/qml/QtWebView/*")
 
 NOINCLUDE_LIBS = {
     "Qt6DataVisualization*",
@@ -140,7 +151,7 @@ NOINCLUDE_LIBS = {
     "Qt6Quick3DXr*",
     "*TextToSpeech*",
     "Qt6VirtualKeyboard*",
-    "Qt6Web*",
+    "Qt6WebEngine",
     "Qt6QuickControls2*",
     "Qt6Quick3DEffects",
     "Qt6Sensor*",
@@ -162,7 +173,19 @@ NOINCLUDE_LIBS = {
     "Qt6Quick3DHelpersImpl",
     "Qt6Quick3DSpatialAudio",
     "Qt*Particle*",
+    "*QtWebEngine*",
+    "*qtwebengine*",
 }
+if platform.system() not in ["Windows", "Darwin"]:
+    NOINCLUDE_LIBS.add("Qt6Web*")
+
+INCLUDE_PLUGINS = {
+    "sensible",
+    "qml",
+}
+
+if platform.system() in ["Windows", "Darwin"]:
+    INCLUDE_PLUGINS.add("webview")
 
 BASE_ARGS = [
     "--standalone",
@@ -175,7 +198,7 @@ BASE_ARGS = [
     # remove assert statements and docstrings
     "--python-flag=-OO",
     "--enable-plugin=pyside6",
-    "--include-qt-plugins=sensible,qml",
+    f"--include-qt-plugins={",".join(INCLUDE_PLUGINS)}",
     "--output-dir=./dist",
     # pyside6-deploy includes these and they seem to just be anti-bloat, so no
     # harm in including them here too:

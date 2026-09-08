@@ -2,32 +2,44 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 import base64
 import hashlib
+import html
 import json
 import logging
 import secrets
 
-from PySide6.QtCore import QThread, Signal
 from requests.exceptions import HTTPError, JSONDecodeError
 
 from launcher import SESSION, constants
 from launcher.offline import offline_man
 
+from .base_login_thread import BaseLoginThread
 
-class ParentedHTTPServer(HTTPServer):
+log = logging.getLogger(__name__)
+
+
+class RedirectHTTPServer(HTTPServer):
+    """HTTPServer subclass for type checking purposes, holds the results."""
+
+    login_code: str | None
+    login_state: str | None
+    error_description: str | None
+    expected_state: str | None
+
     def __init__(
         self,
-        parent: "LoginRedirectWebserver",
-        server_address: (
-            tuple[str | bytes | bytearray, int]
-            | tuple[str | bytes | bytearray, int, int, int]
-        ),
+        server_address,
         RequestHandlerClass,
         bind_and_activate: bool = True,
+        *,
+        expected_state: str | None = None,
     ) -> None:
         super().__init__(
             server_address, RequestHandlerClass, bind_and_activate
         )
-        self.parent = parent
+        self.login_code = None
+        self.login_state = None
+        self.error_description = None
+        self.expected_state = expected_state
 
 
 class RequestHandler(BaseHTTPRequestHandler):
@@ -35,67 +47,106 @@ class RequestHandler(BaseHTTPRequestHandler):
         query = urlparse(self.path).query
         parsed_query = parse_qs(query)
 
-        assert isinstance(self.server, ParentedHTTPServer)
+        assert isinstance(self.server, RedirectHTTPServer)
 
-        if "error" in parsed_query:
-            self.server.parent.on_error(parsed_query["error_description"][0])
-            self.send_response(200)
-            self.send_header("Content-Type", "text/html")
-            self.end_headers()
-            self.wfile.write(
-                bytes(
-                    "<html><script>window.close();</script><body>"
-                    "<h1>Login error</h1>"
-                    "<p>An error occured while logging in:</p>"
-                    f"<p>{parsed_query["error_description"][0]}</p>"
-                    "</body></html>",
-                    encoding="utf-8",
+        if "code" in parsed_query:
+            code: str | None = parsed_query.get("code", [None])[0]
+            state: str | None = parsed_query.get("state", [None])[0]
+            if not code:
+                log.warning("No code present from auth redirect")
+                self.return_failure(
+                    "Authentication server redirected with no code"
                 )
-            )
+                self.server.error_description = "No code present in request"
+            elif state != self.server.expected_state:
+                log.warning("State mismatch! Aborting login")
+                self.return_failure(
+                    "Login session couldn't be verified, please try again."
+                )
+                self.server.error_description = (
+                    "State mismatch between request and response"
+                )
+            else:
+                self.server.login_code = code
+                self.server.login_state = state
+                self.return_success()
         else:
-            self.server.parent.on_success(
-                parsed_query["code"][0], parsed_query.get("state", [None])[0]
-            )
-            self.send_response(200)
-            self.send_header("Content-Type", "text/html")
-            self.end_headers()
-            self.wfile.write(
-                b"<html><script>window.close();</script><body>"
-                b"<h1>Login successful.</h1>"
-                b"<p>You may now close this tab/window.</p></body></html>"
-            )
+            description: str = parsed_query.get(
+                "error_description", ["Unknown error"]
+            )[0]
+            self.return_failure(description)
+            self.server.error_description = description
 
     def log_message(self, *args, **kwargs):
         pass
 
+    def return_success(self):
+        assert isinstance(self.server, RedirectHTTPServer)
 
-class LoginRedirectWebserver(QThread):
-    token_recieved = Signal(dict)
-    error = Signal(str)
-    status = Signal(str)
-    log = logging.getLogger(__name__)
+        content = (
+            b"<html><script>window.close();</script><body>"
+            b"<h1>Login successful.</h1>"
+            b"<p>You may now close this tab/window.</p></body></html>"
+        )
+        self.send_response(200)
+        self.send_header("Content-Type", "text/html")
+        self.send_header("Content-Length", str(len(content)))
+        self.end_headers()
+        self.wfile.write(content)
+        self.wfile.flush()
 
+    def return_failure(self, description: str):
+        assert isinstance(self.server, RedirectHTTPServer)
+
+        content = bytes(
+            "<html><script>window.close();</script><body>"
+            "<h1>Login error</h1>"
+            "<p>An error occured while logging in:</p>"
+            f"<p>{html.escape(description)}</p>"
+            "</body></html>",
+            encoding="utf-8",
+        )
+        self.send_response(200)
+        self.send_header("Content-Type", "text/html")
+        self.send_header("Content-Length", str(len(content)))
+        self.end_headers()
+        self.wfile.write(content)
+        self.wfile.flush()
+
+
+class LoginRedirectWebserver(BaseLoginThread):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.stop = False
-        redirect_uri = constants.AZURE_REDIRECT_URL
 
         self.verifier = secrets.token_urlsafe(64)
         sha = hashlib.sha256(self.verifier.encode("ascii")).digest()
         self.challenge = (
             base64.urlsafe_b64encode(sha).decode("ascii").rstrip("=")
         )
+        self.state = secrets.token_urlsafe(32)
+
+        self.server = RedirectHTTPServer(
+            ("localhost", 0),
+            RequestHandler,
+            expected_state=self.state,
+        )
+        self.port: int = self.server.server_address[1]
+        self.server.timeout = 0.5
+        self.finished.connect(self.server.server_close)
+        self.redirect_uri = f"{constants.AZURE_REDIRECT_URL}:{self.port}"
 
         login_params = {
             "tenant": "consumers",
             "client_id": constants.AZURE_CLIENT_ID,
             "response_type": "code",
-            "redirect_uri": redirect_uri,
+            "redirect_uri": self.redirect_uri,
             "scope": constants.AZURE_SCOPE,
             "response_mode": "query",
             "prompt": "select_account",
             "code_challenge": self.challenge,
             "code_challenge_method": "S256",
+            "state": self.state,
         }
 
         url = [*urlparse(constants.MS_WEB_LOGIN_URL)]
@@ -104,32 +155,39 @@ class LoginRedirectWebserver(QThread):
 
     def cancel(self):
         self.stop = True
-        self.log.debug("Cancelling process...")
-        self.server.server_close()
+        log.debug("Cancelling process...")
         return
 
     def run(self):
-        self.log.debug(
-            "Verifier: %r; challenge code: %r", self.verifier, self.challenge
-        )
-        self.server = ParentedHTTPServer(
-            self, ("localhost", constants.AZURE_REDIRECT_PORT), RequestHandler
-        )
+        log.debug("Challenge code: %r", self.challenge)
 
         self.status.emit("Waiting on authorization...")
 
         while not self.stop:
-            self.server.handle_request()
-        self.server.server_close()
+            try:
+                self.server.handle_request()
+            except Exception as err:
+                self.stop = True
+                log.error("Error occured during authentication:", exc_info=err)
+                log.info("Stopping server early due to error.")
+            else:
+                if self.server.error_description:
+                    self.on_error(self.server.error_description)
+                elif self.server.login_code:
+                    self.on_success(
+                        self.server.login_code, self.server.login_state
+                    )
         return
 
     def on_error(self, description: str):
         self.error.emit(description)
+        self.stop = True
 
     def on_success(self, code: str, state: str | None):
         self.stop = True
+        self.auth_code_received.emit()
         if state:
-            self.log.debug("State: %r", state)
+            log.debug("State: %r", state)
 
         self.status.emit("Getting account tokens...")
 
@@ -137,7 +195,7 @@ class LoginRedirectWebserver(QThread):
             "client_id": constants.AZURE_CLIENT_ID,
             "grant_type": "authorization_code",
             "code": code,
-            "redirect_uri": constants.AZURE_REDIRECT_URL,
+            "redirect_uri": self.redirect_uri,
             "code_verifier": self.verifier,
         }
 
@@ -147,38 +205,40 @@ class LoginRedirectWebserver(QThread):
         except HTTPError as err:
             offline_man.check_requests_error(err)
             if err.response:
-                self.log.error(
+                log.error(
                     "Error occured during authentication: %s", err.response
                 )
                 try:
                     parsed_error = err.response.json()
-                except:
-                    self.error.emit(err.response)
+                except JSONDecodeError:
+                    log.warning(
+                        "Failed to parse JSON from web response, "
+                        "signalling raw text instead."
+                    )
+                    self.error.emit(err.response.text)
                 else:
                     self.error.emit(
                         parsed_error.get("error_description", "Unknown error")
                     )
             else:
                 self.error.emit("An unknown error occured.")
-            self.log.error("Error during authentication:", exc_info=err)
+            log.error("Error during authentication:", exc_info=err)
             return
         except Exception as err:
             offline_man.check_requests_error(err)
-            self.log.error(
-                "Error occured during authentication:", exc_info=err
-            )
-            self.error.emit("Unknown error (%r)", type(err).__name__)
+            log.error("Error occured during authentication:", exc_info=err)
+            self.error.emit(f"Unexpected error ({type(err).__name__})")
             return
 
         try:
             response_json = resp.json()
         except JSONDecodeError:
-            self.log.error("Malformed JSON in response: %r", resp.text)
+            log.error("Malformed JSON in response: %r", resp.text)
             self.error.emit("Malformed JSON in response")
             return
 
         if "error" in response_json:
-            self.log.warning(
+            log.warning(
                 "MSA process returned an error:\n%s",
                 json.dumps(response_json, indent=2),
             )
@@ -189,6 +249,6 @@ class LoginRedirectWebserver(QThread):
             )
             return
 
-        self.log.debug("We got a token")
+        log.debug("We got a token")
         self.status.emit("Token recieved, authenticating with Xbox/Mojang")
-        self.token_recieved.emit(response_json)
+        self.token_received.emit(response_json)
