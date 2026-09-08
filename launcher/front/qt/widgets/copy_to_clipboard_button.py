@@ -56,6 +56,8 @@ class CopyToClipboardButton(QPushButton):
         else:
             log.warning("Unable to get clipboard")
             self.setDisabled(True)
+            if not is_icon_button:
+                self.setText("No clipboard found")
 
     def copy_text(self):
         try:

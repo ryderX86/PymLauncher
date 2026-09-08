@@ -99,9 +99,6 @@ class TextPopup(QDialog):
             clipboard_button.setStyleSheet(
                 clipboard_button.styleSheet() + " font: italic;"
             )
-        elif not QApplication.clipboard():
-            log.warning("No clipboard found")
-            clipboard_button.setDisabled(True)
         buttons_layout.addWidget(clipboard_button)
 
         self._layout.addWidget(buttons_parent)
