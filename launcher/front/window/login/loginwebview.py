@@ -1,4 +1,4 @@
-from functools import lru_cache
+from functools import cache
 import logging
 
 from PySide6.QtCore import QPluginLoader, Qt, Signal
@@ -19,20 +19,20 @@ match constants.OS:
         WEBVIEW_PLUGIN_PATH = ""  # don't use webview on other platforms
 
 
-@lru_cache(1)
+@cache
 def is_webview_available():
     if not constants.FLAG_ENABLE_WEBVIEW:
         return False
     webview = QPluginLoader(WEBVIEW_PLUGIN_PATH)
-    _webview_loader_result = webview.load()
-    if not _webview_loader_result:
+    loaded = webview.load()
+    if not loaded:
         log.warning(
             "Failed to load QWebView from %r (QPluginLoader(%r)): %s",
             webview.fileName(),
             WEBVIEW_PLUGIN_PATH,
             webview.errorString(),
         )
-    return _webview_loader_result
+    return loaded
 
 
 class LoginWebViewDialog(QDialog):
