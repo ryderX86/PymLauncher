@@ -139,7 +139,10 @@ NOINCLUDE_DATA = {
     "PySide6/qml/QtQuick/SpacialAudio/*",
     "PySide6/qml/QtQuick/Xr/*",
 }
-if platform.system() not in ["Windows", "Darwin"]:
+if (not FLAGS & BuildFlags.WEBVIEW) or platform.system() not in [
+    "Windows",
+    "Darwin",
+]:
     NOINCLUDE_DATA.add("PySide6/qml/QtWebView/*")
 
 NOINCLUDE_LIBS = {
@@ -176,7 +179,10 @@ NOINCLUDE_LIBS = {
     "*QtWebEngine*",
     "*qtwebengine*",
 }
-if platform.system() not in ["Windows", "Darwin"]:
+if (not FLAGS & BuildFlags.WEBVIEW) or platform.system() not in [
+    "Windows",
+    "Darwin",
+]:
     NOINCLUDE_LIBS.add("Qt6Web*")
 
 INCLUDE_PLUGINS = {
@@ -184,7 +190,10 @@ INCLUDE_PLUGINS = {
     "qml",
 }
 
-if platform.system() in ["Windows", "Darwin"]:
+if (not FLAGS & BuildFlags.WEBVIEW) and platform.system() in [
+    "Windows",
+    "Darwin",
+]:
     INCLUDE_PLUGINS.add("webview")
 
 BASE_ARGS = [
