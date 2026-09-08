@@ -50,7 +50,7 @@ FunctionEnd
 Section "App"
 	SectionIn RO
 	SetOutPath "$INSTDIR"
-	File /r "..\dist\${NAME}.dist\*.*"
+	File /r "..\dist\launcher.dist\*.*"
 	WriteUninstaller "$INSTDIR\Uninstall.exe"
 
     WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${AUMID}" "DisplayName" "${NAME}"

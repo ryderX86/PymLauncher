@@ -8,6 +8,7 @@ import json
 import logging
 import os
 
+from .constants import FLAG_ENABLE_WEBVIEW
 from .functions import reswrite
 from .paths import paths
 
@@ -92,7 +93,7 @@ class ConfigHolder:
         self.enforce_json_spec = False
         self.show_snapshots = True
         self.show_old_releases = True
-        self.use_webview_for_login = False
+        self.use_webview_for_login = FLAG_ENABLE_WEBVIEW
 
     @classmethod
     def coerce_enum(cls, val: int | str, type_: EnumType):
