@@ -1,5 +1,6 @@
 from collections.abc import Callable
 
+from launcher import constants
 from launcher.config import (
     ConfigHolder,
     JarRedownloadBehavior,
@@ -27,6 +28,7 @@ def test_config():
     config.enforce_json_spec = True
     config.show_snapshots = False
     config.show_old_releases = False
+    config.use_webview_for_login = not constants.FLAG_ENABLE_WEBVIEW
 
     config.save()
 
