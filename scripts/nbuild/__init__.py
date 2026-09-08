@@ -190,7 +190,7 @@ INCLUDE_PLUGINS = {
     "qml",
 }
 
-if (not FLAGS & BuildFlags.WEBVIEW) and platform.system() in [
+if (FLAGS & BuildFlags.WEBVIEW) and platform.system() in [
     "Windows",
     "Darwin",
 ]:

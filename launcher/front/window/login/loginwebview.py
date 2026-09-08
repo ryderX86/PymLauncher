@@ -27,8 +27,9 @@ def is_webview_available():
     _webview_loader_result = webview.load()
     if not _webview_loader_result:
         log.warning(
-            "Failed to load QWebView from %r: %s",
+            "Failed to load QWebView from %r (QPluginLoader(%r)): %s",
             webview.fileName(),
+            WEBVIEW_PLUGIN_PATH,
             webview.errorString(),
         )
     return _webview_loader_result
