@@ -90,6 +90,8 @@ def fetch_version_manifest(force_refresh: bool = False):
     if manifest_cache["versions"] and not force_refresh:
         return manifest_cache
 
+    mf = None
+
     log.info("Looking for existing version manifest")
     mf_path = os.path.join(paths.game, "versions", "version_manifest_v2.json")
     if os.path.isfile(mf_path) and not force_refresh:
@@ -134,8 +136,9 @@ def fetch_version_manifest(force_refresh: bool = False):
             exc_info=err,
         )
         offline_man.check_requests_error(err)
-        if manifest_cache["latest"] or manifest_cache["versions"]:
+        if mf and (mf["latest"] or mf["versions"]):
             log.info("Returning cached manfiest despite error")
+            manifest_cache = mf
             return manifest_cache
         else:
             raise err
