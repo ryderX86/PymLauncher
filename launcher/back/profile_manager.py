@@ -278,11 +278,28 @@ def save_launcher_meta():
         reswrite(paths.profiles_meta_file, file_text)
 
 
+def last_used_timestamp(profile: LaunchProfile):
+    try:
+        t = datetime.fromisoformat(profile.last_used)
+    except Exception as err:
+        log.error(
+            "Failed to get datetime object from profile %r's last used: %r",
+            profile.uuid,
+            profile.last_used,
+            exc_info=err,
+        )
+        t = datetime.min
+    return t.timestamp()
+
+
 def get_profile_sorting():
     meta = get_launcher_meta()
-    if meta:
-        return meta.get("order", [])
-    return [*profiles.keys()]
+    if meta and meta.get("order"):
+        return meta["order"]
+    log.warning("No profile sorting order data, regenerating it...")
+    profs = [*profiles.values()]
+    profs.sort(key=last_used_timestamp)
+    return [p.uuid for p in profs]
 
 
 def _save_sorting_order(data: Iterable[str]):
