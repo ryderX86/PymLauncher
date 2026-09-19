@@ -41,7 +41,7 @@ and any other API keys from
 empty string.
 ### Windows
 #### Prerequesites
-- Python (3.13 or newer): https://python.org
+- Python (3.14 or newer): https://python.org
     - All packages in requirements.txt are required, requirements-dev.txt is
     optional.
 - NSIS (if you want the installer build to be successful):
