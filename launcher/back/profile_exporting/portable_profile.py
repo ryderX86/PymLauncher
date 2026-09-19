@@ -275,7 +275,7 @@ class PortableProfile:
 
         if os.path.splitext(output)[-1] == ".json":
             with open(output, "w") as f:
-                f.write(json.dumps(self.prof.to_dict_compat()))
+                f.write(json.dumps(self.prof.dict()))
             return True
 
         log.debug('Opening "%s" as NEW archive', str(output))

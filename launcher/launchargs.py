@@ -1,4 +1,4 @@
-from argparse import ArgumentParser, ArgumentError
+from argparse import ArgumentError, ArgumentParser
 import os
 
 _parser = ArgumentParser()
@@ -71,7 +71,6 @@ class LaunchArgsContainer:
     exporting_debug: bool
     debug_logging: bool
     launch_profile: str | None
-    debug_splash_screen: bool
 
     def __init__(self):
         self.work_dir = None
@@ -80,7 +79,6 @@ class LaunchArgsContainer:
         self.exporting_debug = False
         self.debug_logging = False
         self.launch_profile = None
-        self.debug_splash_screen = False
 
     def get_args(self):
         args = _parser.parse_args()
@@ -91,7 +89,6 @@ class LaunchArgsContainer:
         self.exporting_debug = args.exporting_debug
         self.debug_logging = args.debug_logging
         self.launch_profile = args.launch_profile
-        self.debug_splash_screen = args.debug_splash_screen
 
         if self.work_dir is not None:
             self.work_dir = os.path.normpath(self.work_dir)

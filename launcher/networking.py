@@ -1,5 +1,5 @@
-import logging
 import ctypes
+import logging
 
 from requests.exceptions import ConnectionError as _ConnectionError
 import requests

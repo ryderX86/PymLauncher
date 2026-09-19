@@ -6,6 +6,7 @@ JARs, and building the classpath string.
 """
 
 from collections.abc import Callable
+from typing import Iterable
 import logging
 import os
 import zipfile
@@ -13,21 +14,19 @@ import zipfile
 from packaging.version import Version, parse
 from PySide6.QtCore import QThreadPool
 
-from launcher.config import config
 from launcher.constants import (
     ARCH,
     CLASSPATH_SEPARATOR,
-    CPU_THREADS,
     LIBRARIES_URL,
     OS,
     OS_VER,
 )
+from launcher.datatypes.game_version import Library
 from launcher.functions import is_path_valid
 from launcher.paths import paths
 
 from .download_helpers import (
     BulkDownloadError,
-    RunnableDownloader,
     _check_file_sha1,
     download,
     should_download_file,
@@ -248,97 +247,10 @@ def parse_lib_path(url: str, name: str) -> tuple[str, str]:
     )
 
 
-def get_libraries_download_list(
-    libraries: list[dict],
-    *,
-    progress_callback: Callable[[int, int], None] | None = None,
-):
-    total = len(libraries)
-    download_list: list[RunnableDownloader] = []
-
-    if progress_callback:
-        downloaded = 0
-
-        def callback(i: int):
-            nonlocal downloaded, total
-            downloaded += i
-            progress_callback(downloaded, total)
-
-        progress_callback(0, total)
-    else:
-
-        def callback(i: int):
-            pass
-
-    for idx, lib in enumerate(libraries, 1):
-        downloads: dict = lib.get("downloads", {})
-        artifact: dict = downloads.get("artifact", {})
-
-        if artifact:
-            path: str = artifact.get("path", "")
-            url = artifact.get("url", "")
-            sha1 = artifact.get("sha1", "")
-            # size = artifact.get("size", 0)
-        else:
-            name: str | None = lib.get("name")
-            url: str | None = lib.get("url")
-            if (not name) or (not url):
-                log.warning("No artifact, name, or URL in library, skipping.")
-                if progress_callback:
-                    progress_callback(idx, total)
-                continue
-            sha1: str | None = lib.get("sha1")
-            # size: int = lib.get("size", 0)
-            url, path = parse_lib_path(url, name)
-
-        if sha1 and any(dl.hash == sha1 for dl in download_list):
-            log.warning(
-                "Duplicate libary %s; continuing.",
-                lib.get("name", "<unidentified>"),
-            )
-            continue
-
-        if (not url) and (not path):
-            log.warning(
-                "Manually retrieving URL and path for %s",
-                lib.get("name", "<unidentified>"),
-            )
-            path_, url_, sha1_ = _get_lib_filepath(lib)
-            if (not path_) or (not url_) or (not sha1_):
-                pass
-            else:
-                path = path_
-                url = url_
-                sha1 = sha1_
-            del path_, url_, sha1_
-
-        if url and path:
-            destination = os.path.join(paths.libraries, *path.split("/"))
-            if os.path.isfile(destination):
-                if not config.redownload_option:
-                    log.info(
-                        "Skipping download of library at '%s' "
-                        "regardless of hash according to options.",
-                        str(destination),
-                    )
-                    continue
-            download_list.append(
-                RunnableDownloader(
-                    url=url,
-                    path=destination,
-                    sha1=sha1,
-                    check_hash=bool(sha1),
-                    callback=callback,
-                )
-            )
-
-    return download_list
-
-
 def download_libraries(
-    libraries: list[dict],
+    libraries: Iterable[Library],
     *,
-    progress_callback: Callable[[int, int], None] | None = None,
+    progress_callback: Callable[[int], None] | None = None,
     threaded: bool = True,
 ):
     pool = QThreadPool.globalInstance()
@@ -346,12 +258,13 @@ def download_libraries(
         log.warning("Couldn't get QThreadPool, downloading single-threaded")
         threaded = False
 
-    dl_list = get_libraries_download_list(
-        libraries, progress_callback=progress_callback
+    dl_list: set = set(
+        l.downloader(progress_callback)
+        for l in libraries
+        if l.url and l.allowed()
     )
 
     if threaded:
-        pool.setMaxThreadCount(CPU_THREADS)
         for dl in dl_list:
             pool.start(dl)
         pool.waitForDone(900000)
@@ -427,7 +340,9 @@ def download_natives(libraries: list[dict]):
     return downloaded
 
 
-def extract_natives(libraries: list[dict], natives_dir: str | os.PathLike):
+def extract_natives(
+    libraries: Iterable[Library], natives_dir: str | os.PathLike
+):
     """
     Extract native libraries into the provided natives directory.
 
@@ -443,25 +358,21 @@ def extract_natives(libraries: list[dict], natives_dir: str | os.PathLike):
         os.makedirs(natives_dir, exist_ok=True)
 
     for lib in libraries:
-        classifier = _get_natives_classifier(lib)
-        if not classifier:
+        if not lib.is_native:
+            continue
+        elif not lib.allowed():
+            continue
+        elif not lib.required:
             continue
 
-        classifiers: dict = lib.get("downloads", {}).get("classifiers", {})
-        native_info: dict | None = classifiers.get(classifier)
-        if not native_info:
-            continue
-
-        path: str = native_info.get("path", "")
-        if not path:
-            continue
+        path: str = lib.path
 
         jar_path = os.path.join(paths.libraries, *path.split("/"))
         if not os.path.isfile(jar_path):
             log.warning("Couldn't find native at '%s'", jar_path)
             continue
 
-        extract_rules: dict = lib.get("extract", {})
+        extract_rules: dict[str, list] = lib.extract_rules or {}
         exclude: list = extract_rules.get("exclude", [])
 
         try:
@@ -481,7 +392,9 @@ def extract_natives(libraries: list[dict], natives_dir: str | os.PathLike):
     return natives_dir
 
 
-def build_classpath(libraries: list[dict], client_jar_path: str | os.PathLike):
+def build_classpath(
+    libraries: Iterable[Library], client_jar_path: str | os.PathLike
+):
     """
     Returns the entire JVM classpath string from the libraries and client JAR.
     """
@@ -492,45 +405,21 @@ def build_classpath(libraries: list[dict], client_jar_path: str | os.PathLike):
         raise ValueError(f"Bad file path: {client_jar_path!r}")
 
     for lib in libraries:
-        artifact: dict = lib.get("downloads", {}).get("artifact")
-        if artifact and artifact.get("path"):
-            jar_path = os.path.join(
-                paths.libraries, *artifact["path"].split("/")
-            )
-            if os.path.isfile(jar_path):
-                if jar_path not in entries:
-                    entries.append(jar_path)
-                    continue
-                else:
-                    log.warning(
-                        "Skipping duplicate library: '%s'",
-                        lib.get("name", "<unidentified>"),
-                    )
-                    continue
-        classifiers: dict = lib.get("downloads", {}).get("classifiers", {})
-        if classifiers:
-            native_name = _get_natives_classifier(lib)
-            native_info = classifiers.get(native_name, {})
-            if native_info:
-                path = native_info.get("path", "")
-                # name = native_info.get("name", "")
-                if path:
-                    jar_path = os.path.join(paths.libraries, *path.split("/"))
-                    if os.path.isfile(jar_path):
-                        entries.append(jar_path)
-                        continue
-        url, path = parse_lib_path(  # pylint: disable=W0612
-            lib.get("url", ""), lib.get("name", "")
-        )
-        jar_path = os.path.join(paths.libraries, *path.split("/"))
+        if lib.is_native:
+            continue
+        jar_path = lib.path
         if os.path.isfile(jar_path):
-            entries.append(str(jar_path))
+            if jar_path not in entries:
+                entries.append(jar_path)
+                continue
+            else:
+                log.warning(
+                    "Skipping duplicate library: '%s'",
+                    lib.name,
+                )
+                continue
         else:
-            log.warning(
-                "Couldn't find library '%s', skipping... (tried path '%s')",
-                lib.get("name", "<unidentified>"),
-                str(jar_path),
-            )
+            log.warning("Couldn't find library %s at %r", lib.name, lib.path)
 
     entries.append(client_jar_path)
     cp_string = CLASSPATH_SEPARATOR.join(entries)

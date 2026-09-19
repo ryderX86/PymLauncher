@@ -2,6 +2,7 @@
 Contains the class used to download the entire game version.
 """
 
+from typing import Iterable
 import logging
 import os
 import subprocess
@@ -16,6 +17,7 @@ from launcher.back import (
     version_manager,
 )
 from launcher.datatypes import LaunchProfile
+from launcher.datatypes.game_version import GameVersion, Library
 from launcher.exceptions.back import (
     MarkExecutableError,
 )
@@ -42,12 +44,13 @@ class InstallWorker(QThread):
     launch_profile: LaunchProfile
     account: LauncherAccount
     emit_status: bool
-    version_json: dict
+    version: GameVersion
     java_executable_path: str
     jar_path: str
     log4j_cfg_path: str | None
-    libraries: list[dict]
+    libraries: Iterable[Library]
     natives_dir: str
+    _cb_progress: int
 
     def __init__(
         self,
@@ -63,6 +66,7 @@ class InstallWorker(QThread):
         self.account = account
         self.emit_status = emit_status
         self.error.connect(lambda e: self.done.emit(False))
+        self._cb_progress = 0
 
     def run(self):
         try:
@@ -89,7 +93,7 @@ class InstallWorker(QThread):
 
         # Basic downloads
         self.status.emit("Fetching version info")
-        self.version_json = self._get_version_info()
+        self.version = self._get_version_info()
         self.status.emit("Downloading client JAR")
         self.jar_path = self._download_jar()
         self.status.emit("Downloading assets")
@@ -163,18 +167,14 @@ class InstallWorker(QThread):
             raise err
 
     def _install_java_recommended(self):
-        jre_name: str | None = self.version_json.get("javaVersion", {}).get(
-            "component"
-        )
+        jre_name: str | None = self.version.java_version
         if not jre_name:
             log.warning("Aborting game install, couldn't get Java version ID")
             err = RuntimeError("Couldn't find Java version ID")
             raise err
-        jre_number: str = self.version_json["javaVersion"].get(
-            "majorVersion", jre_name.split("-")[-1].capitalize()
-        )
+        jre_number: int = self.version.java_version_id
         try:  # TODO: find out what exceptions this can raise and handle them
-            manifest = java_manager.get_jvm_version_manifest(jre_name)
+            manifest = java_manager.get_jvm_version(jre_name)
         except Exception as err:
             log.error(
                 "Failed getting manifest for JRE version %r",
@@ -183,11 +183,12 @@ class InstallWorker(QThread):
             )
             raise
         try:
+            self._reset_callback()
             executable = java_manager.download_java_version(
                 jre_name,
                 manifest,
-                progress_callback=lambda c, t: self.progress.emit(
-                    f"Downloading Java {jre_number}", c, t, False
+                progress_callback=lambda c, t: self._callback(
+                    c, t, f"Downloading Java {jre_number}", False
                 ),
             )
         except MarkExecutableError as err:
@@ -207,44 +208,59 @@ class InstallWorker(QThread):
         natives_dir = os.path.join(paths.game, "bin", self.version_id)
         return library_manager.extract_natives(self.libraries, natives_dir)
 
-    def _download_libs(self) -> list[dict]:
+    def _download_libs(self) -> list:
         try:
-            dl_list = library_manager.filter_libraries(self.version_json)
+            dl_list = self.version.libraries
         except Exception as err:
             log.error(
                 "Failed library downloads, continuing anyways", exc_info=err
             )
-            dl_list: list[dict] = self.version_json.get("libraries", [])
-            if not isinstance(dl_list, list) or not dl_list:
+            dl_list = self.version.libraries
+            if not dl_list:
                 log.warning("Can't continue, no downloads")
                 new = RuntimeError("Couldn't get library downloads")
                 raise new from err
+        count = len(dl_list)
+        self._reset_callback()
         library_manager.download_libraries(
             dl_list,
-            progress_callback=lambda c, t: self.progress.emit(
-                "Downloading libraries", c, t, False
+            progress_callback=lambda c: self._callback(
+                c, count, "Downloading libraries", False
             ),
         )
         return dl_list
 
     def _patch_log4j(self):
-        cfg = asset_manager.check_or_download_logging_config(self.version_json)
-        return cfg
+        cfg = self.version.logging
+        if not cfg:
+            log.debug(
+                "No logging config present in game version %s", self.version.id
+            )
+            return None
+        self.progress.emit("Checking logging config", 0, 1, False)
+        cfg.download()
+        self.progress.emit("Patching logging config", 0, 1, False)
+        patched = cfg.patch()
+        self.progress.emit("Patching logging config", 1, 1, False)
+        return patched
 
     def _download_assets(self):
-        index = asset_manager.fetch_asset_index(self.version_json)
+        self.progress.emit("Fetching assets index", 0, 1, False)
+        index = self.version.assets_stub.download()
+        self.progress.emit("Fetching assets index", 1, 1, False)
+        total = len(index.assets)
+        self._reset_callback()
         asset_manager.download_assets(
             index,
-            progress_callback=lambda c, t: self.progress.emit(
-                "Downloading assets", c, t, False
+            progress_callback=lambda c: self._callback(
+                c, total, "Downloading assets", False
             ),
         )
         return
 
     def _download_jar(self):
-        jar_path = version_manager.download_client_jar(
-            self.version_json,
-            progress_callback=lambda c, t: self.progress.emit(
+        jar_path = self.version.jar_file.download(
+            callback=lambda c, t: self.progress.emit(
                 f"{self.version_id}.jar",
                 c / 1_000_000,
                 t / 1_000_000,
@@ -254,6 +270,14 @@ class InstallWorker(QThread):
         return jar_path
 
     def _get_version_info(self):
-        base_version_json = version_manager.fetch_version_json(self.version_id)
-        version_json = version_manager.resolve_inheritence(base_version_json)
-        return version_json
+        return version_manager.fetch_version(self.version_id)
+
+    def _reset_callback(self):
+        self._cb_progress = 0
+
+    def _callback(
+        self, c: int, total: int, text: str, megabytes: bool = False
+    ):
+        self._cb_progress += 1
+        self.progress.emit(text, self._cb_progress, total, megabytes)
+        return

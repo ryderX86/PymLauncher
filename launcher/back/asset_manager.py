@@ -6,112 +6,32 @@ for a given Minecraft version.
 """
 
 from collections.abc import Callable
-from datetime import timedelta
 from xml.etree import ElementTree
 from xml.parsers import expat
 import hashlib
-import json
 import logging
 import os
-import time
 
 from PySide6.QtCore import QThreadPool
 
-from launcher import SESSION
 from launcher.back.download_helpers import (
     BulkDownloadError,
     RunnableDownloader,
     download,
 )
 from launcher.constants import (
-    CPU_THREADS,
     RESOURCES_URL,
+)
+from launcher.datatypes.game_version import (
+    AssetIndex,
 )
 from launcher.exceptions.back import (
     AssetDownloadError,
     Log4JConfigReadError,
 )
-from launcher.offline import offline_man
 from launcher.paths import paths
 
 log = logging.getLogger(__name__)
-
-
-def fetch_asset_index(version_json: dict) -> dict:
-    """
-    Download (or load cached) the asset index for the given version.
-
-    Returns the parsed asset index dict, which has an ``objects`` key
-    mapping virtual paths to ``{hash, size}`` dicts.
-    """
-    asset_index_info: dict | None = version_json.get("assetIndex")
-    if asset_index_info is None:
-        raise ValueError("Version JSON has no 'assetIndex' field")
-
-    index_id = asset_index_info["id"]
-    index_url = asset_index_info["url"]
-    expected_sha1 = asset_index_info.get("sha1")
-
-    index_path = os.path.join(paths.assets_indexes, f"{index_id}.json")
-
-    if os.path.isfile(index_path):
-        if isinstance(expected_sha1, str):
-            # using SHA1 to verify file
-            with open(index_path, "rb") as fb:
-                file_sha = hashlib.sha1(fb.read()).hexdigest()
-            if file_sha == expected_sha1 or offline_man.offline:
-                if file_sha == expected_sha1:
-                    log.debug("Using cached asset index %r", index_id)
-                else:  # offline mode warning
-                    log.warning(
-                        "SHA-1 mismatch for %r, cannot re-download it due to "
-                        "being offline. Ignoring...",
-                        index_path,
-                    )
-                with open(index_path, "r") as f:
-                    try:
-                        return json.loads(f.read())
-                    except json.JSONDecodeError as err:
-                        log.error(
-                            "Failed reading invalid JSON at %r:",
-                            index_path,
-                            exc_info=err,
-                        )
-                        if offline_man.offline:
-                            raise
-            else:
-                log.warning(
-                    "SHA-1 mismatch for %r, re-downloading it.", index_path
-                )
-        else:
-            log.warning(
-                "Asset index %r has no SHA1! Using timestamp instead", index_id
-            )
-            # using file timestamp to verify; easier/faster to compare floats
-            file_time = os.stat(index_path).st_mtime
-            compare_time = time.time() - timedelta(days=1).total_seconds()
-            if compare_time < file_time:
-                log.debug("Using cached asset index %r (time-based)", index_id)
-                with open(index_path, "r") as f:
-                    txt = f.read()
-                try:
-                    return json.loads(txt)
-                except json.JSONDecodeError as err:
-                    log.error(
-                        "Failed reading invalid JSON at %r:",
-                        index_path,
-                        exc_info=err,
-                    )
-
-    # download the index and return it
-    log.info("Downloading asset index %r from %r", index_id, index_url)
-    resp = SESSION.get(index_url, timeout=30)
-    resp.raise_for_status()
-
-    with open(index_path, "w") as f:
-        f.write(resp.text)
-
-    return resp.json()
 
 
 def patch_logging_config(filepath: str | os.PathLike):
@@ -272,7 +192,7 @@ def get_assets_download_list(
 
 
 def download_assets(
-    asset_index: dict,
+    asset_index: AssetIndex,
     *,
     progress_callback: Callable | None = None,
     threaded: bool = True,
@@ -284,14 +204,13 @@ def download_assets(
             "Couldn't get thread pool, downloading single-threaded instead."
         )
         threaded = False
-    dl_list = get_assets_download_list(asset_index, progress_callback)
+    dl_list = asset_index.get_downloaders(progress_callback)
     if not dl_list:
         return 0
     dl_count = len(dl_list)
 
     # start downloads
     if threaded:
-        pool.setMaxThreadCount(CPU_THREADS)
         for worker in dl_list:
             pool.start(worker)
         timedout = not pool.waitForDone(900000)  # 15 min

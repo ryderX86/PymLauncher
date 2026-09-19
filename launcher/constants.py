@@ -21,7 +21,7 @@ AUTHOR_USR = "ryderX86"
 EMAIL = "me@ryderm.net"
 APP_SLUG = f"{AUTHOR_USR}.{LAUNCHER_NAME}"
 
-AZURE_CLIENT_ID = "1c1a9297-d019-48d4-9417-85ea36cf4c1f"
+AZURE_CLIENT_ID = "009a2177-685c-411f-8063-e2b410a4cbdc"
 AZURE_SCOPE = "XboxLive.signin XboxLive.offline_access"
 AZURE_GRANT_TYPE = "urn:ietf:params:oauth:grant-type:device_code"
 AZURE_REDIRECT_URL = "http://localhost"
@@ -105,6 +105,7 @@ match PLATFORM:
         OS = "unknown"
 
 ARCH: Literal["x86_64", "x86", "arm64", "unknown"]
+NATIVES_ARCH: Literal["32", "64", "unknown"]
 if OS != "osx":
     _machine = platform.machine().lower()
 else:
@@ -113,11 +114,15 @@ else:
 match _machine:
     case "amd64" | "x86_64":
         ARCH = "x86_64"
+        NATIVES_ARCH = "64"
     case "aarch64" | "arm64":
         ARCH = "arm64"
+        NATIVES_ARCH = "64"
     case "i386" | "i686" | "x86" | "x86_32":
         ARCH = "x86"
+        NATIVES_ARCH = "32"
     case _:
+        NATIVES_ARCH = "32"
         ARCH = "unknown"
 
 match OS, ARCH:
@@ -141,16 +146,6 @@ match OS, ARCH:
 
 CLASSPATH_SEPARATOR = ";" if OS == "windows" else ":"
 
-# profile stuff
-DEFAULT_JVM_ARGS = (
-    "-XX:+UnlockExperimentalVMOptions "
-    "-XX:+UseG1GC "
-    "-XX:G1NewSizePercent=20 "
-    "-XX:G1ReservePercent=20 "
-    "-XX:MaxGCPauseMillis=50 "
-    "-XX:G1HeapRegionSize=32M "
-)
-
 LOG4J_FIX_TIME = "2023-06-07T10:50:16+00:00"
 LOG4J_116_5_FIX_MAX_TIME = "2021-06-08T11:00:39+00:00"
 LOG4J_17_112_FIX_MAX_TIME = "2017-06-02T13:50:27+00:00"
@@ -168,11 +163,29 @@ STEVE_SKIN_URL = (
 )
 SKIN_URL_BASE = "http://textures.minecraft.net/texture/"
 
-# UI stuff
+# timing
 DONE_VISUAL_DELAY = 1500  # milliseconds
 """
 How long we should display a "Done!" icon or message, in for example a "Copy to
 clipboard" button.
+"""
+LONG_CACHE_TIME = 86400  # seconds
+"""
+Amount of time (in seconds) before updating a cached item that doesn't
+particularly need regular updates
+
+(24 hours)
+"""
+SHORT_CACHE_TIME = 3600  # seconds
+"""
+Amount of time (in seconds) before updating a cached item that needs
+somewhat regular updates
+
+(1 hour)
+"""
+TINY_CACHE_TIME = 60  # seconds
+"""
+Time before updating profile info on account select/bootstrap in seconds
 """
 
 
@@ -187,6 +200,8 @@ FLAG_ENABLE_WEBVIEW: bool = OS in {"windows", "osx"}
 
 # average CPU has 4 cores now and most post-2010 CPUs have 2 threads per core
 CPU_THREADS = os.cpu_count() or 8
+DEFAULT_MEMORY_MIN = "512M"
+DEFAULT_MEMORY_MAX = "4G"
 
 JVM_TEMP_DIR: str
 """The temporary directory used by the JVM"""

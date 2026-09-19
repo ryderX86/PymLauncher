@@ -85,8 +85,12 @@ class MinecraftToken:
         self.xuid = self.jwt.get(
             "xuid", self.jwt.get("xid", _unidentified_xuid())
         )
-        self.uuid = self.jwt["profiles"]["mc"]
-        self.owned_items = {*mc_token.get("owned_items", [])} or None
+        self.uuid = self.jwt.get("profiles", {}).get("mc", "0")
+        self.owned_items = (
+            set(mc_token.get("owned_items", []))
+            if mc_token.get("owned_items")
+            else None
+        )
         self.acquired_at = mc_token.get(
             "acquired_at", self.jwt.get("iat", time.time())
         )
@@ -130,7 +134,7 @@ class MinecraftToken:
                 MOJ_AUTH_URL, err, original_request=err.request
             ) from err
         except requests.HTTPError as err:
-            if err.response:
+            if err.response is not None:
                 log.error(
                     "Failed to get Minecraft Token from %r; response code %d\n"
                     "Full response: %r",
@@ -175,7 +179,7 @@ class MinecraftToken:
                 MOJ_AUTH_URL, err, original_request=err.request
             ) from err
         except requests.HTTPError as err:
-            if err.response:
+            if err.response is not None:
                 if err.response.status_code in (400, 402, 403):
                     log.warning(
                         "Malformed request err; defaulting to alt auth url"

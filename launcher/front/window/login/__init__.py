@@ -4,7 +4,7 @@ Device code flow window
 
 import logging
 
-from PySide6.QtCore import Qt, QTimer, QUrl, Signal
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
     QApplication,
@@ -18,9 +18,11 @@ from PySide6.QtWidgets import (
 )
 import requests
 
-from launcher.auth import MicrosoftAccount, auth_flow
+from launcher.auth import LauncherAccount, MicrosoftAccount, auth_flow
 from launcher.auth.exceptions import (
+    BaseProfileError,
     NoConnectionError,
+    ProfileNotFoundError,
 )
 from launcher.config import config
 from launcher.constants import (
@@ -296,7 +298,7 @@ class LoginWindow(QDialog):
             error_box(str(err))
             return self.reject()
         except Exception as err:
-            log.error("Auth chain failed! Details:\n%s", str(err))
+            log.error("Auth chain failed!", exc_info=err)
             self.status_label.setText("Authentication failed")
             self.start_button.setEnabled(True)
             self.use_device_code.setHidden(False)
@@ -304,27 +306,68 @@ class LoginWindow(QDialog):
         try:
             lp.minecraft_auth()
             lp.get_profile_info()
+        except ProfileNotFoundError as err:
+            if lp.token and lp.token.owns_game:
+                log.error(
+                    "Profile not found error, notifying user.", exc_info=err
+                )
+                error_box(
+                    "Your account doesn't have a profile!\n"
+                    "Go to https://minecraft.net/profile/ to create one.",
+                    open_link="https://minecraft.net/profile/",
+                )
+                self.status_label.setText(
+                    "Account doesn't have a profile.\n"
+                    "Go to https://minecraft.net/profile/ to create one."
+                )
+                self.use_device_code.setHidden(False)
+                self.cleanup_threads()
+                self.start_button.setEnabled(True)
+            else:
+                log.warning("Account doesn't own game, demo mode incoming...")
+                lp.get_demo_profile()
+                self.on_login_success(lp)
+            return
+        except BaseProfileError as err:
+            log.error(
+                "Unknown profile error occured, notifying user.", exc_info=err
+            )
+            error_box(
+                "An error occured while loading your Minecraft "
+                f"profile:\n{err.ui_msg}"
+            )
+            self.status_label.setText(
+                "An error occured while loading your Minecraft "
+                f"profile: {err.ui_msg}"
+            )
+            self.use_device_code.setHidden(False)
+            self.start_button.setEnabled(True)
+            return
         except Exception as err:
             log.error("Auth chain failed!", exc_info=err)
             self.status_label.setText(f"Auth failed: {err}")
             self.start_button.setEnabled(True)
             self.use_device_code.setHidden(False)
         else:
-            self.status_label.setText("Logged in successfully.")
-            log.info("Logged in as %s", lp.gamertag)
-            self.login_complete.emit(lp)
-            self.start_button.setEnabled(True)
-            self.use_device_code.setHidden(False)
-            self.code_qr_w.setHidden(True)
-            self.accept()
+            self.on_login_success(lp)
+        finally:
+            self.cleanup_threads()
 
-    def cleanup(self):
+    def on_login_success(self, lp: LauncherAccount):
+        self.status_label.setText("Logged in successfully.")
+        log.info("Logged in as %s", lp.gamertag)
+        self.login_complete.emit(lp)
+        self.start_button.setEnabled(True)
+        self.use_device_code.setHidden(False)
+        self.code_qr_w.setHidden(True)
+        self.accept()
+
+    def cleanup_threads(self):
         if self.webdialog:
             self.webdialog.accept()
             self.webdialog.deleteLater()
             self.webdialog = None
         if self._thread:
-            self._thread.cancel()
             self._thread.requestInterruption()
             self._thread.wait()
             self._thread.deleteLater()
@@ -336,15 +379,15 @@ class LoginWindow(QDialog):
         self.start_button.setEnabled(True)
         self.use_device_code.setHidden(False)
         self.code_qr_w.setHidden(True)
-        self.cleanup()
+        self.cleanup_threads()
 
     def _cancel(self):
         self.status_label.setText("Cancelling login")
-        self.cleanup()
+        self.cleanup_threads()
         self.reject()
 
     def closeEvent(self, a0):
-        self.cleanup()
+        self.cleanup_threads()
         super().closeEvent(a0)
 
     def _set_use_device_code(self, a0: Qt.CheckState):

@@ -5,6 +5,7 @@ import requests
 from launcher import constants
 
 from .name_change_error import NameChangeError
+from .profile_errors import BaseProfileError, ProfileNotFoundError
 from .too_many_requests_error import TooManyRequestsError
 
 log = logging.getLogger(__name__)
@@ -39,7 +40,9 @@ class XstsAuthError(BaseAuthenticationException):
 
     def __init__(self, xsts_err: dict):
         xerr_num = xsts_err.get("XErr", -1)
-        if len(xsts_err.get("Message", "")) < 1:
+        if "Message" in xsts_err:
+            reason = xsts_err["Message"]
+        else:
             match xerr_num:
                 case 2148916227:
                     reason = "This account is banned from Xbox Live."
@@ -51,12 +54,18 @@ class XstsAuthError(BaseAuthenticationException):
                     )
                 case 2148916235:
                     reason = (
-                        "Xbox Live is not available in the account's region"
+                        "Xbox Live is not available in this account's region"
                     )
                 case 2148916236:
-                    reason = "Xbox Live needs adult verification in SK."
+                    reason = (
+                        "Your Xbox Live Account needs age verification"
+                        " before continuing."
+                    )
                 case 2148916237:
-                    reason = "Xbox Live needs adult verification in SK."
+                    reason = (
+                        "Your Xbox Live Account needs age verification"
+                        " before continuing."
+                    )
                 case 2148916238:
                     reason = (
                         "This account must be added to a Microsoft Family "
@@ -68,8 +77,6 @@ class XstsAuthError(BaseAuthenticationException):
                     reason = (
                         "Unknown error occured while authenticating with XSTS."
                     )
-        else:
-            reason = xsts_err["Message"]
 
         self.comment = reason
         self.xerr = xerr_num

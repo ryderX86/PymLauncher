@@ -12,7 +12,15 @@ import platform
 import sys
 import uuid
 
-from PySide6.QtCore import Qt, QTimer, QUrl, Signal
+from PySide6.QtCore import (
+    Qt,
+    QThread,
+    QThreadPool,
+    QTimer,
+    QUrl,
+    Signal,
+    qVersion,
+)
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import QLabel, QPushButton, QVBoxLayout, QWidget
 
@@ -25,6 +33,7 @@ from launcher.front.window.modloaders import (
     NeoForgeInstallWindow,
 )
 from launcher.functions import beep
+from launcher.launchargs import launchargs
 from launcher.offline import offline_man
 from launcher.paths import paths
 
@@ -68,7 +77,7 @@ class UtilitiesPage(QWidget):
 
         layout.addWidget(fabric_row)
 
-        if constants.DEV:
+        if constants.DEV or launchargs.debug_logging:
             debug_section = Section("Debug")
             debug_section.setAlignment(
                 Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
@@ -130,6 +139,7 @@ class UtilitiesPage(QWidget):
 
     def system_info(self):
         os_info = platform.uname()
+        thread_pool = QThreadPool.globalInstance()
         text = dedent(f"""
         System info:
             CPU type: {os_info.machine}
@@ -147,6 +157,11 @@ class UtilitiesPage(QWidget):
             .minecraft directory: {paths.game}
             Launcher data directory: {paths.data}
             Accounts cache filename: {paths.accounts_file}
+        Qt Info:
+            Qt version: {qVersion()}
+            Ideal thread count: {QThread.idealThreadCount()}
+            QThreadPool count: {thread_pool.maxThreadCount()}
+            Active threads: {thread_pool.activeThreadCount()}
         """).strip()
 
         TextPopup(text, "Debug Info", "Debug Info", parent=self)

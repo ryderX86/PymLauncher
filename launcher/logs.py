@@ -99,16 +99,14 @@ def setup():
     def log_qt_msg(type_: QtMsgType, context: QMessageLogContext, msg: str):
         match type_:
             case QtMsgType.QtDebugMsg:
-                func = qt_logger.debug
+                qt_logger.debug(msg)
             case QtMsgType.QtWarningMsg:
-                func = qt_logger.warning
+                qt_logger.warning(msg)
             case QtMsgType.QtInfoMsg:
-                func = qt_logger.info
+                qt_logger.info(msg)
             case QtMsgType.QtCriticalMsg | QtMsgType.QtFatalMsg:
-                func = qt_logger.critical
+                qt_logger.critical(msg)
             case QtMsgType.QtSystemMsg:
-                func = qt_logger.info
+                qt_logger.info(msg)
             case _:
-                func = qt_logger.info
-
-        func(msg)
+                qt_logger.info(msg)

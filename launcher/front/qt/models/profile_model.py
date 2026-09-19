@@ -1,5 +1,6 @@
 from collections.abc import Sequence
 from enum import IntEnum
+from types import NoneType
 from typing import Any
 import logging
 
@@ -22,6 +23,20 @@ MIME_TYPE = "application/minecraft.profile"
 
 
 class ProfileModel(QAbstractTableModel):
+    """
+    QAbstractListModel child class
+
+    Data order:
+    0. Profile Name
+    1. Version ID
+    2. Game directory
+    3. JRE path
+    4. JVM args
+    5. Minimum memory
+    6. Maximum memory
+    7. Resolution (split by `"x"`) when saving
+    """
+
     class MapIndex(IntEnum):
         NAME = 0
         VERSION = 1
@@ -33,24 +48,11 @@ class ProfileModel(QAbstractTableModel):
         RESOLUTION = 7
         ICON = 8
 
-    def __init__(self, parent=None):
-        """
-        QAbstractListModel child class
-
-        Data order:
-        0. Profile Name
-        1. Version ID
-        2. Game directory
-        3. JRE path
-        4. JVM args
-        5. Minimum memory
-        6. Maximum memory
-        7. Resolution (split by `"x"`) when saving
-        """
-        super().__init__(parent)
+    def setup(self):
         profile_manager.SIGNAL.profile_added.connect(self._handle_new_prof)
         profile_manager.SIGNAL.profile_deleted.connect(self._handle_del_prof)
         profile_manager.add_profile_refresh_handler(self.refresh)
+        self.refresh()
 
     def mimeTypes(self):
         return super().mimeTypes() + [MIME_TYPE]
@@ -174,47 +176,56 @@ class ProfileModel(QAbstractTableModel):
             return None
         profile = profile_manager.get_profile(index.row())
 
-        if (
-            role == Qt.ItemDataRole.DisplayRole
-            or role == Qt.ItemDataRole.EditRole
-        ):
-            if profile.resolution_width and profile.resolution_height:
-                res = f"{profile.resolution_width}x{profile.resolution_height}"
-            else:
-                res = "Auto"
-            if profile.has_custom_args:
-                jvm_args = profile.jvm_args
-            elif not version_manager.version_exists(
-                profile.real_version_id or ""
+        match index.column(), role:
+            case (
+                1,
+                Qt.ItemDataRole.DisplayRole | Qt.ItemDataRole.EditRole,
+            ) if profile.version_id in {
+                "latest-release",
+                "latest-snapshot",
+            } or version_manager.version_exists(
+                profile.version_id
             ):
-                jvm_args = profile.jvm_args
-            elif role == Qt.ItemDataRole.DisplayRole:
-                jvm_args = None
-            else:
-                jvm_args = profile.default_jvm_args()
-            if index.column() == 8 and profile.has_custom_icon():
-                return "<CUSTOM>"
-            return [
-                profile.name,
-                profile.version_id,
-                profile.game_dir,
-                profile.java_path,
-                jvm_args,
-                profile.memory_min,
-                profile.memory_max,
-                res,
-                profile.icon,
-                profile.mods_folder,
-            ][index.column()]
-        elif role == Qt.ItemDataRole.DecorationRole:
-            if not profile.icon:
+                return profile.version_id
+            case 1, Qt.ItemDataRole.DisplayRole | Qt.ItemDataRole.EditRole:
+                log.warning("Version %r doesn't exist", profile.version_id)
+                return version_manager.fetch_version("latest-release")
+            case 4, Qt.ItemDataRole.DisplayRole:  # args, display
+                return profile.jvm_args
+            case 4, Qt.ItemDataRole.EditRole:  # args, editing
+                if profile.has_custom_args:
+                    return profile.jvm_args
                 return None
-            return resources.profile_icon(profile.icon)
-        elif role == Qt.ItemDataRole.UserRole:
-            return profile
-        elif role == Qt.ItemDataRole.SizeHintRole:
-            return QSize(0, 56)
-        return None
+            case (
+                7,  # resolution
+                Qt.ItemDataRole.DisplayRole | Qt.ItemDataRole.EditRole,
+            ):
+                if (
+                    not profile.resolution_height
+                    or not profile.resolution_width
+                ):
+                    return "Auto"
+                return (
+                    f"{profile.resolution_width}x"
+                    f"{profile.resolution_height}"
+                )
+            case (
+                8,
+                Qt.ItemDataRole.DisplayRole | Qt.ItemDataRole.EditRole,
+            ) if profile.has_custom_icon():
+                return "<CUSTOM>"
+            case _, Qt.ItemDataRole.DisplayRole | Qt.ItemDataRole.EditRole:
+                return profile[index.column()]
+            case _, Qt.ItemDataRole.DecorationRole if profile.icon:
+                return resources.profile_icon(profile.icon)
+            case _, Qt.ItemDataRole.DecorationRole:
+                return None
+            case _, Qt.ItemDataRole.UserRole:
+                return profile
+            case _, Qt.ItemDataRole.SizeHintRole:
+                return QSize(0, 56)
+            case _, _:
+                return None
 
     def _split_resolution(self, res: str) -> tuple[int, int]:
         res_split = res.split("x")
@@ -225,9 +236,20 @@ class ProfileModel(QAbstractTableModel):
     def setData(self, index, value, role: int = Qt.ItemDataRole.EditRole):
         if role == Qt.ItemDataRole.EditRole:
             profile = profile_manager.get_profile(index.row())
-            # skip setting values for icon from the mapper:
-            if index.column() != 8:
-                profile[index.column()] = value
+            match index.column():
+                case 4:  # skip setting values for icon from the mapper
+                    pass
+                case 8:
+                    assert isinstance(value, (str, NoneType))
+                    if (
+                        value
+                        and set(value.split()) != profile.jvm_args.split()
+                    ):
+                        profile[index.column()] = value
+                    elif not value:
+                        profile[index.column()] = None
+                case _:
+                    profile[index.column()] = value
             self.dataChanged.emit(index, index, [role])
             if index.column() > 8:
                 profile_manager.save_single_profile(profile)

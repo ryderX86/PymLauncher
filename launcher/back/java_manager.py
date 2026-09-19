@@ -17,11 +17,11 @@ from PySide6.QtCore import QThreadPool
 
 from launcher.constants import (
     ARCH,
-    CPU_THREADS,
     JAVA_MANIFEST_URL,
     JAVA_OS,
     OS,
 )
+from launcher.datatypes.java_version import JavaVersion
 from launcher.exceptions.back import (
     JavaIndexError,
     MarkExecutableError,
@@ -77,7 +77,7 @@ def get_jvm_manifest(force_update: bool = False) -> dict:
     return jvm_manifest
 
 
-def get_jvm_version_manifest(version: str) -> dict:
+def get_jvm_version(version: str) -> JavaVersion:
     """
     Fetches the JVM manifest for a specific version (i.e.
     `java-runtime-epsilon`)
@@ -87,7 +87,7 @@ def get_jvm_version_manifest(version: str) -> dict:
     if not mf:
         mf = jvm_manifest.get("manifest", {}).get(JAVA_OS, {})
     if not mf:
-        err = ValueError("No manifest found")
+        err = ValueError(f"No manifest found for {version!r}")
         err.add_note(f"OS: '{OS}'; ARCH: '{ARCH}'")
         vers = ", ".join(jvm_manifest.keys())
         err.add_note(f"Versions found: {vers}")
@@ -112,11 +112,14 @@ def get_jvm_version_manifest(version: str) -> dict:
     jvm_version: dict = jvm_versions[0]
 
     java_version_info: dict = jvm_version.get("version", {})
+    version_id = java_version_info.get("name", "unidentified")
+    release = java_version_info.get("released", "unknown")
     if java_version_info:
-        ver = java_version_info.get("name", "unidentified")
-        release = java_version_info.get("released", "unknown")
-        log.info("Found Java %s (released: %s) in manifest", ver, release)
-        del ver, release
+        log.info(
+            "Found Java %s (released: %s) in manifest", version_id, release
+        )
+    else:
+        log.warning("Couldn't find Java version info for %r", version)
 
     java_version_manifest = jvm_version.get("manifest", {})
     if not java_version_manifest:
@@ -153,7 +156,11 @@ def get_jvm_version_manifest(version: str) -> dict:
                     mf_bytes = file.read()
                 mf_sha1 = hashlib.sha1(mf_bytes).hexdigest()
                 if mf_sha1 == sha1:
-                    return json.loads(mf_bytes.decode("utf-8"))
+                    return JavaVersion.parse(
+                        version,
+                        version_id,
+                        json.loads(mf_bytes.decode("utf-8")),
+                    )
                 else:
                     log.warning(
                         "JRE manifest at '%s' is outdated or "
@@ -165,7 +172,9 @@ def get_jvm_version_manifest(version: str) -> dict:
                 with open(manifest_path, "r") as file:
                     mf_text = file.read()
                 try:
-                    return json.loads(mf_text)
+                    return JavaVersion.parse(
+                        version, version_id, json.loads(mf_text)
+                    )
                 except json.JSONDecodeError as err:
                     log.error(
                         "Failed to read JSON at '%s', redownloading.",
@@ -183,7 +192,7 @@ def get_jvm_version_manifest(version: str) -> dict:
     resp = download(url, sha=sha1)
     with open(manifest_path, "w") as file:
         file.write(resp.text)
-    return resp.json()
+    return JavaVersion.parse(version, version_id, resp.json())
 
 
 def java_base_path(name: str):
@@ -306,7 +315,7 @@ def get_java_file_dowloads(
 
 def download_java_version(
     name: str,
-    jre_manifest: dict,
+    jre_version: JavaVersion,
     *,
     progress_callback: Callable | None = None,
     threaded: bool = True,
@@ -316,14 +325,13 @@ def download_java_version(
         log.warning("Couldn't get QThreadPool, downloading single-threaded")
         threaded = False
 
-    dl_list = get_java_file_dowloads(
-        name, jre_manifest, progress_callback=progress_callback
-    )
+    dl_list = jre_version.get_downloads(progress_callback)
+    if len(dl_list) < 1:
+        raise RuntimeError(f"No downloads given for JRE {name}")
 
     jre_path_default = os.path.join(paths.jre_path, name)
 
     if threaded:
-        pool.setMaxThreadCount(CPU_THREADS)
         for worker in dl_list:
             pool.start(worker)
         timed_out = not pool.waitForDone(900000)
@@ -356,8 +364,9 @@ def download_java_version(
             base_exc_path = ["bin", "java"]
 
     if OS == "windows":
-        if "MinecraftJava.exe" in jre_manifest.get("files", {}).keys():
-            return os.path.join(jre_path_default, "MinecraftJava.exe")
+        legacy_exe_path = os.path.join(jre_path_default, "MinecraftJava.exe")
+        if os.path.isfile(legacy_exe_path):
+            return legacy_exe_path
         else:
             return os.path.join(jre_path_default, *base_exc_path)
     else:

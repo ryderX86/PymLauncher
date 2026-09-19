@@ -153,17 +153,16 @@ class LoginRedirectWebserver(BaseLoginThread):
         url[4] = urlencode(login_params)
         self.url = urlunparse(url)
 
-    def cancel(self):
+    def requestInterruption(self) -> None:
         self.stop = True
-        log.debug("Cancelling process...")
-        return
+        return super().requestInterruption()
 
     def run(self):
         log.debug("Challenge code: %r", self.challenge)
 
         self.status.emit("Waiting on authorization...")
 
-        while not self.stop:
+        while (not self.stop) and (not self.isInterruptionRequested()):
             try:
                 self.server.handle_request()
             except Exception as err:

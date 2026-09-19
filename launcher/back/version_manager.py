@@ -6,6 +6,7 @@ inheritence, and downloading the client JAR file.
 in `os.path` strings as a forward or back slash for OS independant behavior.
 """
 
+from copy import deepcopy
 from datetime import timedelta
 from typing import Any, Callable
 import hashlib
@@ -18,19 +19,18 @@ import time
 from launcher import SESSION
 from launcher.config import config
 from launcher.constants import (
-    DEFAULT_JVM_ARGS,
     VERSION_MANIFEST_URL,
 )
-from launcher.datatypes.game_version import GameVersionStub
+from launcher.datatypes.game_version import GameVersion, GameVersionStub
 from launcher.offline import offline_man
 from launcher.paths import paths
 
 from .download_helpers import download
-from .library_manager import evaluate_rules
 
 log = logging.getLogger(__name__)
 
 manifest_cache: dict = {"latest": {}, "versions": []}
+_manifest_loaded: bool = False
 
 FABRIC_VER_RE = re.compile(
     r"(?:fabric-loader-)((?:[0-9]+\.?)+)-((?:[0-9]+\.?)+(?:-snapshot-[0-9]+)?)"
@@ -272,7 +272,7 @@ def get_version_list(
     _version_list_cache = versions
     # forge is expected to always appear at the bottom unfortuantely, since for
     # some ungodly reason before more recent versions they always set the time
-    # to 1 DECADE before unix epoch (also 1 decade before???? WHY)
+    # to 1 DECADE before unix epoch
     versions.sort(reverse=True)
     log.info("Parsed complete versions list successfully.")
     return versions
@@ -282,6 +282,7 @@ def get_latest_release() -> str:
     """Returns the latest version ID, if possible."""
     fetch_version_manifest()
     if not manifest_cache["latest"]:
+        log.warning("No latest version info, returning blank")
         return ""
     return manifest_cache["latest"]["release"]
 
@@ -290,6 +291,7 @@ def get_latest_snapshot() -> str:
     """Returns the latest snapshot ID, if possible."""
     fetch_version_manifest()
     if not manifest_cache["latest"]:
+        log.warning("No latest version info, returning blank")
         return ""
     return manifest_cache["latest"]["snapshot"]
 
@@ -324,7 +326,7 @@ def _get_manifest_entry(version_id: str) -> dict[str, Any] | None:
             return ver
 
 
-def fetch_version_json(
+def _fetch_version_json(
     version_id: str, override: bool = False
 ) -> dict[str, Any]:
     """
@@ -344,6 +346,8 @@ def fetch_version_json(
     If all else fails (or JSON decoding for a local version fails) it'll raise
     a `ValueError`.
     """
+    if not version_id:
+        raise ValueError("Version ID string cannot be empty")
     if version_id in _version_json_cache and not override:
         return _version_json_cache[version_id]
     elif override:
@@ -370,7 +374,7 @@ def fetch_version_json(
                     str(local_path),
                     exc_info=err,
                 )
-                raise ValueError(
+                raise RuntimeError(
                     f"Version {version_id!r} has corrupted JSON"
                 ) from err
         else:
@@ -403,13 +407,23 @@ def fetch_version_json(
     return _version_json_cache[version_id]
 
 
+def fetch_version(id_: str):
+    match id_:
+        case "latest-release":
+            id_ = get_latest_release()
+        case "latest-snapshot":
+            id_ = get_latest_snapshot()
+    version_obj = _fetch_version_json(id_)
+    return GameVersion(_resolve_inheritence(version_obj))
+
+
 def _resolve_inheritence(
     version_json: dict, recursion: int = 0, *, force_refresh: bool = False
 ) -> dict[str, Any]:
     if version_json["id"] in _inheritence_cache and not force_refresh:
         return _inheritence_cache[version_json["id"]]
     if recursion > 20:
-        raise RecursionError()
+        raise RecursionError("Too many versions in inheritence chain!")
 
     if "inheritsFrom" not in version_json.keys():
         return version_json
@@ -417,14 +431,14 @@ def _resolve_inheritence(
     parent_id: str = version_json["inheritsFrom"]
     log.info("Game version %r inherits from %r", version_json["id"], parent_id)
 
-    parent_json = fetch_version_json(parent_id)
+    parent_json = _fetch_version_json(parent_id)
     parent_json = _resolve_inheritence(parent_json, recursion=recursion + 1)
 
-    merged_json = {**parent_json}
+    # since we modify the parent json values here by adding the child's values,
+    # we need to deepcopy to avoid overriding the parent's values in the cache.
+    merged_json = deepcopy(parent_json)
 
     for key, val in version_json.items():
-        # continue is used so `case _` doesn't have to be, since we're already
-        # very close to getting to col 80 and it might as well be the same
         match key:
             case "inheritsFrom":
                 continue
@@ -464,7 +478,8 @@ def resolve_inheritence(version_json: dict):
 
     If the chain exceeds 20 *(an already far, far excessive amount)*, then a
     `RecursionError` is raised.
-    <br><sub>Stub function that calls `_resolve_inheritence()`.</sub>
+    <br><sub>Stub function that calls :func:`_resolve_inheritence`;
+    logic lives there.</sub>
     """
     return _resolve_inheritence(version_json)
 
@@ -591,8 +606,10 @@ def version_exists(id_: str):
 
     Returns a bool
     """
+    if not id_:
+        return False
     json_path = os.path.join(paths.versions, id_, f"{id_}.json")
-    if id_ in [a.get("id", "") for a in manifest_cache["versions"]]:
+    if id_ in {a.get("id", "") for a in manifest_cache["versions"]}:
         return True
     elif os.path.exists(json_path):
         with open(json_path, "r") as f:
@@ -647,39 +664,3 @@ def check_fabric_mod_arg_support(version_id: str):
         if i >= 12:
             return True
     return False
-
-
-def default_user_jvm_args_factory(version_json: dict) -> str:
-    if version_json["id"] in _args_cache:
-        return _args_cache[version_json["id"]]
-    args = version_json.get("arguments", {})
-    if args.get("default-user-jvm", []):
-        jvm_args = []
-        for arg in args["default-user-jvm"]:
-            if arg.get("rules", []):
-                if not evaluate_rules(arg["rules"]):
-                    continue
-            match arg["value"]:
-                case str():
-                    jvm_args.append(arg["value"])
-                case list():
-                    for text in arg["value"]:
-                        if text.startswith("-Xms"):
-                            continue
-                        elif text.startswith("-Xmx"):
-                            continue
-                        else:
-                            jvm_args.append(text)
-                case _:
-                    raise TypeError(
-                        "Expected list or str, "
-                        f"got {type(arg["value"].__name__)}"
-                    )
-        # mojang is very interesting at making decisions regarding their
-        # manifest files
-        # if "-XX:UseZGC" in jvm_args and "-XX:UseG1GC" in jvm_args:
-        #     i = jvm_args.index("-XX:UseG1GC")
-        #     del jvm_args[i]
-        _args_cache[version_json["id"]] = " ".join(jvm_args)
-        return " ".join(jvm_args)
-    return DEFAULT_JVM_ARGS

@@ -10,6 +10,3 @@ class BaseLoginThread(QThread):
     We received an auth *code*, not the actual token.
     Close the WebView window if it's open, but we're not done yet.
     """
-
-    def cancel(self):
-        raise NotImplementedError

@@ -192,7 +192,7 @@ class MicrosoftAccount:
             offline_man.check_requests_error(err)
             raise err
         except requests.HTTPError as err:
-            if err.response:
+            if err.response is not None:
                 log.error(
                     "Failed to refresh MSA token; response code %d",
                     err.response.status_code,
@@ -210,7 +210,9 @@ class MicrosoftAccount:
             else:
                 offline_man.check_requests_error(err)
                 log.error("Failed to refresh MSA token; no response")
-            raise err
+            raise MSABaseAuthenticationException(
+                None, "Account refresh"
+            ) from err
 
         if len(response.text) < 5:
             exc_type = MSABaseAuthenticationException.get_exception_type(

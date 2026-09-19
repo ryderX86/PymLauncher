@@ -1,10 +1,13 @@
 from collections.abc import Buffer, Callable
+from functools import update_wrapper
 from types import MappingProxyType
-from typing import Any
+from typing import Concatenate, ParamSpec, TypeVar
 import json
 import logging
 import os
 import time
+
+from PySide6.QtCore import QObject, Signal
 
 from launcher.auth import LauncherAccount, encryption
 from launcher.auth.encryption import data_load_hook, data_save_hook
@@ -16,20 +19,55 @@ from launcher.paths import paths
 
 log = logging.getLogger(__name__)
 
+P = ParamSpec("P")
+R_co = TypeVar("R_co", covariant=True)
+
+
+def _trigger_callbacks(
+    func: Callable[Concatenate["AccountManager", P], R_co],
+) -> Callable[Concatenate["AccountManager", P], R_co]:
+    def wrapped(self: "AccountManager", *args, **kwargs):
+        previous_active = self.active
+        result = func(self, *args, **kwargs)
+        if self.active and self.active != previous_active:
+            self.signals.account_changed.emit(self.active)
+        return result
+
+    update_wrapper(
+        wrapped,
+        func,
+        (
+            "__module__",
+            "__name__",
+            "__qualname__",
+            "__doc__",
+            "__annotate__",
+            "__type_params__",
+        ),
+        ("__dict__", "__annotations__"),
+    )
+
+    return wrapped
+
 
 class AccountManager:
+
+    class _Signals(QObject):
+        account_changed = Signal(LauncherAccount)
+
     _instance: "AccountManager | None" = None
 
     # instance attributes
     _accounts: dict[str, LauncherAccount] = {}  # str is XUID
     _active_account: LauncherAccount | None
     _loaded: bool = False
-    _active_callbacks: list[Callable[[LauncherAccount], None]]
     _original_text: str | None
     """
     Backup of the decrypted text in accounts.bin; used for write-spam
     prevention
     """
+
+    signals = _Signals()
 
     def __new__(cls):
         if cls._instance:
@@ -47,7 +85,6 @@ class AccountManager:
         self._loaded = False
         self._accounts = {}
         self._active_account = None
-        self._active_callbacks = []
         self._original_text = None
         type(self)._instance = self  # singleton
 
@@ -189,6 +226,7 @@ class AccountManager:
             output.sort(key=lambda a: a.displayname.lower())
         return output
 
+    @_trigger_callbacks
     def auto_set_active(
         self,
         preferred_xuid: str | None = None,
@@ -230,10 +268,7 @@ class AccountManager:
                         account.gamertag,
                     )
                 self._active_account = account
-                if self.active:
-                    for callback in self._active_callbacks:
-                        callback(self.active)
-                return self.active
+                return self._active_account
         elif preferred_xuid:
             raise KeyError(
                 f"Account with XUID {preferred_xuid!r} not found in cache!"
@@ -267,9 +302,8 @@ class AccountManager:
 
         if raise_on_fail and not set_account:
             raise RuntimeError("Failed to set any active account")
-        if self.active:
-            for callback in self._active_callbacks:
-                callback(self.active)
+        elif not set_account:
+            log.warning("Failed to find an active account")
         return self.active
 
     def _check_refresh_token(self, acc_or_xuid: str | LauncherAccount):
@@ -329,8 +363,7 @@ class AccountManager:
         # if refresh fails, exception will be raised before this happens:
         self._active_account = account
         assert self.active
-        for callback in self._active_callbacks:
-            callback(self.active)
+        self.signals.account_changed.emit(self.active)
         return self.active
 
     def replace_into(self, account: LauncherAccount):
@@ -420,39 +453,6 @@ class AccountManager:
             return xuid_or_account in self._accounts
         else:
             return xuid_or_account in self._accounts.values()
-
-    def add_switch_callback(
-        self,
-        callback: Callable[[LauncherAccount], Any],
-        destroyed_signal: Any = None,
-    ):
-        if callback in self._active_callbacks:
-            log.warning(
-                "Attempted to add callback %r multiple times",
-                callback.__name__,
-            )
-            return
-        self._active_callbacks.append(callback)
-        if destroyed_signal is not None:
-            try:
-                destroyed_signal.connect(
-                    lambda: self.remove_switch_callback(callback)
-                )
-            except AttributeError as err:
-                raise TypeError(
-                    "Object passed to 'destroyed_signal' doesn't "
-                    "have a 'connect()' method"
-                ) from err
-
-    def remove_switch_callback(
-        self, callback: Callable[[LauncherAccount], None]
-    ):
-        if callback not in self._active_callbacks:
-            raise AttributeError(
-                f"Function {callback.__name__!r} was never registered "
-                "as a callback"
-            )
-        self._active_callbacks.remove(callback)
 
 
 account_man = AccountManager()

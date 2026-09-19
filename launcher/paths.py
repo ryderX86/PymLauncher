@@ -184,12 +184,16 @@ class PathFinder:
         return os.path.join(self._game, "assets", "objects")
 
     @property
+    def assets_log_configs(self):
+        return os.path.join(self._game, "assets", "log_configs")
+
+    @property
     def profiles_file(self):
         return os.path.join(self._game, "launcher_profiles.json")
 
     @property
     def profiles_meta_file(self):
-        return os.path.join(self._game, "launcher_profiles_meta.json")
+        return os.path.join(self._game, "launcher_profiles_pyml_meta.json")
 
     @property
     def accounts_file(self):

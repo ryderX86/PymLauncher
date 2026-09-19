@@ -13,7 +13,11 @@ from launcher.constants import (
 )
 from launcher.offline import offline_man
 
-from .exceptions import NoConnectionError, XstsAuthError
+from .exceptions import (
+    BaseAuthenticationException,
+    NoConnectionError,
+    XstsAuthError,
+)
 
 log = logging.getLogger(__name__)
 
@@ -105,7 +109,7 @@ class XstsToken:
                 XSTS_AUTH_URL, err, original_request=err.request
             ) from err
         except requests.HTTPError as err:
-            if err.response:
+            if err.response is not None:
                 log.error(
                     "Failed to refresh MSA token; response code %d\n"
                     "Response text: %s",
@@ -114,7 +118,10 @@ class XstsToken:
                 )
                 raise XstsAuthError(err.response.json()) from err
             log.error("Failed to refresh MSA token; no response", exc_info=err)
-            raise err
+            raise BaseAuthenticationException(
+                None,
+                "Unexpected error occured whilst authenticating with XSTS",
+            ) from err
 
         return cls(response.json())
 

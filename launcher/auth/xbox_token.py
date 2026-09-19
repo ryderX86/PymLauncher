@@ -105,7 +105,7 @@ class XboxToken:
                 XBOX_AUTH_URL, err, original_request=err.request
             ) from err
         except requests.HTTPError as err:
-            if err.response:
+            if err.response is not None:
                 log.error(
                     "Failed to refresh MSA token; response code %d",
                     err.response.status_code,
@@ -121,7 +121,9 @@ class XboxToken:
                 log.error(
                     "Failed to refresh Xbox token; no response", exc_info=err
                 )
-                raise
+                raise BaseAuthenticationException(
+                    None, "Unknown error whilst authenticating with Xbox"
+                ) from err
         try:
             resp_json = response.json()
         except json.JSONDecodeError as err:

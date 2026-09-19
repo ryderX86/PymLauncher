@@ -1,6 +1,7 @@
 import logging
 import sys
 
+from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import QApplication, QMessageBox
 
 from launcher import constants
@@ -14,6 +15,7 @@ def error_box(
     *,
     fatal: bool = False,
     dev_only: bool = False,
+    open_link: str | None = None,
 ):
     """
     Show an error box.
@@ -38,11 +40,20 @@ def error_box(
         error_win.setWindowTitle(str(error_type))
     else:
         error_win.setWindowTitle("Error")
-    error_win.setStandardButtons(QMessageBox.StandardButton.Ok)
+    if open_link:
+        error_win.addButton(QMessageBox.StandardButton.Open)
+        error_win.addButton(QMessageBox.StandardButton.Ok)
+        error_win.setDefaultButton(QMessageBox.StandardButton.Open)
+        open_button = error_win.button(QMessageBox.StandardButton.Open)
+        open_button.clicked.connect(
+            lambda: QDesktopServices.openUrl(open_link)
+        )
+    else:
+        error_win.setStandardButtons(QMessageBox.StandardButton.Ok)
     QApplication.beep()
     error_win.exec()
     log.debug("Error dialog dismissed.")
     if fatal:
         log.info("We had a fatal error, shutting down. Goodbye")
         sys.exit(1)
-    return
+    return error_win.result()

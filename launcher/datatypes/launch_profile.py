@@ -1,11 +1,18 @@
-from dataclasses import asdict, dataclass, field
 from datetime import datetime
-from typing import Any, Literal, overload
+from typing import (
+    Any,
+    Final,
+    Literal,
+    NamedTuple,
+    get_args,
+    overload,
+)
 import logging
 import os
 import re
 import uuid
 
+from launcher import constants
 from launcher.back import version_manager
 from launcher.exceptions.datatypes import InvalidVersionIdError
 
@@ -22,116 +29,225 @@ MODS_DIR_REGEX = re.compile(
     r"-Dfabric\.(modsFolder|addMods)=((?:\"[^\"]+\"|\S+))"
 )
 
-NEW_DEFAULT_ARGS = (
-    "-XX:+UseCompactObjectHeaders "
-    "-XX:+AlwaysPreTouch "
-    "-XX:+UseStringDeduplication "
-    "-XX:+UseZGC"
-)
-DEFAULT_ARGS = (
-    "-XX:+UnlockExperimentalVMOptions "
-    "-XX:+UseG1GC "
-    "-XX:G1NewSizePercent=20 "
-    "-XX:G1ReservePercent=20 "
-    "-XX:MaxGCPauseMillis=50 "
-    "-XX:G1HeapRegionSize=32M"
-)
 
-DEFAULT_ARGS_LIST = {
-    "-XX:+UseCompactObjectHeaders "
-    "-XX:+AlwaysPreTouch "
-    "-XX:+UseStringDeduplication "
-    "-XX:+UseZGC",
-    "-XX:+UnlockExperimentalVMOptions "
-    "-XX:+UseG1GC "
-    "-XX:G1NewSizePercent=20 "
-    "-XX:G1ReservePercent=20 "
-    "-XX:MaxGCPauseMillis=50 "
-    "-XX:G1HeapRegionSize=32M",
-}
+class SplitJVMArgs(NamedTuple):
+    args: str | None
+    memory_min: str | None
+    memory_max: str | None
+    mods_folder: str | None
+    mods_folder_mode: str | None
 
 
-@dataclass(slots=True)
 class LaunchProfile:
-    """Launcher game profile"""
+    """
+    Game launch profile. Same as profiles in the official launcher.
 
-    name: str = "Untitled"
-    version_id: str = "latest-release"
-    game_dir: str | None = None
-    java_path: str | None = None
-    jvm_args: str | None = None
-    resolution_width: int | None = None
-    resolution_height: int | None = None
-    icon: str | None = None
-    memory_min: str = "512M"
-    memory_max: str = "4G"
-    mods_folder: str | None = None
-    mods_folder_mode: str | None = None
-    is_default_profile: bool = False
-    type: ProfileType = field(default="custom")
-    uuid: str = field(default_factory=lambda: str(uuid.uuid4()))
-    created: str = field(default_factory=lambda: datetime.now().isoformat())
-    last_used: str = field(
-        default="1970-01-01T00:00:00.000Z"
-    )  # same as vanilla
+    When updating arguments, check both
+    :meth:`~LaunchProfile.to_dict_compat` AND
+    :meth:`~LaunchProfile.to_dict_meta`.
+    """
 
-    def __post_init__(self):
+    __slots__ = (
+        "name",
+        "version_id",
+        "game_dir",
+        "java_path",
+        "_jvm_args",
+        "resolution_width",
+        "resolution_height",
+        "icon",
+        "memory_min",
+        "memory_max",
+        "mods_folder",
+        "mods_folder_mode",
+        "type",
+        "uuid",
+        "created",
+        "last_used",
+        "is_default_profile",
+        "_extra_args",
+    )
+
+    name: str
+    version_id: str
+    game_dir: str | None
+    java_path: str | None
+    _jvm_args: str | None
+    resolution_width: int | None
+    resolution_height: int | None
+    icon: str | None
+    memory_min: str
+    memory_max: str
+    mods_folder: str | None
+    mods_folder_mode: str | None
+    is_default_profile: Final[bool]
+    type: ProfileType
+    uuid: str
+    created: str
+    last_used: str
+    _extra_args: dict[str, Any] | None
+
+    @staticmethod
+    def split_jvm_args(args: str | None) -> SplitJVMArgs:
+        if not args:
+            return SplitJVMArgs(None, None, None, None, None)
+        min_match = MIN_ARG_REGEX.search(args)
+        if min_match:
+            args = args.replace(min_match[0], "")
+            memory_min = min_match[2]
+        else:
+            memory_min = None
+        max_match = MAX_ARG_REGEX.search(args)
+        if max_match:
+            args = args.replace(max_match[0], "")
+            memory_max = max_match[2]
+        else:
+            memory_max = None
+        modloader_arg = MODS_DIR_REGEX.search(args)
+        if modloader_arg:
+            args = args.replace(modloader_arg[0], "")
+            mod_folder_mode = modloader_arg[1]
+            mods_folder = modloader_arg[2].strip('"')
+        else:
+            mods_folder = None
+            mod_folder_mode = None
+        args = args.strip()
+        while "  " in args:
+            args = args.replace("  ", " ")
+        return SplitJVMArgs(
+            args, memory_min, memory_max, mods_folder, mod_folder_mode
+        )
+
+    @overload
+    def __init__(
+        self,
+        /,
+        *,
+        name: str = "Untitled",
+        version_id: str = "latest-release",
+        game_dir: str | None = None,
+        java_path: str | None = None,
+        resolution: dict | None = None,
+        icon: str | None = None,
+        jvm_args: str | None = None,
+        memory_min: str | None = "512M",
+        memory_max: str | None = "4G",
+        # pylint: disable-next=redefined-outer-name
+        uuid: str = ...,
+        created: str = ...,
+        last_used: str = "1970-01-01T00:00:00.000Z",
+        mods_folder: str | None = None,
+        mods_folder_mode: str | None = None,
+        # pylint: disable-next=redefined-builtin
+        type: ProfileType = "custom",
+    ): ...
+
+    @overload
+    def __init__(
+        self,
+        /,
+        *,
+        name: str = "Untitled",
+        version_id: str = "latest-release",
+        game_dir: str | None = None,
+        java_path: str | None = None,
+        resolution_width: int | None = None,
+        resolution_height: int | None = None,
+        icon: str | None = None,
+        jvm_args: str | None = None,
+        memory_min: str | None = "512M",
+        memory_max: str | None = "4G",
+        # pylint: disable-next=redefined-outer-name
+        uuid: str = ...,
+        created: str = ...,
+        last_used: str = "1970-01-01T00:00:00.000Z",
+        mods_folder: str | None = None,
+        mods_folder_mode: str | None = None,
+        # pylint: disable-next=redefined-builtin
+        type: ProfileType = "custom",
+    ): ...
+
+    def __init__(
+        self,
+        **kwargs,
+    ):
+        self.name = kwargs.pop("name", "Untitled")
+        self.version_id = kwargs.pop("version_id", "latest-release")
+        self.game_dir = kwargs.pop("game_dir", None)
+        self.java_path = kwargs.pop("java_path", None)
+        if "resolution" in kwargs:
+            resolution = kwargs.pop("resolution")
+            self.resolution_width = resolution.get("width")
+            self.resolution_height = resolution.get("height")
+        else:
+            self.resolution_width = kwargs.pop("resolution_width", None)
+            self.resolution_height = kwargs.pop("resolution_height", None)
+        self.icon = kwargs.pop("icon", None)
+        self._jvm_args = kwargs.pop("jvm_args", None)
+
+        self.type: ProfileType = kwargs.pop("type", "custom")
+        # pylint: disable-next=no-member
+        if self.type not in get_args(ProfileType.__value__):
+            raise ValueError(f"Invalid profile type: {self.type}")
         match self.type:
             case "latest-release" | "latest-snapshot":
                 self.is_default_profile = True
-        if not self.jvm_args:
-            self.jvm_args = self.default_jvm_args()
-        min_match = MIN_ARG_REGEX.search(self.jvm_args)
-        if min_match:
-            self.jvm_args = self.jvm_args.replace(min_match[0], "")
-        max_match = MAX_ARG_REGEX.search(self.jvm_args)
-        if max_match:
-            self.jvm_args = self.jvm_args.replace(max_match[0], "")
-        if min_match or max_match:
-            self.jvm_args = self.jvm_args.strip()
-        modloader_arg = MODS_DIR_REGEX.search(self.jvm_args)
-        if modloader_arg:
-            self.jvm_args = self.jvm_args.replace(modloader_arg[0], "")
-        if modloader_arg or self.mods_folder:
-            if not self.mods_folder_mode:
-                self.mods_folder_mode = "modsFolder"
-        if "  " in self.jvm_args:  # probably not necessary?
-            while "  " in self.jvm_args:
-                self.jvm_args = self.jvm_args.replace("  ", " ")
-        self.jvm_args = self.jvm_args.strip()
+            case _:
+                self.is_default_profile = False
+        self.uuid = kwargs.pop("uuid", str(uuid.uuid4()))
+        self.created = kwargs.pop("created", datetime.now().isoformat())
+        self.last_used = kwargs.pop("last_used", "1970-01-01T00:00:00.000Z")
 
-    def to_dict(self):
-        """
-        Returns the raw JSON format version of this, not suitable for saving
-        to `launcher_profiles.json`.
+        parsed_args = self.split_jvm_args(self._jvm_args)
+        if parsed_args.args:
+            version = version_manager.fetch_version(self.version_id)
+            if (
+                set(parsed_args.args.split())
+                != version.default_user_jvm_args_set
+            ):
+                self._jvm_args = parsed_args.args
+            else:
+                self._jvm_args = None
+        else:
+            self._jvm_args = None
+        self.memory_min = parsed_args.memory_min or kwargs.pop(
+            "memory_min", constants.DEFAULT_MEMORY_MIN
+        )
+        self.memory_max = parsed_args.memory_max or kwargs.pop(
+            "memory_max", constants.DEFAULT_MEMORY_MAX
+        )
+        self.mods_folder = parsed_args.mods_folder or kwargs.pop(
+            "mods_folder", None
+        )
+        self.mods_folder_mode = parsed_args.mods_folder_mode or kwargs.pop(
+            "mods_folder_mode", None
+        )
 
-        For saving to disk, use `to_dict_compat()`.
-        """
-        return asdict(self)
+        if kwargs:
+            self._extra_args = {}
 
-    # def get_icon(self):
-    #     if not self.icon:
-    #         return icon_from_name("")
-    #     if self.icon.startswith("data:image/png;base64,"):
-    #         return icon_from_b64(self.icon[21:])
-    #     else:
-    #         return icon_from_name(self.icon.lower())
+        for key, value in kwargs.items():
+            assert self._extra_args
+            log.warning(
+                "Unexpected key/value pair in profile JSON: {%r: %r} "
+                "(Will be deleted by Mojang's launcher!)",
+                str(key),
+                str(value),
+            )
+            self._extra_args[key] = value
+
+    def needs_save_args(self):
+        if self.memory_min.upper() != constants.DEFAULT_MEMORY_MIN:
+            return True
+        if self.memory_max.upper() != constants.DEFAULT_MEMORY_MAX:
+            return True
+        if self.mods_folder:
+            return True
+        return False
 
     @property
     def has_custom_args(self):
-        default_args = DEFAULT_ARGS_LIST
-        if self.version_id not in [
-            "latest-release",
-            "latest-snapshot",
-            *version_manager.manifest_cache.get("versions", []),
-        ]:
-            v = version_manager.fetch_version_json(self.version_id)
-            default_args = {version_manager.default_user_jvm_args_factory(v)}
-        if self.jvm_args and self.jvm_args in default_args:
-            return False
-        elif not self.jvm_args:
-            return False
-        return True
+        return bool(self._jvm_args)
 
     def __eq__(self, other: object):
         """Checks UUIDs, nothing else."""
@@ -172,6 +288,29 @@ class LaunchProfile:
                     raise IndexError(f"Bad index: '{index}'")
                 raise IndexError(f"Out of range: {index}")
 
+    @property
+    def jvm_args(self) -> str:
+        if not self._jvm_args:
+            match self.version_id:
+                case "latest-release":
+                    version_info = version_manager.fetch_version(
+                        version_manager.get_latest_release()
+                    )
+                case "latest-snapshot":
+                    version_info = version_manager.fetch_version(
+                        version_manager.get_latest_snapshot()
+                    )
+                case _:
+                    version_info = version_manager.fetch_version(
+                        self.version_id
+                    )
+            return version_info.default_user_jvm_args
+        return self._jvm_args
+
+    @jvm_args.setter
+    def jvm_args(self, args: str):
+        self._jvm_args = args
+
     @overload
     def __setitem__(
         self, index: Literal[0, 1, "name", "version_id"], new_val: str
@@ -197,9 +336,9 @@ class LaunchProfile:
             case 1 | "version_id":
                 check_type(new_val, str)
                 if new_val not in ["latest-release", "latest-snapshot"]:
-                    if new_val not in [
+                    if new_val not in {
                         a.id for a in version_manager.get_version_list()
-                    ]:
+                    }:
                         log.warning("Invalid version ID: %s", new_val)
                         new_val = version_manager.get_latest_release()
                 self.version_id = new_val
@@ -214,7 +353,7 @@ class LaunchProfile:
             case 4 | "jvm_args":
                 if not new_val:
                     new_val = None
-                self.jvm_args = new_val
+                self._jvm_args = new_val
             case 5 | "memory_min":
                 if not new_val:
                     new_val = "512M"
@@ -294,39 +433,15 @@ class LaunchProfile:
         if not version_stub:
             log.warning("Couldn't get version stub, no JVM args by default")
             return ""
-        version_info = version_manager.resolve_inheritence(
-            version_stub.get_json()
-        )
-        if version_info.get("arguments", {}).get("default-user-jvm"):
-            return " ".join(
-                [
-                    "-XX:+UseCompactObjectHeaders",
-                    "-XX:+AlwaysPreTouch",
-                    "-XX:+UseStringDeduplication",
-                    "-XX:+UseZGC",
-                ]
-            )
-        else:
-            return " ".join(
-                [
-                    "-XX:+UnlockExperimentalVMOptions",
-                    "-XX:+UseG1GC",
-                    "-XX:G1NewSizePercent=20",
-                    "-XX:G1ReservePercent=20",
-                    "-XX:MaxGCPauseMillis=50",
-                    "-XX:G1HeapRegionSize=32M",
-                ]
-            )
+        version_info = version_manager.fetch_version(version_stub.id)
+        return version_info.default_user_jvm_args
 
     def _get_final_jvm_args(self):
-        if self.jvm_args:
-            args = self.jvm_args.split(" ")
-        else:
-            args = []
+        args = (self.jvm_args or "").split(" ")
         if self.mods_folder:
             if not self.mods_folder_mode:
                 self.mods_folder_mode = "modsFolder"
-            elif not os.path.isfile(self.mods_folder):
+            elif os.path.isdir(self.mods_folder):
                 self.mods_folder_mode = "modsFolder"
             elif os.path.isfile(self.mods_folder.split(";")[0]):
                 self.mods_folder_mode = "addMods"
@@ -335,8 +450,12 @@ class LaunchProfile:
             else:
                 mods_dir = self.mods_folder
             args.insert(0, "-Dfabric." f"{self.mods_folder_mode}={mods_dir}")
-        args.insert(0, f"-Xms{self.memory_min}")
-        args.insert(1, f"-Xmx{self.memory_max}")
+        args.insert(
+            0, f"-Xms{self.memory_min or constants.DEFAULT_MEMORY_MIN}"
+        )
+        args.insert(
+            1, f"-Xmx{self.memory_max or constants.DEFAULT_MEMORY_MAX}"
+        )
         return " ".join(args)
 
     @property
@@ -354,7 +473,7 @@ class LaunchProfile:
         props["type"] = "custom"
         props["created"] = datetime.now().isoformat()
         uid = str(uuid.uuid4())
-        new = cls.from_dict_compat(props, uid)
+        new = cls.from_storage(props, uid)
         return new
 
     def _icon_compat(self):
@@ -376,8 +495,12 @@ class LaunchProfile:
                 "created": self.created,
                 "gameDir": self.game_dir,
                 "icon": self._icon_compat(),
-                "javaArgs": self._get_final_jvm_args(),
                 "javaDir": self.java_path,
+                "javaArgs": (
+                    self._get_final_jvm_args()
+                    if self.has_custom_args or self.needs_save_args()
+                    else None
+                ),
                 "lastUsed": self.last_used,
                 "lastVersionId": self.version_id,
                 "name": self.name,
@@ -394,6 +517,9 @@ class LaunchProfile:
             if v
         }
 
+    def to_dict_meta(self):
+        return {"jvm_args": self.jvm_args, "custom_args": self.has_custom_args}
+
     def check_install(self):
         """Returns `True` if the version is installed"""
         id_ = self.real_version_id
@@ -408,13 +534,11 @@ class LaunchProfile:
                 break
         if not version_stub:
             raise InvalidVersionIdError(f"No version stub found for '{id_}'")
-        version_info = version_manager.resolve_inheritence(
-            version_stub.get_json()
-        )
-        return version_manager.check_client_jar(version_info)
+        version_info = version_manager.fetch_version(version_stub.id)
+        return version_info.jar_file.available()
 
     @property
-    def real_version_id(self) -> str | None:
+    def real_version_id(self) -> str:
         match self.version_id:
             case "latest-release":
                 version_type = "release"
@@ -425,7 +549,7 @@ class LaunchProfile:
         return version_manager.manifest_cache["latest"].get(version_type)
 
     @classmethod
-    def from_dict_compat(cls, data: dict, uid: str):
+    def from_storage(cls, data: dict[str, Any], uid: str):
         known_keys = [
             "created",
             "gameDir",
@@ -444,25 +568,6 @@ class LaunchProfile:
                 "Unexpected entry '%s' in 'launcher_profiles.json'", key
             )
 
-        # initialize with defaults then try to update them with
-        # existing values if possible
-        memory_min = "512M"
-        memory_max = "4G"
-        modloader_arg = None
-        modloader_mode = None
-        if data.get("javaArgs"):
-            min_search = MIN_ARG_REGEX.search(data["javaArgs"])
-            if min_search:
-                memory_min = min_search[2]
-            max_search = MAX_ARG_REGEX.search(data["javaArgs"])
-            if max_search:
-                memory_max = max_search[2]
-
-            mods_dir_search = MODS_DIR_REGEX.search(data["javaArgs"])
-            if mods_dir_search:
-                modloader_mode = mods_dir_search[1]
-                modloader_arg = mods_dir_search[2].strip('"')
-
         t = data.get("type", "custom")
         if t in ("latest-release", "latest-snapshot"):
             if not data.get("name"):
@@ -478,34 +583,14 @@ class LaunchProfile:
             game_dir=data.get("gameDir"),
             java_path=data.get("javaDir"),
             jvm_args=data.get("javaArgs"),
-            resolution_height=data.get("resolution", {}).get("height"),
             resolution_width=data.get("resolution", {}).get("width"),
+            resolution_height=data.get("resolution", {}).get("height"),
             uuid=uid,
-            memory_max=memory_max,
-            memory_min=memory_min,
-            mods_folder=modloader_arg,
-            mods_folder_mode=modloader_mode,
             icon=data.get("icon"),
             created=data.get("created", "1970-01-01T00:00:00.000Z"),
             last_used=data.get("lastUsed", "1970-01-01T00:00:00.000Z"),
             type=data.get("type", "custom"),
         )
-
-    @classmethod
-    def from_dict(cls, data: dict, uid: str):
-        known: list[str] = [
-            f.name
-            # pylint: disable-next=E1101
-            for f in cls.__dataclass_fields__.values()
-        ]
-        unknown: list[str] = [f for f in data.keys() if f not in known]
-        filtered_data = {k: v for k, v in data.items() if k in known}
-        if unknown:
-            for key in unknown:
-                log.warning(
-                    "Unexpected entry in launcher profile '%s': '%s'", uid, key
-                )
-        return cls(**filtered_data)
 
     def has_valid_uuid(self):
         uid_fmt = self.uuid.replace("-", "")
@@ -529,3 +614,13 @@ class LaunchProfile:
 
     def set_last_used(self):
         self.last_used = datetime.now().isoformat()
+
+    @property
+    def type_text(self):
+        match self.type:
+            case "custom":
+                return "Custom"
+            case "latest-release":
+                return "Latest Release"
+            case "latest-snapshot":
+                return "Latest Snapshot"

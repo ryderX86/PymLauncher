@@ -121,7 +121,7 @@ def install(game_ver: str, fabric_ver: str, override: bool = False):
     log.debug("Download: %s", URL)
 
     dir_ = os.path.join(
-        paths.game, "versions", f"fabric-loader{fabric_ver}-{game_ver}"
+        paths.game, "versions", f"fabric-loader-{fabric_ver}-{game_ver}"
     )
     path = os.path.join(dir_, f"fabric-loader-{fabric_ver}-{game_ver}.json")
 

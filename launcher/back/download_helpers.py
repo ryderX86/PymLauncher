@@ -6,7 +6,7 @@ from collections import Counter
 from datetime import timedelta
 from pathlib import Path
 from types import FunctionType
-from typing import Callable, Iterable, Literal, TypeVar
+from typing import Callable, Iterable, Literal, TypeVar, assert_never
 import hashlib
 import logging
 import lzma
@@ -198,7 +198,7 @@ class RunnableDownloader(QRunnable):
     """File final path"""
     _vpath: str | os.PathLike | None
     """File final location for legacy assets"""
-    _hash: str | None
+    _hash: set[str] | None
     """File hash to check against"""
     _override: bool
     """Should we override the file? (default: `False`)"""
@@ -222,7 +222,7 @@ class RunnableDownloader(QRunnable):
         self,
         url: str,
         path: os.PathLike | str,
-        sha1: str | None = None,
+        sha1: str | Iterable[str] | None = None,
         use_lzma: bool = False,
         callback: Callable[[int], None] | None = None,
         check_hash: bool | None = None,
@@ -258,7 +258,17 @@ class RunnableDownloader(QRunnable):
             )
         else:
             self._file_exists = os.path.isfile(path)
-        self._hash = sha1
+        match sha1:
+            case str():
+                self._hash = {sha1}
+            case set():
+                self._hash = sha1
+            case None:
+                self._hash = None
+            case _ if isinstance(sha1, Iterable):
+                self._hash = set(sha1)
+            case _:
+                assert_never(sha1)
         if sha1 and check_hash is None:
             check_hash = True
         elif check_hash is None:
@@ -279,7 +289,7 @@ class RunnableDownloader(QRunnable):
     def _check_sha1(self):
         if not os.path.isfile(self._path):
             return False
-        elif not self._should_check_hash:
+        elif not self._should_check_hash or not self._hash:
             if not config.redownload_option:
                 self.log.debug(
                     "Skipping download since redownloading without a hash "
@@ -289,7 +299,7 @@ class RunnableDownloader(QRunnable):
             return False
         with open(self._path, "rb") as file:
             content = file.read()
-        return self._hash == hashlib.sha1(content).hexdigest()
+        return hashlib.sha1(content).hexdigest() in self._hash
 
     def run(self):
         if get_exit_status():
@@ -423,7 +433,7 @@ class RunnableDownloader(QRunnable):
             content = resp.content
         if self._hash:
             sha1 = hashlib.sha1(content).hexdigest()
-            if sha1 != self._hash:
+            if sha1 not in self._hash:
                 self.last_exception = RuntimeError(
                     "SHA mismatch occured after download"
                 )
@@ -431,7 +441,8 @@ class RunnableDownloader(QRunnable):
                     err = RuntimeError(
                         f"Failed to download from {self._url!r}, "
                         "max retries exceeded. "
-                        f"(SHA-1 mismatch, expected {self._hash!r}, got "
+                        "(SHA-1 mismatch, expected any of "
+                        f"{tuple(self._hash)!r}, got "
                         f"{sha1!r})"
                     )
                     self.last_exception = err
@@ -462,7 +473,7 @@ class RunnableDownloader(QRunnable):
         return os.path.isfile(self._path)
 
     @property
-    def hash(self) -> str | None:
+    def hash(self) -> set[str] | None:
         return self._hash
 
     @property
@@ -498,6 +509,7 @@ class BulkDownloadError(Exception):
         """All exceptions passed to this exception"""
 
         if self.exception_list:
+            # pylint: disable-next=unsubscriptable-object
             self.primary_exception = Counter(
                 self.exception_list
             ).most_common()[0][0] # fmt: skip
@@ -528,7 +540,7 @@ class BulkDownloadError(Exception):
         return self.exception_list[i]
 
     @classmethod
-    def from_runnable_list(cls, dl_list: list[RunnableDownloader]):
+    def from_runnable_list(cls, dl_list: Iterable[RunnableDownloader]):
         exc_list = []
         for dl in dl_list:
             if dl.success is not None and (

@@ -20,7 +20,9 @@ from launcher.auth import LauncherAccount
 from launcher.back import java_manager, library_manager
 from launcher.config import JarRedownloadBehavior, config
 from launcher.datatypes import LaunchProfile
-from launcher.functions import is_path_valid, truncate
+from launcher.datatypes.game_version import GameVersion, JVMLaunchArg
+from launcher.functions import is_path_valid, remove_empty_strings, truncate
+from launcher.launchargs import launchargs
 from launcher.paths import paths
 
 from .install_worker import InstallWorker
@@ -198,35 +200,29 @@ def _build_legacy_args(
 
 
 def build_launch_command(
-    version_json: dict,
+    version: GameVersion,
     account: LauncherAccount,
     java_path: str,
     log4j_config: str | None,
     classpath: str,
     profile: LaunchProfile,
     **kwargs,
-):
+) -> list[str]:
     """
     Builds the full command to launch the game.
 
     Returns a list suitable for `subprocess.Popen`.
     """
-    version_id: str = version_json.get("id", "")
+    version_id: str = version.id
     if not version_id:
         raise ValueError("Version info missing expected value for 'id'")
 
     if not java_path:
-        java_info = version_json.get("javaVersion", {})
-        needed_java_version = java_info.get("component", "")
-        java_path = str(java_manager.find_java_exc(needed_java_version))
+        java_path = str(java_manager.find_java_exc(version.java_version))
 
-    jar_path = os.path.join(
-        paths.game, "versions", version_id, f"{version_id}.jar"
-    )
+    jar_path = version.jar_file.path
 
-    asset_index_id: str | None = version_json.get("assetIndex", {}).get("id")
-    if not asset_index_id:
-        asset_index_id = version_json.get("assets")
+    asset_index_id: str = version.assets_index
     if not asset_index_id:
         raise ValueError(
             "Version info missing expected value for 'assets'"
@@ -263,7 +259,7 @@ def build_launch_command(
         os.makedirs(natives_dir, exist_ok=True)
 
     if not classpath:
-        lib_list = library_manager.filter_libraries(version_json)
+        lib_list = version.libraries
         classpath = library_manager.build_classpath(lib_list, jar_path)
 
     if profile.resolution_height or profile.resolution_width:
@@ -289,7 +285,7 @@ def build_launch_command(
         "auth_player_name": account.profile.name,
         "auth_uuid": account.token.uuid,
         "version_name": version_id,
-        "version_type": version_json.get("type", "unknown"),
+        "version_type": version.type,
         "auth_access_token": account.token.access_token,
         "auth_session": session,
         "user_properties": "{}",
@@ -302,7 +298,7 @@ def build_launch_command(
         "auth_xuid": account.xuid,
         "resolution_width": resolution_width,
         "resolution_height": resolution_height,
-        "natives_directory": natives_dir,
+        "natives_directory": natives_dir.replace("\\", "/"),
         "classpath": classpath,
         "library_directory": os.path.join(paths.game, "libraries"),
         "launcher_name": constants.LAUNCHER_NAME,
@@ -317,43 +313,61 @@ def build_launch_command(
     if account.demo_mode:
         features.append("is_demo_user")
 
-    if "arguments" in version_json.keys():
-        jvm_args, game_args = _build_args(version_json, values, features)
-    else:
-        jvm_args, game_args = _build_legacy_args(
-            version_json, values, features
-        )
-
     if profile.mods_folder:
         mods_folder = profile.mods_folder.strip()
         if " " in mods_folder:
             if mods_folder[0] != '"' or mods_folder[-1] != '"':
                 mods_folder = f'"{mods_folder}"'
         mods_folder_mode = profile.mods_folder_mode or "modsFolder"
-        jvm_args.insert(-2, f"-Dfabric.{mods_folder_mode}={mods_folder}")
+        version.arguments_jvm.insert(
+            -2, f"-Dfabric.{mods_folder_mode}={mods_folder}"
+        )
 
     cmd: list[str] = [java_path]
 
     if constants.OS == "windows":
         cmd.extend(["-Dos.name=Windows 10", "-Dos.version=10.0"])
 
-    cmd.extend(jvm_args)
-    if log4j_config:
-        cmd.append(log4j_config)
+    for arg in version.arguments_jvm:
+        if isinstance(arg, JVMLaunchArg):
+            if not arg.allowed():
+                continue
+            cmd.append(_substitute(arg.string(), values))
+        else:
+            cmd.append(_substitute(arg, values))
 
-    main_class = version_json.get(
-        "mainClass", "net.minecraft.client.main.Main"
-    )
     cmd.extend([f"-Xms{profile.memory_min}", f"-Xmx{profile.memory_max}"])
     if profile.jvm_args:
         cmd.extend(profile.jvm_args.split(" "))
-    cmd.append(main_class)
-    cmd.extend(game_args)
+
+    if log4j_config and version.logging:
+        cmd.append(version.logging.launch_arg.replace("${path}", log4j_config))
+
+    cmd.append(version.main_class)
+
+    cmd.extend(
+        (
+            _substitute(
+                (arg.string() if not isinstance(arg, str) else arg),
+                values,
+            )
+            for arg in version.arguments_game
+            if isinstance(arg, str) or arg.get_result(features)
+        )
+    )
 
     if resolution_width and resolution_height and "--width" not in cmd:
         cmd.extend(["--width", str(resolution_width)])
     if resolution_width and resolution_height and "--height" not in cmd:
         cmd.extend(["--height", str(resolution_height)])
+
+    cmd = remove_empty_strings(cmd)
+    if constants.DEV or launchargs.debug_logging:
+        for arg in cmd:
+            if "${" in arg and "}" in arg:
+                log.warning(
+                    "Unhandled template literal in launch argument: %r", arg
+                )
 
     return cmd
 
@@ -417,7 +431,7 @@ class LaunchWorker(QThread):
             cwd=self.cwd,
             stdin=subprocess.DEVNULL,
             stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
             text=True,
             universal_newlines=True,
             bufsize=1,
@@ -461,6 +475,9 @@ class LaunchWorker(QThread):
 
         def loop(self):
             nonlocal stdout_cache
+            assert isinstance(self, LaunchWorker)
+            assert self._callback
+            assert self._p
             if self._p.stdout:
                 for line in iter(self._p.stdout.readline, ""):
                     trimmed_line = truncate(line, MAXIMUM_LINE_LENGTH, "...\n")
@@ -487,7 +504,7 @@ class LaunchWorker(QThread):
         Main process. Cannot be run before the installer (self.installer) is
         finished (a check is in `start()` for this.)
         """
-        self.version_json = self.installer.version_json
+        self.version_json = self.installer.version
         self.launch_profile = self.installer.launch_profile
         self.account = self.installer.account
         self.java_executable_path = self.installer.java_executable_path
@@ -526,8 +543,6 @@ class LaunchWorker(QThread):
         logged_cmd = " ".join(self.cmd).replace(
             self.account.token.access_token, "[REDACTED]"
         )
-        if constants.OS == "windows":
-            logged_cmd.replace("", "")
         self.log.info("Launch command: '%s'", logged_cmd)
 
         # store the CWD for debugging crashes:

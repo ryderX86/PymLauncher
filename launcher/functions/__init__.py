@@ -1,4 +1,5 @@
-from collections.abc import Buffer
+from collections.abc import Buffer, Iterable
+from typing import TypeVar
 import logging
 import os
 import time
@@ -11,7 +12,13 @@ from launcher import get_qapp
 
 from .error_box import error_box
 from .suppressables import suppressable
-from .text import indent, is_path_valid, pathsafe_str, truncate
+from .text import (
+    display_file_size,
+    indent,
+    is_path_valid,
+    pathsafe_str,
+    truncate,
+)
 
 log = logging.getLogger(__name__)
 
@@ -110,3 +117,12 @@ def uisleep(seconds: int | float):
         QCoreApplication.processEvents()
         if time.time() >= end:
             break
+
+
+def remove_empty_strings(l):
+    temp: list[str] = []
+    for x in l:
+        if len(x) < 1:
+            continue
+        temp.append(x)
+    return type(l)(temp)

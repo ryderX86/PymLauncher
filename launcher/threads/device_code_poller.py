@@ -28,9 +28,9 @@ class DeviceCodePoller(BaseLoginThread):
         self.expires_in = expires_in
         self._cancelled = False
 
-    def cancel(self):
-        self.log.info("Cancelling operation")
+    def requestInterruption(self) -> None:
         self._cancelled = True
+        return super().requestInterruption()
 
     def run(self):
         deadline = time.time() + self.expires_in

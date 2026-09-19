@@ -22,7 +22,9 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from launcher.auth import LauncherAccount
 from launcher.back import profile_manager
+from launcher.back.account_manager import account_man
 from launcher.back.profile_manager import LaunchProfile
 from launcher.config import config
 from launcher.exceptions.datatypes import InvalidVersionIdError
@@ -232,6 +234,9 @@ class HomePage(QWidget):
             self.play_button, 0, Qt.AlignmentFlag.AlignCenter
         )
         layout.addLayout(play_layout)
+        account_man.signals.account_changed.connect(
+            self._check_set_demo_mode_text
+        )
 
     def _refresh_profiles(self):
         profs = [*profile_manager.profiles.values()]
@@ -284,21 +289,31 @@ class HomePage(QWidget):
     def _profile_change(self, profile: LaunchProfile):
         self._reset_play_button()
         try:
-            prof_exists = profile.check_install()
+            version_installed = profile.check_install()
         except InvalidVersionIdError:
             self.progress_label.setText(
                 f"Unknown game version: {profile.version_id}"
             )
             return
-        if prof_exists:
+        if version_installed:
             self.progress_label.setText("Ready to launch.")
         elif not offline_man.offline:
             self.progress_label.setText("Ready to install.")
         else:
-            self.progress_label.setText(
-                f"Version {profile.version_id} isn't installed!"
+            if profile.version_id in {"latest-snapshot", "latest-release"}:
+                self.progress_label.setText(
+                    f"Version {profile.real_version_id} isn't installed!"
+                )
+            else:
+                self.progress_label.setText(
+                    f"Version {profile.version_id} isn't installed!"
+                )
+        if profile.version_id in {"latest-snapshot", "latest-release"}:
+            self.version_label.setText(
+                f"Version: {profile.type_text} ({profile.real_version_id})"
             )
-        self.version_label.setText(f"Version: {profile.version_id}")
+        else:
+            self.version_label.setText(f"Version: {profile.version_id}")
 
     def _on_play(self):
         """Play button function"""
@@ -416,6 +431,18 @@ class HomePage(QWidget):
                 return
         qurl = QUrl.fromLocalFile(p)
         QDesktopServices.openUrl(qurl)
+
+    def _check_set_demo_mode_text(self, lp: LauncherAccount | None = None):
+        if not self.play_button.isEnabled():
+            return
+        if not lp:
+            lp = account_man.active
+            if not lp:
+                return
+        if lp.token and lp.token.owns_game:
+            self.play_button.setText("Launch Game")
+        else:
+            self.play_button.setText("Launch Demo")
 
     def _on_launch_finished(self, success: bool, message: str):
         if success:

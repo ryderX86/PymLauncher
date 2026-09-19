@@ -137,7 +137,7 @@ class AccountPage(QWidget):
 
         layout.addWidget(manage_w)
         offline_man.add_hook(self.offline_mode_hook)
-        account_man.add_switch_callback(self.set_account_info, self.destroyed)
+        account_man.signals.account_changed.connect(self.set_account_info)
 
     def set_account_info(self, info: LauncherAccount):
         """Update account info displayed on page"""

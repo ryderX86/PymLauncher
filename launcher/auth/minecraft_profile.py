@@ -1,6 +1,6 @@
-from datetime import timedelta
 from enum import StrEnum
 from functools import lru_cache
+from json import JSONDecodeError
 from pathlib import Path
 import hashlib
 import logging
@@ -13,18 +13,14 @@ from PySide6.QtGui import QIcon, QImage, QPainter, QPixmap
 import requests
 import requests.exceptions
 
-from launcher import SESSION
+from launcher import SESSION, constants
 from launcher.auth.minecraft_token import MinecraftToken
 from launcher.back.download_helpers import download as try_request
-from launcher.constants import (
-    MOJ_PROF_URL,
-    STEVE_SKIN_URL,
-)
 from launcher.front import resources
 from launcher.offline import offline_man
 from launcher.paths import paths
 
-from .exceptions import NoConnectionError, UnauthorizedError
+from .exceptions import BaseProfileError, NoConnectionError, UnauthorizedError
 
 log = logging.getLogger(__name__)
 
@@ -66,6 +62,8 @@ def check_redownload_skin(
         sha = url.split("/")[-1]
     name = name or "".join([sha[:10], "..."])
     if os.path.isfile(p):
+        if os.lstat(p).st_atime >= (time.time() - (1000 * 60 * 60 * 24)):
+            return
         with open(p, "rb") as b:
             file_sha = hashlib.sha256(b.read()).hexdigest()
         if file_sha == sha:
@@ -84,8 +82,8 @@ class MinecraftProfile:
     default_skin_inf = {
         "id": _STEVE_UUID,
         "state": "ACTIVE",
-        "url": STEVE_SKIN_URL,
-        "textureKey": STEVE_SKIN_URL.rsplit("/", maxsplit=1)[-1],
+        "url": constants.STEVE_SKIN_URL,
+        "textureKey": constants.STEVE_SKIN_URL.rsplit("/", maxsplit=1)[-1],
         "variant": "CLASSIC",
     }
     __slots__ = (
@@ -100,6 +98,7 @@ class MinecraftProfile:
         "_cape_thumbnails",
         "current_cape",
         "current_skin",
+        "_is_demo_profile",
     )
     # included by API
     uuid: str
@@ -129,9 +128,13 @@ class MinecraftProfile:
     """
     current_cape: dict[str, str] | None
     current_skin: dict[str, str]
+    _is_demo_profile: bool
 
     def __init__(
-        self, profile_info: dict, mc_token: MinecraftToken | None = None
+        self,
+        profile_info: dict,
+        mc_token: MinecraftToken | None = None,
+        demo_profile: bool = False,
     ):
         """Don't use this for new profiles. Use `cls.from_token()` instead."""
         self._token = mc_token
@@ -147,6 +150,7 @@ class MinecraftProfile:
         self._cape_thumbnails = None
 
         self.current_skin = self.default_skin_inf
+        self._is_demo_profile = demo_profile
 
         self.current_cape = None
         self._check_current_skin()
@@ -182,7 +186,7 @@ class MinecraftProfile:
         skin_path = os.path.join(
             os.path.join(paths.textures_cache, "skins"), f"{_STEVE_UUID}.png"
         )
-        check_redownload_skin(skin_path, STEVE_SKIN_URL)
+        check_redownload_skin(skin_path, constants.STEVE_SKIN_URL)
         with open(skin_path, "rb") as file:
             b = file.read()
         return b
@@ -192,7 +196,7 @@ class MinecraftProfile:
         skin_path = os.path.join(
             os.path.join(paths.textures_cache, "skins"), f"{_STEVE_UUID}.png"
         )
-        check_redownload_skin(skin_path, STEVE_SKIN_URL)
+        check_redownload_skin(skin_path, constants.STEVE_SKIN_URL)
         return skin_path
 
     @staticmethod
@@ -214,19 +218,51 @@ class MinecraftProfile:
 
         response = None
         try:
-            response = SESSION.get(MOJ_PROF_URL, headers=headers)
+            response = SESSION.get(constants.MOJ_PROF_URL, headers=headers)
             response.raise_for_status()
         except (
             requests.exceptions.ConnectTimeout,
             requests.exceptions.ConnectionError,
         ) as err:
-            log.error("Failed to connect to %s:", MOJ_PROF_URL, exc_info=err)
+            log.error(
+                "Failed to connect to %s:",
+                constants.MOJ_PROF_URL,
+                exc_info=err,
+            )
             offline_man.check_requests_error(err)
             raise NoConnectionError(
-                MOJ_PROF_URL, err, original_request=err.request
+                constants.MOJ_PROF_URL, err, original_request=err.request
             ) from err
         except requests.HTTPError as err:
-            log.error("Failed to fetch profile info!:", exc_info=err)
+            log.error("Failed to fetch profile info:", exc_info=err)
+            offline = offline_man.check_requests_error(err)
+            if offline:
+                raise NoConnectionError(
+                    constants.MOJ_PROF_URL,
+                    err,
+                    "Failed fetching profile info",
+                    err.request,
+                ) from err
+            if err.response is not None:
+                try:
+                    resp_json = err.response.json()
+                except JSONDecodeError:
+                    log.warning(
+                        "Failed to parse error JSON, going off response code"
+                    )
+                    raise BaseProfileError.auto_select_class(
+                        err.response.status_code
+                    )(err.response.status_code) from err
+                else:
+                    path = resp_json.get("path", "unknown-path")
+                    error = resp_json.get("error", "Unknown Error")
+                    error_msg = resp_json.get(
+                        "errorMessage",
+                        "An unknown error occured while fetching your profile",
+                    )
+                    raise BaseProfileError.auto_select_class(
+                        err.response.status_code
+                    )(err.response.status_code, path, error, error_msg)
             raise UnauthorizedError(err.response) from err
         except Exception as err:
             log.error(
@@ -248,10 +284,7 @@ class MinecraftProfile:
             return False
         elif not self.last_updated:
             return True
-        elif (
-            self.last_updated
-            < time.time() - timedelta(minutes=5).total_seconds()
-        ):
+        elif self.last_updated < time.time() - constants.TINY_CACHE_TIME:
             return True
         return False
 
@@ -268,13 +301,24 @@ class MinecraftProfile:
         return {"Authorization": f"Bearer {self.token}"}
 
     def refresh_profile_info(self):
+        if self._is_demo_profile and not (
+            self._token and self._token.owns_game
+        ):
+            log.debug("Skipping profile refresh on demo account")
+            return self
+        elif self._is_demo_profile:
+            log.warning(
+                "Account with demo profile owns game, "
+                "changing to full profile and refreshing."
+            )
+            self._is_demo_profile = False
         if not self._token:
             raise RuntimeError("No Minecraft token present")
         headers = {"Authorization": f"Bearer {self.token}"}
 
         response = None
         try:
-            response = SESSION.get(MOJ_PROF_URL, headers=headers)
+            response = SESSION.get(constants.MOJ_PROF_URL, headers=headers)
             response.raise_for_status()
         except (
             requests.exceptions.ConnectTimeout,
@@ -282,12 +326,12 @@ class MinecraftProfile:
         ) as err:
             log.warning(
                 "Failed to connect to %s: %s",
-                MOJ_PROF_URL,
+                constants.MOJ_PROF_URL,
                 type(err).__name__,
             )
             offline_man.check_requests_error(err)
             raise NoConnectionError(
-                MOJ_PROF_URL, err, original_request=err.request
+                constants.MOJ_PROF_URL, err, original_request=err.request
             ) from err
         except requests.HTTPError as err:
             if err.response:

@@ -1,15 +1,13 @@
 from json import JSONDecodeError
-from time import sleep
 from typing import NoReturn
 import atexit
 import logging
 import sys
 import warnings
 
-from PySide6.QtCore import QEventLoop, QFile
+from PySide6.QtCore import QEventLoop, QFile, QTimer
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QApplication, QStyleFactory
-import requests
 
 from . import constants, get_qapp, logs, setup_qapp
 from .auth import LauncherAccount
@@ -19,9 +17,7 @@ from .auth.exceptions import (
     NoConnectionError,
 )
 from .back import (
-    java_manager,
     profile_manager,
-    version_manager,
 )
 from .back.account_manager import account_man
 from .config import config
@@ -40,6 +36,13 @@ from .launchargs import launchargs
 from .offline import connectivity_poller, offline_man
 from .ostools.win32 import setup_app_id
 from .paths import paths
+from .threads.bootstrap import (
+    AccountManagerBootstrap,
+    BaseBootstrapThread,
+    JavaManifestBootstrap,
+    LaunchProfileBootstrap,
+    VersionManifestBootstrap,
+)
 from .threads.install_worker import InstallWorker
 from .threads.launch_worker import LaunchWorker
 
@@ -64,13 +67,24 @@ class LauncherApp:
     install_worker: InstallWorker
     launch_worker: LaunchWorker
 
+    # Trackers for threads
+    bootstrap_threads: list[BaseBootstrapThread]
+    java_mf_loaded: bool
+    version_mf_loaded: bool
+
     event_loop_running: bool
 
     def __init__(self):
+        # set default values first so we can check them
         self.event_loop_running = False
+        self.login_dialog = None
+        self.java_mf_loaded = False
+        self.version_mf_loaded = False
+        self.bootstrap_threads = []
+        self.close_if_login_aborted = True
+
         self.qapp = get_qapp()
         self.fonts = get_fonts()
-        self.login_dialog = None
         detect_set_clipboard()
         self.qapp.setApplicationName("PymLauncher")
         match constants.OS:
@@ -90,23 +104,27 @@ class LauncherApp:
 
         self.lb_window = LoadingBlockerWindow()
         self.lb_window.rejected.connect(self._close_event)
-        self.lb_window.show()
         # just in case it doesn't fully run the rest of main():
         self.qapp.aboutToQuit.connect(self._set_clean_exit)
+
+        # anything that potentially can be made outside of the main thread
+        # should probably be checked here before any of the base UI is
+        # constructed
+        if account_man.signals.thread() != self.qapp.thread():
+            log.warning(
+                "Account manager lives on an incorrect thread, "
+                "attempting to mediate this before UI creation."
+            )
+            account_man.signals = account_man._Signals()
 
         self.main_window = MainWindow()
         self.main_window.login_requested.connect(self.show_login)
         self.main_window.account_page.logout_requested.connect(self.logout)
         self.main_window.home_page.play_requested.connect(self.play)
 
-        account_man.add_switch_callback(self._on_account_changed)
+        account_man.signals.account_changed.connect(self._on_account_changed)
 
         self.main_window.home_page.game_crash.connect(self.show_crash_dialog)
-
-        if constants.DEV:
-            if launchargs.debug_splash_screen:
-                self.lb_window.set_text("Waiting 5s for splash debugging")
-                sleep(5)
 
     def _set_clean_exit(self):
         global clean_exit
@@ -116,66 +134,176 @@ class LauncherApp:
         for page in self.main_window.page_list:
             page.build()
 
-    def bootstrap(self):
-        global clean_exit
-        log.debug("Attempting to get version manifest set up...")
-        self.lb_window.set_text("Fetching version list")
-        try:
-            version_manager.fetch_version_manifest()
-            version_manager.get_version_list()
-        except Exception as err:
-            log.error("Failed to load version manifest:", exc_info=err)
-            if isinstance(err, requests.RequestException):
-                if not offline_man.check_requests_error(err):
-                    error_box(
-                        "Failed to get the version manifest! "
-                        "Relaunch if versions are missing."
-                    )
-
-        log.debug("Attempting to get JRE manifest...")
-        self.lb_window.set_text("Fetching Java version list")
-        try:
-            java_manager.get_jvm_manifest()
-        except Exception as err:
-            log.error("Failed to load JRE manifest:", exc_info=err)
-            if isinstance(err, requests.RequestException):
-                if not offline_man.check_requests_error(err):
-                    error_box(
-                        "Failed to get the Java manifest! "
-                        "Relaunch if you can't install/launch the game."
-                    )
-
-        self.lb_window.set_text("Loading launch profiles")
-        try:
-            profile_manager.load_launcher_profiles()
-        except Exception as err:
-            reset_profiles = WarningDialog.warn(
-                text="Failed to load launch profiles. The file may be corrupted.\n"
-                "Would you like to reset the profiles file?\n"
-                "(A backup will be created.)",
-                title="Error loading accounts",
-                button_config=ButtonConfig.YES_NO,
-                button_labels={"no": "Close Launcher"},
-                parent=self.lb_window,
+    def _on_bootstrap_error(
+        self, thread: BaseBootstrapThread, err: Exception, can_continue: bool
+    ):
+        match thread:
+            case AccountManagerBootstrap():
+                return self._auth_thread_error(thread, err, can_continue)
+            case LaunchProfileBootstrap():
+                return self._profile_thread_error(thread, err, can_continue)
+        log.warning(
+            "Recieved Exception object from %s thread", type(thread).__name__
+        )
+        if not can_continue and not thread.wait_after_error:
+            log.warning("Cannot continue, notifying user and shutting down.")
+            log.debug("Stopping other bootstrap threads...")
+            for t in self.bootstrap_threads:
+                t.requestInterruption()
+            error_box(
+                "An unexpected error occured while loading the launcher:\n"
+                f"{type(err).__name__}: {err!r}\n"
+                "Additional info:\n"
+                f"{'\n'.join((str(a) for a in err.args))}"
             )
-            if reset_profiles:
-                profile_manager.reset_profiles()
-                profile_manager.load_launcher_profiles()
-            else:
-                clean_exit = True
-                sys.exit()
-        self.lb_window.set_text("Loading UI data...")
-        self.buildall()
-        self.load_accounts()
-        if self.login_dialog and self.login_dialog.isVisible():
-            loop = QEventLoop(self.qapp)
-            self.login_dialog.finished.connect(loop.quit)
-            loop.exec(QEventLoop.ProcessEventsFlag.AllEvents)
+            self.exit(1)
+
+    def _auth_thread_error(
+        self, thread: BaseBootstrapThread, err: Exception, can_continue: bool
+    ):
+        match err:
+            case PermissionError():
+                error_box(
+                    "Failed to read accounts from storage.\n"
+                    "The launcher cannot continue loading and will close.\n"
+                    "Please make sure you are using the right account with the "
+                    "necessary permissions.\n"
+                    f"Error type: {type(err).__name__}"
+                )
+                self.exit(1)
+            case AttributeError():
+                log.error("AttributeError in account loading:", exc_info=err)
+                if err.obj is not None:
+                    log.debug(
+                        "Object type at fault: %r", type(err.obj).__name__
+                    )
+                else:
+                    log.debug("Can't retrieve object type from exception")
+                if err.name is not None:
+                    log.debug("Missing key: %r", err.name)
+                else:
+                    log.debug("Can't retrieve key name from exception")
+                error_box(str(err))
+                self.exit(1)
+            case JSONDecodeError() | EncryptedDataDecodeError():
+                if isinstance(err, EncryptedDataDecodeError):
+                    dialog_text = (
+                        "Failed to load accounts from storage.\n"
+                        "The file may be unrecoverable due to a decryption error.\n"
+                        "Would you like to reset the storage file and try again?\n"
+                        "(A backup will remain in place)"
+                    )
+                else:
+                    dialog_text = (
+                        "Failed to load accounts from storage.\n"
+                        "The file may have invalid formatting.\n"
+                        "Would you like to reset the storage file and try again?\n"
+                        "(A backup will remain in place)"
+                    )
+                delete_accounts = WarningDialog.warn(
+                    text=dialog_text,
+                    title="Error loading accounts",
+                    button_config=ButtonConfig.YES_NO,
+                    button_labels={"no": "Close Launcher"},
+                    parent=self.lb_window,
+                )
+                if delete_accounts:
+                    account_man.reset_accounts_file()
+                    return thread.run()
+                else:
+                    self.exit(0)
+
+    def _profile_thread_error(
+        self, thread: BaseBootstrapThread, err: Exception, can_continue: bool
+    ):
+        reset_profiles = WarningDialog.warn(
+            text="Failed to load launch profiles. The file may be corrupted.\n"
+            "Would you like to reset the profiles file?\n"
+            "(A backup will be created.)",
+            title="Error loading accounts",
+            button_config=ButtonConfig.YES_NO,
+            button_labels={"no": "Close Launcher"},
+            parent=self.lb_window,
+        )
+        if reset_profiles:
+            profile_manager.reset_profiles()
+            profile_manager.load_launcher_profiles()
+        else:
+            self._cancel_bootstrap()
+            self.exit()
+
+    def _cancel_bootstrap(self):
+        for thread in self.bootstrap_threads:
+            thread.requestInterruption()
+
+    def _wait_on_threads_loop(self, loop: QEventLoop, timer: QTimer):
+        if all(a.isFinished() for a in self.bootstrap_threads):
+            loop.quit()
+            timer.stop()
+            self.bootstrap_threads = []
+            return
+        match len(self.bootstrap_threads):
+            case 1:
+                self.lb_window.set_text(self.bootstrap_threads[0].ui_msg)
+            case _:
+                self.lb_window.set_text(  # final "..." appended automatically
+                    "...\n".join([a.ui_msg for a in self.bootstrap_threads])
+                )
+
+    def _on_thread_finished(self, thread: BaseBootstrapThread):
+        idx = self.bootstrap_threads.index(thread)
+        self.bootstrap_threads.pop(idx)
+        thread.deleteLater()
+        return
+
+    def _on_accounts_loaded(self):
+        if account_man.has_accounts:
+            self.close_if_login_aborted = False
+        else:
+            self.close_if_login_aborted = True
+
+    def bootstrap(self):
+        # initialize QThreads
+        java_mf_loader = JavaManifestBootstrap()
+        version_mf_loader = VersionManifestBootstrap()
+        account_loader = AccountManagerBootstrap()
+        profile_loader = LaunchProfileBootstrap(version_mf_loader)
+        self.bootstrap_threads.append(java_mf_loader)
+        self.bootstrap_threads.append(version_mf_loader)
+        self.bootstrap_threads.append(account_loader)
+        self.bootstrap_threads.append(profile_loader)
+
+        # setup thread signals
+        for thread in self.bootstrap_threads:
+            thread.error.connect(self._on_bootstrap_error)
+        account_loader.finished.connect(self._on_accounts_loaded)
+
+        loop = QEventLoop(self.lb_window)
+
+        # start threads
+        version_mf_loader.start()
+        java_mf_loader.start()
+        account_loader.start()
+
+        loop_timer = QTimer(singleShot=False, interval=25)
+        loop_timer.timeout.connect(
+            lambda: self._wait_on_threads_loop(loop, loop_timer)
+        )
+        log.debug("Starting event loop")
+        with self.lb_window.shown("Loading..."):
+            loop_timer.start()
+            loop.exec()
+        with self.lb_window.shown("Polishing UI"):
+            self.buildall()
+        with self.lb_window.shown("Waiting on login"):
+            if self.login_dialog and self.login_dialog.isVisible():
+                loop = QEventLoop(self.qapp)
+                self.login_dialog.finished.connect(loop.quit)
+                loop.exec(QEventLoop.ProcessEventsFlag.AllEvents)
 
         log.info("Finished loading. Showing main window")
         self.main_window.show()
         # self.lb_window.setParent(self.main_window)
-        self.lb_window.hide()
         focused = QApplication.focusWidget()
         if focused:
             focused.clearFocus()
@@ -184,26 +312,29 @@ class LauncherApp:
     def run(self) -> int:
         with warnings.catch_warnings():
             warnings.simplefilter("error", UserWarning)
-            try:
-                self.bootstrap()
-            except EncryptionUnavailableWarning as err:
-                WarningDialog(
-                    err.args[0],
-                    WarningType.ACCOUNTS_BIN_ENCRYPTION,
-                    parent=self.lb_window,
-                )
-            except UserWarning as err:
-                WarningDialog(
-                    "\n".join((str(a) for a in err.args)),
-                    parent=self.lb_window,
-                )
-            except Exception as err:
-                log.error("Error occured in bootstrap process:", exc_info=err)
-                error_box(
-                    f"Error occured in bootstrap: {err}\n"
-                    "Startup cannot continue"
-                )
-                raise
+            with self.lb_window.shown():
+                try:
+                    self.bootstrap()
+                except EncryptionUnavailableWarning as err:
+                    WarningDialog(
+                        err.args[0],
+                        WarningType.ACCOUNTS_BIN_ENCRYPTION,
+                        parent=self.lb_window,
+                    )
+                except UserWarning as err:
+                    WarningDialog(
+                        "\n".join((str(a) for a in err.args)),
+                        parent=self.lb_window,
+                    )
+                except Exception as err:
+                    log.error(
+                        "Error occured in bootstrap process:", exc_info=err
+                    )
+                    error_box(
+                        f"Error occured in bootstrap: {err}\n"
+                        "Startup cannot continue"
+                    )
+                    raise
         self.event_loop_running = True
         return self.qapp.exec()
 
@@ -271,7 +402,6 @@ class LauncherApp:
                 self.close_if_login_aborted = False
             else:
                 self.close_if_login_aborted = True
-            self.lb_window.hide()
             self.show_login()
             if not account_man.active:
                 try:
@@ -294,38 +424,42 @@ class LauncherApp:
             self.close_if_login_aborted = False
         else:
             self.close_if_login_aborted = True
-            self.lb_window.hide()
             self.show_login()
         self._refresh_account_ui()
 
     def show_login(
         self, *, reason: str | None = None, automatic: bool = False
     ):
-        if offline_man.offline and not automatic:
-            error_box(
-                "Cannot log in while offline! Please wait and try again."
-            )
-            return self._on_login_abort()
-        elif offline_man.offline:  # TODO: confirm this works
-            if len(account_man) > 1:
-                account_man.auto_set_active()
-                return
-        self.login_dialog = LoginWindow(self.main_window, reason=reason)
-        self.login_dialog.login_complete.connect(self._on_login_complete)
-        self.login_dialog.rejected.connect(self._on_login_abort)
-        self.login_dialog.open()
-        self.login_dialog.finished.connect(
-            lambda: setattr(self, "login_dialog", None)
-        )
+        with self.lb_window.hidden():
+            if offline_man.offline and not automatic:
+                error_box(
+                    "Cannot log in while offline! Please wait and try again."
+                )
+                return self._on_login_abort()
+            elif offline_man.offline:  # TODO: confirm this works
+                if len(account_man) > 1:
+                    account_man.auto_set_active()
+                    return
+            self.login_dialog = LoginWindow(self.main_window, reason=reason)
+            self.login_dialog.login_complete.connect(self._on_login_complete)
+            self.login_dialog.rejected.connect(self._on_login_abort)
+            self.login_dialog.open()
         return
 
     def _on_login_abort(self):
         global clean_exit
         active_acc = account_man.active
+        while self.login_dialog and self.login_dialog.isVisible():
+            self.qapp.processEvents()
+        if not active_acc or (
+            not offline_man.offline and not active_acc.token_valid
+        ):
+            active_acc = account_man.auto_set_active(ignore_refreshes=True)
+        else:
+            self.main_window.account_dropdown.refresh()
         if self.close_if_login_aborted or not active_acc:
             clean_exit = True
             self.exit()
-        account_man.set_active(active_acc)
         return
 
     def show_crash_dialog(self, exit_code: str, stderr: str):
@@ -337,13 +471,10 @@ class LauncherApp:
     def _on_login_complete(self, account: LauncherAccount):
         if account:
             self.close_if_login_aborted = False
-        self.lb_window.open()
-        self.lb_window.set_text("Loading account details")
-        self.lb_window.update()
-        account_man.replace(account)
-        account_man.set_active(account.xuid)
-        self._refresh_account_ui()
-        self.lb_window.hide()
+        with self.lb_window.shown("Loading account details..."):
+            account_man.replace_into(account)
+            account_man.set_active(account.xuid)
+            self._refresh_account_ui()
         return
 
     def logout(self):
@@ -398,8 +529,7 @@ class LauncherApp:
                     return
             except Exception as err:
                 self.main_window.home_page.aborted_launch()
-                dialog = LoginWindow(self.main_window, reason=str(err))
-                dialog.exec()
+                self.show_login(reason=str(err))
                 return
 
         self.install_worker = InstallWorker(
@@ -419,66 +549,72 @@ class LauncherApp:
         self, acc: LauncherAccount, *, current_retries: int = 0
     ) -> None:
         MAX_RETRIES = 5
-        if self.lb_window.isVisible():
-            self.lb_window.accept()
         if (
             not acc.token or not acc.token.is_active
         ) and not offline_man.offline:
             if not current_retries:
-                self.lb_window.set_text("Reauthenticating")
-            self.lb_window.open()
-            try:
-                acc.refresh()
-            except NoConnectionError:
-                pass  # handled elsewhere already
-            except MSAServerUnavailableError:
-                if not current_retries or current_retries < MAX_RETRIES:
+                text = "Reauthenticating"
+            else:
+                text = (
+                    "Server unavailable, waiting to try again... "
+                    f"(attempt {current_retries+1} of {MAX_RETRIES+1})"
+                )
+            with self.lb_window.shown(text):
+                try:
+                    acc.refresh()
+                except NoConnectionError:
+                    pass  # handled elsewhere already
+                except MSAServerUnavailableError:
+                    offline_man.offline = True
+                    if not current_retries or current_retries < MAX_RETRIES:
+                        log.warning(
+                            "Failed to authenticate: Server unavailable; "
+                            "retrying (attempt %i of %i)",
+                            current_retries,
+                            MAX_RETRIES,
+                        )
+                        self.lb_window.set_text(
+                            "Server currently unavailable, "
+                            "waiting to try again (attempt "
+                            f"{current_retries+1} of {MAX_RETRIES+1})"
+                        )
+                        uisleep(5)
+                        return self._on_account_changed(
+                            acc, current_retries=current_retries + 1
+                        )
+                    else:
+                        log.error(
+                            "Failed to authenticate: Server unavailable;"
+                            " max retries exceeded. Notifying user."
+                        )
+                        error_box(
+                            "Failed to authenticate: "
+                            "The server is currently unavailable. "
+                            "Please try again later."
+                        )
+                        self.lb_window.accept()
+                        return
+                except (
+                    BaseAuthenticationException
+                ) as err:  # should only ever be a 402 by this point
                     log.warning(
-                        "Failed to authenticate: Server unavailable; "
-                        "retrying (attempt %i of %i)",
-                        current_retries,
-                        MAX_RETRIES,
+                        "Failed to refresh %r: %r. Prompting user to relog.",
+                        acc.gamertag,
+                        type(err).__name__,
                     )
-                    self.lb_window.set_text(
-                        "Server currently unavailable, "
-                        "waiting to try again (attempt "
-                        f"{current_retries+1} of {MAX_RETRIES+1})"
+                    self.show_login(reason=str(err))
+                    return
+                except Exception as err:
+                    log.error(
+                        "Unexpected exception occured while authenticating",
+                        exc_info=err,
                     )
-                    uisleep(5)
-                    self.lb_window.accept()
-                    return self._on_account_changed(
-                        acc, current_retries=current_retries + 1
+                    self.show_login(
+                        reason="Unexpected error occured during "
+                        "reauthentication"
                     )
                 else:
-                    log.error(
-                        "Failed to authenticate: Server unavailable;"
-                        " max retries exceeded. Notifying user."
-                    )
-                    error_box(
-                        "Failed to authenticate: "
-                        "The server is currently unavailable. "
-                        "Please try again later."
-                    )
-                    self.lb_window.accept()
-                    self.main_window.account_dropdown.next_account()
-                    return
-            except (
-                BaseAuthenticationException
-            ) as err:  # should only ever be a 402 by this point
-                log.warning(
-                    "Failed to refresh %r: %r. Prompting user to relog.",
-                    acc.gamertag,
-                    type(err).__name__,
-                )
-                dialog = LoginWindow(self.lb_window, reason=str(err))
-                dialog.rejected.connect(
-                    self.main_window.account_dropdown.next_account
-                )
-                dialog.exec()
-                return
-            else:
-                self.lb_window.accept()
-                account_man.replace_into(acc)
+                    account_man.replace_into(acc)
         self._refresh_account_ui()
         return
 
@@ -494,8 +630,7 @@ class LauncherApp:
             except NoConnectionError:
                 pass
             except Exception as err:
-                dialog = LoginWindow(self.main_window, reason=str(err))
-                dialog.exec()
+                self.show_login(reason=str(err))
                 if not active_account.token_valid:
                     self.main_window.account_dropdown.next_account()
                     return

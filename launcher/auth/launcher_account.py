@@ -103,26 +103,33 @@ class LauncherAccount:
             self.msa.refresh()
         if not self.token_valid:
             if not self.xbox:
+                log.debug("Refreshing Xbox auth token")
                 xbox = XboxToken.auth(self.msa)
                 self.xbox = xbox
+            log.debug("Refreshing XSTS token")
             xsts = XstsToken.auth(self.xbox)
+            log.debug("Getting XSTS token #2")
             # xbl_meta is used to get the gamertag. we could technically remove
             # this in the future since we can get the XUID from the JWT within
             # the mojang token, and from there can get the gamertag, but right
             # now it's not worth it
             xbl_meta = XstsToken.auth(self.xbox, "http://xboxlive.com")
             self.gamertag = xbl_meta.gamertag
+            log.debug("Getting Minecraft token")
             mc = MinecraftToken.auth(xsts)
             self.token = mc
+            log.debug("Got all tokens for %r", self.gamertag)
         if profile_update:
+            log.debug("Updating profile info")
             self.get_profile_info()
+        log.info("Done!")
         return True
 
     minecraft_auth = refresh
 
     def profile_needs_update(self):
         if not self.profile:
-            if self.token and self.token.owns_game:
+            if self.token:
                 return True
             return False
         return self.profile.should_refresh
@@ -259,6 +266,13 @@ class LauncherAccount:
         prof_info = MinecraftProfile.from_token(self.token)
         self.profile = prof_info
         return self.profile
+
+    def get_demo_profile(self):
+        prof_info = MinecraftProfile(
+            {"name": f"Demo-Player-{self.gamertag}", "id": "0"}, self.token
+        )
+        self.profile = prof_info
+        return prof_info
 
     def __eq__(self, other):
         if isinstance(other, str):

@@ -8,6 +8,8 @@ import os
 import platform
 import re
 
+from launcher import constants
+
 
 def indent(text: str | dict | list, amount: int = 2):
     """Indents all lines of a `str` with `amount:int` (default: `2`) spaces."""
@@ -76,3 +78,69 @@ def pathsafe_str(text: str) -> str:
             continue
         output.append(char)
     return "".join(output)
+
+
+match constants.OS:
+    case "windows":
+        BYTE_SIZE = 1024
+    case "osx":
+        BYTE_SIZE = 1000
+    case "linux":
+        BYTE_SIZE = 1024
+    case _:
+        BYTE_SIZE = 1000
+
+match constants.OS:
+    case "linux":
+        KB = "KiB"
+        KB_L = "kibibytes"
+        MB = "MiB"
+        MB_L = "mebibytes"
+        GB = "GiB"
+        GB_L = "gibibytes"
+    case _:
+        KB = "KB"
+        KB_L = "kilobytes"
+        MB = "MB"
+        MB_L = "megabytes"
+        GB = "GB"
+        GB_L = "gigabytes"
+
+
+def display_file_size(base_size: int, long: bool = False):
+    size: int | float = base_size
+    if long:
+        current_display = "bytes"
+        kb = KB_L
+        mb = MB_L
+        gb = GB_L
+    else:
+        current_display = "B"
+        kb = KB
+        mb = MB
+        gb = GB
+    # byte->kilobyte
+    if size > BYTE_SIZE:
+        current_display = kb
+        size /= BYTE_SIZE
+    # kilo->mega
+    if size > BYTE_SIZE:
+        current_display = mb
+        size /= BYTE_SIZE
+    # mega->giga
+    if size > BYTE_SIZE:
+        current_display = gb
+        size /= BYTE_SIZE
+
+    # trim decimal
+    size_s_raw = str(size)
+    size_s_split = size_s_raw.split(".")
+    if len(size_s_split) > 1:
+        size_s = ".".join((size_s_split[0], size_s_split[1][:2]))
+    else:
+        size_s = size_s_raw
+
+    if long:
+        return " ".join((size_s, current_display))
+    else:
+        return "".join((size_s, current_display))

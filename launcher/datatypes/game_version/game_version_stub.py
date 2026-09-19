@@ -2,11 +2,9 @@ from dataclasses import InitVar, dataclass, field
 from datetime import datetime
 from enum import StrEnum
 from pathlib import Path
-import json
 import logging
 import os
 
-from launcher.back import version_manager
 from launcher.paths import paths
 
 log = logging.getLogger(__name__)
@@ -89,25 +87,6 @@ class GameVersionStub:
     def jar_path(self):
         return os.path.join(paths.game, "versions", self.id, f"{self.id}.jar")
 
-    def get_json(self) -> dict:
-        if self.local:
-            assert self.path
-            with open(self.path, "r") as f:
-                txt = f.read()
-            try:
-                return json.loads(txt)
-            except json.JSONDecodeError as err:
-                raise RuntimeError(
-                    f"Failed to decode JSON from file at {self.path!r}"
-                ) from err
-        else:
-            version_info = version_manager.fetch_version_json(self.id)
-            if not version_info:
-                raise RuntimeError(
-                    f"Couldn't get version info for stub for {self.id!r}"
-                )
-            return version_info
-
     def __eq__(self, other):
         """Returns `True` if the IDs match."""
         if isinstance(other, GameVersionStub):
@@ -146,8 +125,10 @@ class GameVersionStub:
 
     @property
     def timestamp(self):
+        """`release_time`"""
         return self._release_ts
 
     @property
     def build_timestamp(self):
+        """`time`"""
         return self._build_ts

@@ -22,13 +22,17 @@ class ProfileSelectionModel(QItemSelectionModel):
                 "ProfileSelectionModel is already initialized! "
                 "Get the global instance instead: 'instance()'"
             )
-        profile_manager.add_profile_switch_handler(self._profile_switch)
-        profile_manager.add_profile_refresh_handler(self._handle_prof_refresh)
         super().__init__(model)
         _INSTANCE = self
         self._model_old = super().model
         self.currentChanged.connect(self._handle_idx_change)
         self.model().refresh()
+
+    def setup(self):
+        self.model().setup()
+        profile_manager.add_profile_switch_handler(self._profile_switch)
+        profile_manager.add_profile_refresh_handler(self._handle_prof_refresh)
+        self._handle_prof_refresh()
 
     def _handle_prof_refresh(self):
         current_row = profile_manager.get_row_from_profile(

@@ -8,6 +8,8 @@ manifest
 - Rework `LoginRedirectWebserver` to be more clearly named & more stable.
 - Move web request logic from `launcher.front.skin_change` to a module/class in
 `launcher.auth` (probably `MinecraftProfile`)
+- Rework `LaunchProfile` and move away from using dataclasses for it
+- De-tangle the bootstrap process in `launcher.__main__`.
 ## Structural changes
 - Split profiles page into the page itself, and two widgets:
     1. Individual profile editor

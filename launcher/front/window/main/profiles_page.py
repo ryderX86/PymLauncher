@@ -14,6 +14,7 @@ TODOs:
 from pathlib import Path
 import logging
 import os
+import textwrap
 import time
 
 from PySide6.QtCore import QEvent, QSize, Qt, QThread, Signal
@@ -23,6 +24,7 @@ from PySide6.QtGui import (
     QKeySequence,
     QMouseEvent,
     QShortcut,
+    QShowEvent,
 )
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -110,6 +112,12 @@ def _right_click_decorator(func):
     return decorated_func
 
 
+def _wrap_args_tooltip(args: str):
+    return "\n".join(
+        textwrap.wrap(args, 50, break_long_words=False, break_on_hyphens=False)
+    )
+
+
 class VersionJsonBackgroundDownloader(QThread):
     done = Signal(str)
 
@@ -119,32 +127,23 @@ class VersionJsonBackgroundDownloader(QThread):
         super().__init__(parent)
         self._version_id = version_id
         self._profile = profile
+        self.destroyed.connect(lambda: _running_threads.remove(self))
 
     def run(self):
         if self._profile.has_custom_args:
-            self.done.emit("")
+            self.done.emit(self._profile.jvm_args)
             return
         match self._version_id.lower():
             case "latest-release" | "latest release":
                 self._version_id = version_manager.get_latest_release()
             case "latest-snapshot" | "latest snapshot":
                 self._version_id = version_manager.get_latest_release()
-        version_list = version_manager.get_version_list()
-        version: GameVersionStub | None = None
-        for v in version_list:
-            if v.id == self._version_id:
-                version = v
-                break
-        if not version:
-            self.log.warning(
-                "Failed to get version info for '%s'", self._version_id
-            )
-            self.done.emit("INVALID")
+        if not version_manager.version_exists(self._version_id):
+            log.warning("Version doesn't exist! Aborting...")
+            self.done.emit("")
             return
-        version_json = version_manager.resolve_inheritence(version.get_json())
-        args = version_manager.default_user_jvm_args_factory(version_json)
-        self.done.emit(args)
-        self.destroyed.connect(lambda: _running_threads.remove(self))
+        version = version_manager.fetch_version(self._version_id)
+        self.done.emit(version.default_user_jvm_args)
 
 
 class ProfilesPage(QWidget):
@@ -187,8 +186,14 @@ class ProfilesPage(QWidget):
             self._save()
 
     def build(self):
+        self.select.setup()
         self._load()
         self._loaded = True
+
+    def showEvent(self, event: QShowEvent) -> None:
+        prof = profile_manager.get_current_profile()
+        self._args_changer(prof.version_id)
+        return super().showEvent(event)
 
     def _build_ui(self):
         layout = QHBoxLayout(self)
@@ -391,7 +396,7 @@ class ProfilesPage(QWidget):
         self.form.addRow("Java Executable:", java_row)
 
         self.jvm_args_input = QLineEdit(
-            placeholderText="(Use default arguments)"
+            placeholderText="(Use default arguments)", clearButtonEnabled=True
         )
         self.jvm_args_input.textChanged.connect(self._dirty_check)
         self.mapper.addMapping(self.jvm_args_input, MapIndex.JAVA_ARGS)
@@ -622,7 +627,7 @@ class ProfilesPage(QWidget):
         is_dirty = False
         self._validity_state = True
         for i in range(10):
-            if i == 8:
+            if i in {4, 8}:
                 continue
             widget = self.mapper.mappedWidgetAt(i)
             if widget is None:
@@ -674,6 +679,11 @@ class ProfilesPage(QWidget):
                 widget.style().polish(widget)
         # This entire section here for the icon check is stupid and I'm not proud
         # of it, but it damn works at least.
+        if profile.has_custom_args:
+            ui_args = set(a for a in self.jvm_args_input.text().split() if a)
+            prev_args = set(a for a in profile.jvm_args.split() if a)
+            if ui_args != prev_args:
+                is_dirty = True
         if self.icon_picker.text() == "<CUSTOM>" and profile.has_custom_icon():
             # <CUSTOM> is always a loaded icon, means there's no change
             pass
@@ -722,7 +732,13 @@ class ProfilesPage(QWidget):
         self.icon_picker.revert()
         self.mapper.revert()
         prof = profile_manager.get_current_profile()
-        self.jvm_args_input.setText(prof.jvm_args)
+        if prof.has_custom_args:
+            self.jvm_args_input.setText(prof.jvm_args)
+        else:
+            self.jvm_args_input.setText(None)
+            self.jvm_args_input.setToolTip(
+                _wrap_args_tooltip(prof.default_jvm_args())
+            )
         if constants.DEV:
             self._dirty_check()
         else:
@@ -942,7 +958,7 @@ class ProfilesPage(QWidget):
                 )
             )
         jvm_args = self.jvm_args_input.text() or None
-        if profile.jvm_args != jvm_args:
+        if (profile.jvm_args or "") != jvm_args:
             changed_values.append(
                 ("jvm_args", profile.jvm_args or "None", jvm_args or "None")
             )
@@ -1032,9 +1048,17 @@ class ProfilesPage(QWidget):
             if version_id != current_id:
                 log.warning("Version ID changed, not setting JVM args")
                 return
-            if args:
-                prof.jvm_args = args
+            if prof.has_custom_args:
                 self.jvm_args_input.setText(args)
+                self.jvm_args_input.setToolTip(_wrap_args_tooltip(args))
+            else:
+                self.jvm_args_input.setPlaceholderText(
+                    args or "(Use default arguments)"
+                )
+                if args:
+                    self.jvm_args_input.setToolTip(_wrap_args_tooltip(args))
+                else:
+                    self.jvm_args_input.setToolTip("")
 
         _bg_worker.done.connect(set_args_final)
         _bg_worker.finished.connect(_bg_worker.deleteLater)
