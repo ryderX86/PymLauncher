@@ -122,7 +122,7 @@ class LauncherAccount:
         if profile_update:
             log.debug("Updating profile info")
             self.get_profile_info()
-        log.info("Done!")
+        log.info("Done refreshing tokens")
         return True
 
     minecraft_auth = refresh
