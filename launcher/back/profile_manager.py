@@ -237,6 +237,7 @@ _meta_cache = {}
 
 
 def get_launcher_meta():
+    global _meta_cache
     if _meta_cache or getattr(get_launcher_meta, "ran_once", False):
         return _meta_cache
     get_launcher_meta.ran_once = True  # type: ignore
@@ -253,6 +254,7 @@ def get_launcher_meta():
             )
             return {}
         else:
+            _meta_cache = meta
             return meta
     return {}
 
