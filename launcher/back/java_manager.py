@@ -344,15 +344,12 @@ def download_java_version(
         log.warning("Running downloads unthreaded")
         for worker in dl_list:
             worker.run()
-            if worker.failed:
-                log.warning("Download worker failed, breaking early")
-                break
         if any(not a.success for a in dl_list):
             raise BulkDownloadError.from_runnable_list(dl_list)
 
     log.info(
         "Download complete, %d/%d new files.",
-        len({a.downloaded_file for a in dl_list}),
+        len(set(a.downloaded_file for a in dl_list if a.downloaded_file)),
         len(dl_list),
     )
 

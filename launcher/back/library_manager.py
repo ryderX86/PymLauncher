@@ -237,7 +237,9 @@ def download_libraries(
         if any(not a.success for a in dl_list):
             raise BulkDownloadError.from_runnable_list(dl_list)
 
-    downloaded_count = len({a.downloaded_file for a in dl_list})
+    downloaded_count = len(
+        {a.downloaded_file for a in dl_list if a.downloaded_file}
+    )
     log.info(
         "Finished downloading libraries: %d new / %d total",
         downloaded_count,
