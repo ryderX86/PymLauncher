@@ -2,18 +2,23 @@ import json
 import logging
 import time
 
-import requests
-import requests.exceptions
-
-from launcher import SESSION
 from launcher.constants import (
     AZURE_CLIENT_ID,
     AZURE_SCOPE,
     MSA_REFRESH_URL,
 )
+from launcher.exceptions.network import (
+    HTTPStatusCodeError,
+    WrappedUL3Exception,
+)
+from launcher.networking import make_request
 from launcher.offline import offline_man
 
-from .exceptions import MSABaseAuthenticationException, UnauthorizedError
+from .exceptions import (
+    MSABaseAuthenticationException,
+    NoConnectionError,
+    UnauthorizedError,
+)
 
 log = logging.getLogger(__name__)
 
@@ -179,28 +184,22 @@ class MicrosoftAccount:
         }
 
         try:
-            response = SESSION.post(MSA_REFRESH_URL, data=form_data)
-            response.raise_for_status()
-        except (
-            requests.exceptions.ConnectionError,
-            requests.exceptions.ConnectTimeout,
-        ) as err:
+            response = make_request("post", MSA_REFRESH_URL, form=form_data)
+        except WrappedUL3Exception as err:
             log.error(
                 "%s occured while attempting MSA token refresh",
                 type(err).__qualname__,
             )
-            offline_man.check_requests_error(err)
-            raise err
-        except requests.HTTPError as err:
+            if offline_man.check_requests_error(err):
+                raise NoConnectionError(MSA_REFRESH_URL, err) from err
+            raise MSABaseAuthenticationException() from err
+        except HTTPStatusCodeError as err:
             if err.response is not None:
                 log.error(
                     "Failed to refresh MSA token; response code %d",
-                    err.response.status_code,
+                    err.code,
                 )
-                if (
-                    err.response.status_code >= 400
-                    and err.response.status_code < 500
-                ):
+                if err.code in range(400, 500):
                     exc_type = (
                         MSABaseAuthenticationException.get_exception_type(
                             err.response
@@ -208,13 +207,14 @@ class MicrosoftAccount:
                     )
                     raise exc_type(err.response) from err
             else:
-                offline_man.check_requests_error(err)
+                if offline_man.check_requests_error(err):
+                    raise NoConnectionError(MSA_REFRESH_URL, err) from err
                 log.error("Failed to refresh MSA token; no response")
             raise MSABaseAuthenticationException(
                 None, "Account refresh"
             ) from err
 
-        if len(response.text) < 5:
+        if len(response.data) < 5:
             exc_type = MSABaseAuthenticationException.get_exception_type(
                 response
             )

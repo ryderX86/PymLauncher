@@ -31,7 +31,6 @@ from PySide6.QtWidgets import (
 from requests.exceptions import ConnectionError as RequestsConnectionError
 from requests.exceptions import ConnectTimeout, HTTPError
 
-from launcher import SESSION
 from launcher.auth import LauncherAccount, SkinModel
 from launcher.back.account_manager import account_man
 from launcher.config import config
@@ -40,8 +39,14 @@ from launcher.constants import (
     OS_PATH_DELIM,
     SKIN_CHANGE_URL,
 )
+from launcher.exceptions.network import (
+    ConnectError,
+    HTTPStatusCodeError,
+    WrappedUL3Exception,
+)
 from launcher.front import resources
 from launcher.functions.error_box import error_box
+from launcher.networking import make_request
 from launcher.offline import offline_man
 
 log = logging.getLogger(__name__)
@@ -367,29 +372,18 @@ class SkinChange(QDialog):
         if self.current_cape:
             try:
                 payload = {"capeId": self.current_cape}
-                resp = SESSION.put(CAPE_URL, headers=headers, json=payload)
-                resp.raise_for_status()
-            except (RequestsConnectionError, ConnectTimeout) as err:
-                log.warning(
-                    "Cape PUT request failed to open connection:", exc_info=err
-                )
-                error_box(
-                    "Failed to connect to server. "
-                    "Check that you are not offline and try again. "
-                    "If the error persists and you are definitely online, "
-                    "please create a bug report."
-                )
-            except HTTPError as err:
+                make_request("put", CAPE_URL, headers=headers, body=payload)
+            except HTTPStatusCodeError as err:
                 offline_man.check_requests_error(err)
                 cape = self.cape_list.currentItem().text()
                 if err.response:
                     log.warning(
                         "Cape PUT request (change to %r) returned HTTP %d:\nDetails: %s",
                         cape,
-                        err.response.status_code,
-                        err.response.text,
+                        err.code,
+                        err.body,
                     )
-                    if "profile does not own cape" in err.response.text:
+                    if err.body and "profile does not own cape" in err.body:
                         error_box(
                             f'Failed to set cape to "{cape}": ""You do not own it.'
                         )
@@ -397,7 +391,7 @@ class SkinChange(QDialog):
                         error_box(
                             f'Failed to set cape to "{cape}": '
                             "An unknown error occured.\n"
-                            f"Details: {err.response.text}"
+                            f"Details: {err.body}"
                         )
                 else:
                     log.warning(
@@ -407,13 +401,21 @@ class SkinChange(QDialog):
                     error_box(
                         f'Failed to set cape to "{cape}": {type(err).__name__}'
                     )
+            except Exception as err:
+                offline_man.check_requests_error(err)
+                log.warning("Cape PUT request failed:", exc_info=err)
+                error_box(
+                    "Failed to connect to server. "
+                    "Check that you are not offline and try again. "
+                    "If the error persists and you are definitely online, "
+                    "please create a bug report."
+                )
             else:
                 return True
         else:
             try:
-                resp = SESSION.delete(CAPE_URL, headers=headers)
-                resp.raise_for_status()
-            except HTTPError as err:
+                make_request("delete", CAPE_URL, headers=headers)
+            except HTTPStatusCodeError as err:
                 log.error(
                     "Failed to remove cape from player: "
                     "Connection to %r failed:",
@@ -458,15 +460,16 @@ class SkinChange(QDialog):
             name = "".join([*name, char])
 
         try:
-            resp = SESSION.post(
-                SKIN_CHANGE_URL,
-                headers=headers,
-                files={
-                    "variant": ("", self.variant),
-                    "file": (name, open(fp, "rb"), "image/png"),
-                },
-            )
-            resp.raise_for_status()
+            with open(fp, "rb") as file:
+                make_request(
+                    "post",
+                    SKIN_CHANGE_URL,
+                    headers=headers,
+                    form={
+                        "variant": ("", self.variant),
+                        "file": (name, file.read(), "image/png"),
+                    },
+                )
         except Exception as err:
             log.error("Failed to upload skin:", exc_info=err)
             raise

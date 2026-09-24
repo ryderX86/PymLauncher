@@ -7,6 +7,7 @@ JARs, and building the classpath string.
 
 from collections.abc import Callable
 from typing import Iterable
+import hashlib
 import logging
 import os
 import zipfile
@@ -17,18 +18,17 @@ from PySide6.QtCore import QThreadPool
 from launcher.constants import (
     ARCH,
     CLASSPATH_SEPARATOR,
-    LIBRARIES_URL,
     OS,
     OS_VER,
 )
 from launcher.datatypes.game_version import Library
 from launcher.functions import is_path_valid
+from launcher.networking import make_request
 from launcher.paths import paths
 
 from .download_helpers import (
     BulkDownloadError,
     _check_file_sha1,
-    download,
     should_download_file,
 )
 
@@ -168,65 +168,22 @@ def _download_file(
         if not os.path.isdir(parent):
             os.makedirs(parent, exist_ok=True)
         try:
-            resp = download(url, sha=expected_sha1)
+            resp = make_request("get", url, preload_response=False)
         except:
             return False
 
-        with open(dest, "wb") as fb:
-            fb.write(resp.content)
+        dest_tmp = f"{dest}.tmp"
+
+        sha1 = hashlib.sha1()
+        with open(dest_tmp, "wb") as fb:
+            for chunk in resp.stream(None):
+                fb.write(chunk)
+                sha1.update(chunk)
+
+        if sha1.hexdigest() == expected_sha1:
+            os.replace(dest_tmp, dest)
         return True
     return False
-
-
-def _get_lib_filepath(
-    library: dict,
-) -> tuple[str, str, str | None] | tuple[None, None, None]:
-    """
-    Returns a tuple of `str, str, str|None` or `None, None, None` depending on
-    if the full name is present in the library's JSON.
-
-    If present, the order will be `str(<lib_os_path>),
-    <download url>, <sha1>|None`.
-    """
-    name: str = library.get("name", "")
-    if not name:
-        return None, None, None
-    pkg, libname, ver = name.split(":")
-    url = f"{LIBRARIES_URL}/{pkg}/{libname}/{libname}-{ver}.jar"
-    if "natives" in library.keys():
-        natives: dict = library.get("natives", {})
-        native_str: str = natives.get(OS, "")
-        match ARCH:
-            case "x86_64" | "arm64":
-                arch = "64"
-            case "x86":
-                arch = "32"
-            case _:
-                arch = ""
-        native_str = native_str.replace("${arch}", arch)
-        if native_str:
-            ver = f"{ver}-{native_str}"
-    sha1: str | None = None
-    if "sha1" in library.keys():
-        sha1 = library.get("sha1", "")
-    if not sha1:
-        sha1_url = url + ".sha1"
-        try:
-            resp = download(sha1_url)
-            resp.raise_for_status()
-            sha1 = resp.text
-        except Exception as err:
-            log.warning(
-                "Failed to get SHA1 for library '%s'", name, exc_info=err
-            )
-            sha1 = None
-        finally:
-            del sha1_url
-
-    folders = pkg.split(".")
-    folderpath = os.path.join(paths.libraries, *folders, libname, ver)
-    file_target = os.path.join(folderpath, f"{libname}-{ver}.jar")
-    return file_target, url, sha1
 
 
 def parse_lib_path(url: str, name: str) -> tuple[str, str]:

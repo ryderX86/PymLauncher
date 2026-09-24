@@ -6,8 +6,8 @@ import os
 
 from requests.exceptions import HTTPError as HTTPError_
 
-from launcher import SESSION
 from launcher.exceptions import InvalidAssetError
+from launcher.networking import make_request
 from launcher.offline import offline_man
 from launcher.paths import paths
 
@@ -103,8 +103,7 @@ class AssetIndexStub:
 
         log.info("Getting asset index %s from %r", self.id, self.url)
         try:
-            resp = SESSION.get(self.url)
-            resp.raise_for_status()
+            resp = make_request("get", self.url)
         except HTTPError_ as err:
             offline_man.check_requests_error(err)
             raise
@@ -114,16 +113,22 @@ class AssetIndexStub:
             os.makedirs(paths.assets_indexes, exist_ok=True)
 
         try:
-            index: dict = json.loads(resp.text)
+            index: dict = resp.json()
         except json.JSONDecodeError as err:
             raise InvalidAssetError(
                 f"Server returned invalid JSON from {self.url!r}",
                 self.file_path,
-                resp.text,
+                resp.data.decode(),
+            ) from err
+        except UnicodeDecodeError as err:
+            log.error("Failed to decode data from %r:", self.url, exc_info=err)
+            raise InvalidAssetError(
+                f"Server returned invalid bytes from {self.url!r}",
+                self.file_path,
             ) from err
 
-        with open(self.file_path, "w") as file:
-            file.write(resp.text)
+        with open(self.file_path, "wb") as file:
+            file.write(resp.data)
 
         if return_dict:
             return index

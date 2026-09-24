@@ -2,8 +2,9 @@ import hashlib
 import logging
 import os
 
-from launcher import SESSION, get_qapp
+from launcher import get_qapp
 from launcher.functions import display_file_size
+from launcher.networking import make_request
 from launcher.offline import offline_man
 from launcher.paths import paths
 
@@ -44,8 +45,7 @@ class JarFile:
         )
 
         try:
-            resp = SESSION.get(self.url, stream=True)
-            resp.raise_for_status()
+            resp = make_request("get", self.url, preload_response=False)
         except Exception as err:
             log.error(
                 "Exception occured downloading %s.jar:", self.id, exc_info=err
@@ -60,7 +60,7 @@ class JarFile:
         else:
             qapp = None
         with open(self.path, "wb") as fb:
-            for chunk in resp.iter_content(chunk_size=None):
+            for chunk in resp.stream(None):
                 fb.write(chunk)
                 sha1.update(chunk)
                 if callback:

@@ -138,6 +138,7 @@ class UtilitiesPage(QWidget):
         self.f_win_button.setDisabled(offline)
 
     def system_info(self):
+        # pylint: disable=protected-access
         os_info = platform.uname()
         thread_pool = QThreadPool.globalInstance()
         text = dedent(f"""
@@ -152,6 +153,7 @@ class UtilitiesPage(QWidget):
             CWD: {os.getcwd()}
             Executable: {sys.executable}
             Python flags: {", ".join(str(a) for a in sys.flags)}
+            GIL enabled: {sys._is_gil_enabled()}
         Launcher info:
             Offline: {"Yes" if offline_man.offline else "No"}
             .minecraft directory: {paths.game}

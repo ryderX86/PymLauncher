@@ -9,7 +9,8 @@ import secrets
 
 from requests.exceptions import HTTPError, JSONDecodeError
 
-from launcher import SESSION, constants
+from launcher import constants
+from launcher.networking import session
 from launcher.offline import offline_man
 
 from .base_login_thread import BaseLoginThread
@@ -199,7 +200,7 @@ class LoginRedirectWebserver(BaseLoginThread):
         }
 
         try:
-            resp = SESSION.post(constants.AZURE_TOKEN_URL, data=payload)
+            resp = session.post(constants.AZURE_TOKEN_URL, data=payload)
             resp.raise_for_status()
         except HTTPError as err:
             offline_man.check_requests_error(err)

@@ -28,7 +28,12 @@ log = logging.getLogger(__name__)
 
 
 class InstallWorker(QThread):
-    """Background worker for downloading game files"""
+    """
+    Background worker for downloading game files
+
+    All functions here apart from `run()` itself are safe to raise exceptions
+    in without further handling, `run()` will catch everything and emit it.
+    """
 
     progress = Signal(
         str, float, float, bool
@@ -201,6 +206,18 @@ class InstallWorker(QThread):
             else:
                 txt = "Failed to mark Java as an executable file."
             new = RuntimeError(txt)
+            raise new from err
+        except Exception as err:
+            log.error(
+                "Failed to download Java %s (%s):",
+                self.version.java_version_id,
+                jre_name,
+                exc_info=err,
+            )
+            new = RuntimeError(
+                f"Failed to download Java {self.version.java_version_id}: "
+                f"{type(err).__name__}"
+            )
             raise new from err
         return executable
 

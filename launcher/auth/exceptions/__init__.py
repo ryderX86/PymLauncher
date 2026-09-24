@@ -1,5 +1,6 @@
 import logging
 
+from urllib3.response import BaseHTTPResponse
 import requests
 
 from launcher import constants
@@ -14,12 +15,14 @@ log = logging.getLogger(__name__)
 class BaseAuthenticationException(Exception):
     """Base class for all authentication errors"""
 
-    response: requests.Response | None
+    response: requests.Response | BaseHTTPResponse | None
 
     _msg = "Failed to authenticate due to an unknown error."
 
     def __init__(
-        self, response: requests.Response | None = None, msg: str | None = None
+        self,
+        response: requests.Response | BaseHTTPResponse | None = None,
+        msg: str | None = None,
     ):
         if msg:
             super().__init__(msg)
@@ -140,13 +143,13 @@ class MSABaseAuthenticationException(BaseAuthenticationException):
     error_uri: str
     trace_id: str
     correlation_id: str
-    original_response: requests.Response | None
+    original_response: requests.Response | BaseHTTPResponse | None
     trigger: str
     """What triggered the raising of this error"""
 
     def __init__(
         self,
-        response: requests.Response | None = None,
+        response: requests.Response | BaseHTTPResponse | None = None,
         trigger: str | None = None,
     ):
         super().__init__(response)
@@ -175,7 +178,7 @@ class MSABaseAuthenticationException(BaseAuthenticationException):
     @classmethod
     def get_exception_type(
         cls,
-        response: requests.Response,
+        response: requests.Response | BaseHTTPResponse,
     ) -> type["MSABaseAuthenticationException"]:
         try:
             j: dict = response.json()
@@ -217,11 +220,11 @@ class MSAInvalidRequestError(MSABaseAuthenticationException):
     _msg = "A protocol error has occured. Please submit a bug report."
 
 
-class MSAInvalidSessionError(MSABaseAuthenticationException):
-    """Session expired or token is invalid."""
+class MSAInvalidsessionError(MSABaseAuthenticationException):
+    """session expired or token is invalid."""
 
     default_errcode = {"interaction_required", "invalid_grant"}
-    _msg = "Session expired. Please log in again."
+    _msg = "session expired. Please log in again."
 
 
 class MSAInvalidScopeError(MSABaseAuthenticationException):

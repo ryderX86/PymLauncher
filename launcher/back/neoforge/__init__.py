@@ -5,8 +5,8 @@ import json
 import logging
 import os
 
-from launcher.back.download_helpers import download
 from launcher.functions.text import indent
+from launcher.networking import make_request
 from launcher.paths import paths
 
 FALLBACK_DOMAIN = "maven.creeperhost.net"
@@ -72,7 +72,7 @@ def get_master(force_refresh: bool = False):
             del manifest_text
     log.debug("Grabbing NeoForge version manifest")
     _versions_list = {}
-    response = download(VERSION_MANIFEST_URL)
+    response = make_request("get", VERSION_MANIFEST_URL)
     versions: list[str] = response.json().get("versions", [])
     if not versions:
         err = RuntimeError("Couldn't get version list")
@@ -103,7 +103,7 @@ def get_master(force_refresh: bool = False):
         _versions_list[id_].append(v)
 
     # legacy version list
-    response = download(LEGACY_VERSIONS_MANIFEST)
+    response = make_request("get", LEGACY_VERSIONS_MANIFEST)
     versions: list[str] = response.json().get("versions", [])
     if not versions:
         log.warning("Legacy versions list is empty!")
@@ -177,8 +177,10 @@ def install(neoforge_version: str, override: bool = False):
     if not os.path.isdir(dest_dir):
         os.makedirs(dest_dir, exist_ok=True)
 
-    resp = download(url)
-    b = BytesIO(resp.content)
+    resp = make_request("get", url, preload_response=False)
+    b = BytesIO()
+    for chunk in resp.stream(False):
+        b.write(chunk)
 
     with ZipFile(b) as zipf:
         with zipf.open("version.json") as json_file:

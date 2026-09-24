@@ -3,10 +3,10 @@ import logging
 import os
 
 from launcher.back.download_helpers import (
-    download,
     file_exists_or_age,
 )
 from launcher.functions.text import indent
+from launcher.networking import make_request
 from launcher.paths import paths
 
 log = logging.getLogger(__name__)
@@ -49,7 +49,7 @@ def _ensure_master(force_refresh: bool = False):
                 log.info("Using cached fabric-versions.json")
                 return True
         log.info("Downloading Fabric manifest...")
-        response = download(FABRIC_MANIFEST_URL)
+        response = make_request("get", FABRIC_MANIFEST_URL)
         _master_manifest = response.json()
         del _master_manifest["mappings"]
         del _master_manifest["intermediary"]
@@ -58,8 +58,8 @@ def _ensure_master(force_refresh: bool = False):
             raise RuntimeError(
                 "Couldn't get game versions manifest for Fabric"
             )
-        with open(os.path.join(paths.data, "fabric-versions.json"), "w") as f:
-            f.write(response.text)
+        with open(os.path.join(paths.data, "fabric-versions.json"), "wb") as f:
+            f.write(response.data)
     return True
 
 
@@ -134,14 +134,18 @@ def install(game_ver: str, fabric_ver: str, override: bool = False):
         raise FileExistsError(str(path))
 
     log.info("Installing fabric-loader-%s-%s", fabric_ver, game_ver)
-    response = download(URL)
+    response = make_request("get", URL)
     # check JSON data:
     try:
-        json.loads(response.text)
+        response.json()
     except json.JSONDecodeError as err:
         new = RuntimeError("Server returned malformed JSON data:")
-        new.add_note("".join(['"', indent(response.text), '"']))
+        new.add_note("".join(['"', indent(response.data.decode()), '"']))
         raise new from err
-    with open(path, "w") as file:
-        file.write(response.text)
+    except UnicodeDecodeError as err:
+        raise RuntimeError(
+            "Server returned bytes which couldn't be decoded"
+        ) from err
+    with open(path, "wb") as file:
+        file.write(response.data)
     return True

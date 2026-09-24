@@ -1,7 +1,6 @@
 from enum import StrEnum
 from functools import lru_cache
 from json import JSONDecodeError
-from pathlib import Path
 import hashlib
 import logging
 import os
@@ -10,13 +9,15 @@ import uuid
 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QIcon, QImage, QPainter, QPixmap
-import requests
-import requests.exceptions
 
-from launcher import SESSION, constants
+from launcher import constants
 from launcher.auth.minecraft_token import MinecraftToken
-from launcher.back.download_helpers import download as try_request
+from launcher.exceptions.network import (
+    HTTPStatusCodeError,
+    WrappedUL3Exception,
+)
 from launcher.front import resources
+from launcher.networking import make_request
 from launcher.offline import offline_man
 from launcher.paths import paths
 
@@ -72,9 +73,9 @@ def check_redownload_skin(
             log.warning("Cached texture %r has mismatched SHA", name)
     if name:
         log.debug("Downloading player texture for %r", name)
-    resp = try_request(url)
+    resp = make_request("get", url)
     with open(p, "wb") as b:
-        b.write(resp.content)
+        b.write(resp.data)
     return
 
 
@@ -212,58 +213,43 @@ class MinecraftProfile:
         _cached_skins[uid] = ico
         return _cached_skins[uid]
 
-    @classmethod
-    def from_token(cls, mc_token: MinecraftToken):
+    @staticmethod
+    def _get_profile_json(mc_token: MinecraftToken):
         headers = {"Authorization": f"Bearer {mc_token.access_token}"}
 
-        response = None
         try:
-            response = SESSION.get(constants.MOJ_PROF_URL, headers=headers)
-            response.raise_for_status()
-        except (
-            requests.exceptions.ConnectTimeout,
-            requests.exceptions.ConnectionError,
-        ) as err:
+            response = make_request(
+                "get", constants.MOJ_PROF_URL, headers=headers
+            )
+        except HTTPStatusCodeError as err:
+            if err.code == 401:  # Unauthorized
+                raise UnauthorizedError(
+                    err.response, err.body or err.desc
+                ) from err
+            try:
+                j = err.response.json()
+            except JSONDecodeError as err2:
+                log.warning(
+                    "Failed to decode response from Mojang:", exc_info=err2
+                )
+                raise BaseProfileError.auto_select_class(err.code)(
+                    err.code, constants.MOJ_PROF_URL
+                ) from err
+            path = j.get("path", constants.MOJ_PROF_URL)
+            msg = j.get("error", "<unknown>")
+            err_msg = j.get("errorMessage", "<unknown>")
+            raise BaseProfileError.auto_select_class(err.code)(
+                err.code, path, msg, err_msg
+            )
+        except WrappedUL3Exception as err:
             log.error(
-                "Failed to connect to %s:",
+                "Failed to get profile info from %r:",
                 constants.MOJ_PROF_URL,
                 exc_info=err,
             )
-            offline_man.check_requests_error(err)
-            raise NoConnectionError(
-                constants.MOJ_PROF_URL, err, original_request=err.request
-            ) from err
-        except requests.HTTPError as err:
-            log.error("Failed to fetch profile info:", exc_info=err)
-            offline = offline_man.check_requests_error(err)
-            if offline:
-                raise NoConnectionError(
-                    constants.MOJ_PROF_URL,
-                    err,
-                    "Failed fetching profile info",
-                    err.request,
-                ) from err
-            if err.response is not None:
-                try:
-                    resp_json = err.response.json()
-                except JSONDecodeError:
-                    log.warning(
-                        "Failed to parse error JSON, going off response code"
-                    )
-                    raise BaseProfileError.auto_select_class(
-                        err.response.status_code
-                    )(err.response.status_code) from err
-                else:
-                    path = resp_json.get("path", "unknown-path")
-                    error = resp_json.get("error", "Unknown Error")
-                    error_msg = resp_json.get(
-                        "errorMessage",
-                        "An unknown error occured while fetching your profile",
-                    )
-                    raise BaseProfileError.auto_select_class(
-                        err.response.status_code
-                    )(err.response.status_code, path, error, error_msg)
-            raise UnauthorizedError(err.response) from err
+            if offline_man.check_requests_error(err):
+                raise NoConnectionError(constants.MOJ_PROF_URL, err) from err
+            raise BaseProfileError() from err
         except Exception as err:
             log.error(
                 "Unexpected error occured while fetching profile info:",
@@ -271,12 +257,14 @@ class MinecraftProfile:
             )
             raise
 
-        if response is None:
-            raise ValueError("Repsonse shouldn't be none!")
         prof_info_json = response.json()
         prof_info_json["last_updated"] = time.time()
 
-        return cls(prof_info_json, mc_token)
+        return prof_info_json
+
+    @classmethod
+    def from_token(cls, mc_token: MinecraftToken):
+        return cls(cls._get_profile_json(mc_token))
 
     @property
     def should_refresh(self):
@@ -314,47 +302,8 @@ class MinecraftProfile:
             self._is_demo_profile = False
         if not self._token:
             raise RuntimeError("No Minecraft token present")
-        headers = {"Authorization": f"Bearer {self.token}"}
 
-        response = None
-        try:
-            response = SESSION.get(constants.MOJ_PROF_URL, headers=headers)
-            response.raise_for_status()
-        except (
-            requests.exceptions.ConnectTimeout,
-            requests.exceptions.ConnectionError,
-        ) as err:
-            log.warning(
-                "Failed to connect to %s: %s",
-                constants.MOJ_PROF_URL,
-                type(err).__name__,
-            )
-            offline_man.check_requests_error(err)
-            raise NoConnectionError(
-                constants.MOJ_PROF_URL, err, original_request=err.request
-            ) from err
-        except requests.HTTPError as err:
-            if err.response:
-                log.error(
-                    "Failed to fetch profile info: HTTP %s",
-                    err.response.status_code,
-                )
-            else:
-                offline_man.check_requests_error(err)
-                log.error(
-                    "Failed to fetch profile info; no response", exc_info=err
-                )
-            raise err
-        except Exception as err:
-            log.error(
-                "Unknown error occured fetching profile info:",
-                exc_info=True,
-            )
-            raise err
-
-        if response is None:
-            raise ValueError("Response shouldn't be none!")
-        prof_info_json: dict = response.json()
+        prof_info_json: dict = self._get_profile_json(self._token)
 
         # dummy data in case of demo account
         self.uuid = prof_info_json.get("id", "UNKNOWN")
@@ -467,7 +416,7 @@ class MinecraftProfile:
             capes_out.append(new_cape_obj)
         return capes_out
 
-    def get_all_cape_thumbs(self) -> list[dict[str, str | Path | QPixmap]]:
+    def get_all_cape_thumbs(self) -> list[dict[str, str | QPixmap]]:
         capes_out = []
         c = self.get_all_cape_paths()
         for cape in c:

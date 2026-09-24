@@ -3,19 +3,21 @@ import json
 import logging
 import time
 
-import requests
-import requests.exceptions
-
-from launcher import SESSION
 from launcher.auth.xbox_token import XboxToken
 from launcher.constants import (
     XSTS_AUTH_URL,
 )
+from launcher.exceptions.network import (
+    HTTPStatusCodeError,
+    WrappedUL3Exception,
+)
+from launcher.networking import make_request
 from launcher.offline import offline_man
 
 from .exceptions import (
     BaseAuthenticationException,
     NoConnectionError,
+    UnauthorizedError,
     XstsAuthError,
 )
 
@@ -92,35 +94,29 @@ class XstsToken:
         }
 
         try:
-            response = SESSION.post(
-                XSTS_AUTH_URL, json=payload, headers=headers
+            response = make_request(
+                "post", XSTS_AUTH_URL, body=payload, headers=headers
             )
-            response.raise_for_status()
-        except (
-            requests.exceptions.ConnectionError,
-            requests.exceptions.ConnectTimeout,
-        ) as err:
+        except HTTPStatusCodeError as err:
+            log.error(
+                "Failed to authenticate with Xbox Live: HTTP %d %s",
+                err.code,
+                err.desc,
+                exc_info=err,
+            )
+            if err.code == 401:
+                raise UnauthorizedError(err.response) from err
+            raise XstsAuthError(err.response.json()) from err
+        except WrappedUL3Exception as err:
             log.warning(
                 "%s occured while attempting MSA token refresh",
                 type(err).__name__,
             )
-            offline_man.check_requests_error(err)
-            raise NoConnectionError(
-                XSTS_AUTH_URL, err, original_request=err.request
-            ) from err
-        except requests.HTTPError as err:
-            if err.response is not None:
-                log.error(
-                    "Failed to refresh MSA token; response code %d\n"
-                    "Response text: %s",
-                    err.response.status_code,
-                    err.response.text,
-                )
-                raise XstsAuthError(err.response.json()) from err
-            log.error("Failed to refresh MSA token; no response", exc_info=err)
+            if offline_man.check_requests_error(err):
+                raise NoConnectionError(XSTS_AUTH_URL, err) from err
             raise BaseAuthenticationException(
-                None,
-                "Unexpected error occured whilst authenticating with XSTS",
+                msg="An unknown error occured authenticating "
+                "with Xbox Live."
             ) from err
 
         return cls(response.json())

@@ -6,9 +6,10 @@ __all__ = ["offline_man"]
 from collections.abc import Callable
 import logging
 
+from urllib3.exceptions import NameResolutionError, NewConnectionError
 import requests
 
-from launcher.threads.offline import OfflineModeCheckerThread
+from launcher.exceptions.network import ConnectError
 
 log = logging.getLogger(__name__)
 
@@ -73,17 +74,24 @@ class _OfflineModeManager:
         Returns the new lack-of-connection status (`True` for offline,
         `False` for online)
         """
-        if not isinstance(err, requests.ConnectionError):
-            return False
-        if (
-            "[Errno 11001]" in str(err)
-            or "[Errno -2]" in str(err)
-            or "[Errno 8]" in str(err)
-        ):
-            log.warning("DNS error occured, setting offline mode.")
-            self.offline = True
-            log.error("Exception traceback:", exc_info=err)
-        return self.offline
+        match err:
+            case requests.ConnectionError():
+                if (
+                    "[Errno 11001]" in str(err)
+                    or "[Errno -2]" in str(err)
+                    or "[Errno 8]" in str(err)
+                ):
+                    log.warning("DNS error occured, setting offline mode.")
+                    self.offline = True
+                    log.error("Exception traceback:", exc_info=err)
+                return self.offline
+            case NameResolutionError() | NewConnectionError() | ConnectError():
+                log.warning("urllib3 error occured, setting offline mode.")
+                self.offline = True
+                log.error("Exception traceback:", exc_info=err)
+                return self.offline
+            case _:
+                return False
 
     @property
     def cause(self):
@@ -95,7 +103,7 @@ class _OfflineModeManager:
 
 
 offline_man = _OfflineModeManager()
-connectivity_poller = OfflineModeCheckerThread()
+connectivity_poller = None
 _current_status = "Unknown"
 
 
@@ -115,6 +123,14 @@ def _status_update(dns_issue: bool, xbl_issue: bool, moj_issue: bool):
 
 def _start_status_checker_thread(callback: Callable):
     global connectivity_poller, _current_status
+    # TODO: just move the thread into this module
+    if "OfflineModeCheckerThread" not in globals():
+        # pylint: disable-next=import-outside-toplevel
+        from launcher.threads.offline import OfflineModeCheckerThread
+    # pylint: disable-next=possibly-used-before-assignment
+    assert OfflineModeCheckerThread  # type: ignore
+    if not connectivity_poller:
+        connectivity_poller = OfflineModeCheckerThread()
     if connectivity_poller.has_run:
         connectivity_poller.terminate()
         connectivity_poller.deleteLater()

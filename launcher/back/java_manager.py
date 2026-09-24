@@ -27,9 +27,10 @@ from launcher.exceptions.back import (
     MarkExecutableError,
 )
 from launcher.functions.text import indent
+from launcher.networking import make_request
 from launcher.paths import paths
 
-from .download_helpers import BulkDownloadError, RunnableDownloader, download
+from .download_helpers import BulkDownloadError, RunnableDownloader
 
 log = logging.getLogger(__name__)
 
@@ -68,11 +69,11 @@ def get_jvm_manifest(force_update: bool = False) -> dict:
             log.info("'jre_manifest.json' is too old, re-downloading it.")
 
     log.info("Getting JRE manifest from '%s'", JAVA_MANIFEST_URL)
-    resp = download(JAVA_MANIFEST_URL)
+    resp = make_request("get", JAVA_MANIFEST_URL)
     mf_raw = resp.json()
     jvm_manifest = mf_raw
-    with open(paths.jvm_manifest, "w") as f:
-        f.write(resp.text)
+    with open(paths.jvm_manifest, "wb") as f:
+        f.write(resp.data)
     log.info("Saved JRE manifest to disk.")
     return jvm_manifest
 
@@ -189,9 +190,9 @@ def get_jvm_version(version: str) -> JavaVersion:
         os.makedirs(parent_dir, exist_ok=True)
 
     log.info("Downloading manifest from '%s'", url)
-    resp = download(url, sha=sha1)
-    with open(manifest_path, "w") as file:
-        file.write(resp.text)
+    resp = make_request("get", url)
+    with open(manifest_path, "wb") as file:
+        file.write(resp.data)
     return JavaVersion.parse(version, version_id, resp.json())
 
 

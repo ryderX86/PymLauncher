@@ -4,7 +4,7 @@ import logging
 from PySide6.QtCore import QThread, Signal
 import requests
 
-from launcher import SESSION
+from launcher.networking import session
 
 MIN_POLL_TIME = 30  # seconds
 
@@ -51,7 +51,7 @@ class OfflineModeCheckerThread(QThread):
             timeout_moj = False
             # check XBL status
             try:
-                resp = SESSION.get(XBOX_STATUS_URL)
+                resp = session.get(XBOX_STATUS_URL)
                 resp.raise_for_status()
                 xbl_status = resp.json()
             except requests.exceptions.ConnectTimeout:
@@ -76,7 +76,7 @@ class OfflineModeCheckerThread(QThread):
 
             # check Mojang status
             try:
-                resp = SESSION.get(MOJANG_STATUS_URL)
+                resp = session.get(MOJANG_STATUS_URL)
                 resp.raise_for_status()
                 moj_status = resp.json()
             except requests.exceptions.ConnectTimeout:

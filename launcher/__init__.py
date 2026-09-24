@@ -1,11 +1,6 @@
 import sys
 
 from PySide6.QtWidgets import QApplication
-from requests.adapters import HTTPAdapter
-from urllib3.util import Retry
-
-from .constants import USER_AGENT
-from .networking import ResilientSession
 
 # setting it here allows me to not fool around with detecting when it's created
 # or spam the functions to get it
@@ -36,18 +31,3 @@ def get_qapp() -> QApplication:
     if not _qapp:
         raise RuntimeError("get_qapp() called before setup_qapp()")
     return _qapp
-
-
-SESSION = ResilientSession()
-SESSION.headers["User-Agent"] = USER_AGENT
-SESSION.mount(
-    "http",
-    HTTPAdapter(
-        max_retries=Retry(
-            total=3,
-            backoff_factor=0.5,
-            status_forcelist=[500, 502, 503, 504],
-            retry_after_max=15,
-        )
-    ),
-)

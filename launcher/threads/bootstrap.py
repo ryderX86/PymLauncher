@@ -37,14 +37,6 @@ class BaseBootstrapThread(QThread):
             self.loggers[type(self)] = logger
             self.log = logger
 
-    def _on_error(self, err: Exception, can_continue: bool):
-        if not can_continue and not self.wait_after_error:
-            self.log.warning(
-                "Can't continue after previous error, "
-                "stopping bootstrap process."
-            )
-            self.requestInterruption()
-
     @property
     def ui_msg(self):
         return self._ui_msg

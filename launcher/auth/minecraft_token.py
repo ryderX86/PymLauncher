@@ -2,20 +2,24 @@ import logging
 import random
 import time
 
-import requests
-import requests.exceptions
-
-from launcher import SESSION
 from launcher.auth.xsts_token import XstsToken
 from launcher.constants import (
     LAUNCH_ENTITLEMENTS_URL,
     MOJ_AUTH_URL,
-    MOJ_AUTH_URL_ALT,
 )
 from launcher.datatypes import decode_jwt
+from launcher.exceptions.network import (
+    HTTPStatusCodeError,
+    WrappedUL3Exception,
+)
+from launcher.networking import make_request
 from launcher.offline import offline_man
 
-from .exceptions import NoConnectionError, UnauthorizedError
+from .exceptions import (
+    BaseAuthenticationException,
+    NoConnectionError,
+    UnauthorizedError,
+)
 
 log = logging.getLogger(__name__)
 
@@ -111,99 +115,39 @@ class MinecraftToken:
         return {"Authorization": f"Bearer {self.access_token}"}
 
     @classmethod
-    def auth_alternate(cls, xsts_token: XstsToken):
+    def auth(cls, xsts_token: XstsToken):
         payload = {
-            "xtoken": f"XBL3.0 x={xsts_token.user_hash};{xsts_token.token}",
+            "identityToken": f"XBL3.0 x={xsts_token.user_hash};{xsts_token.token}",
             "platform": "PC_LAUNCHER",
         }
 
-        response = None
         try:
-            response = SESSION.post(MOJ_AUTH_URL, json=payload)
-            response.raise_for_status()
-        except (
-            requests.exceptions.ConnectionError,
-            requests.exceptions.ConnectTimeout,
-        ) as err:
-            log.warning(
-                "%s occured while attempting MSA token refresh",
-                type(err).__name__,
+            resp = make_request("post", MOJ_AUTH_URL, body=payload)
+        except HTTPStatusCodeError as err:
+            log.error(
+                "Failed to get Minecraft token from %r; HTTP %d - %s\n"
+                "Full response: %r",
+                MOJ_AUTH_URL,
+                err.code,
+                err.desc,
+                err.body,
             )
-            offline_man.check_requests_error(err)
-            raise NoConnectionError(
-                MOJ_AUTH_URL, err, original_request=err.request
+            raise UnauthorizedError(
+                err.response, f"HTTP {err.code} {err.desc}"
             ) from err
-        except requests.HTTPError as err:
-            if err.response is not None:
-                log.error(
-                    "Failed to get Minecraft Token from %r; response code %d\n"
-                    "Full response: %r",
-                    MOJ_AUTH_URL_ALT,
-                    err.response.status_code,
-                    err.response.text,
-                )
-            else:
-                offline_man.check_requests_error(err)
-                log.error(
-                    "Failed to get Minecraft token from %r; no response",
-                    MOJ_AUTH_URL,
-                    exc_info=err,
-                )
-            raise UnauthorizedError(err.response) from err
-
-        if response is None:
-            raise ValueError("Failed to get response")
-
-        return cls(response.json())
-
-    @classmethod
-    def auth(cls, xsts_token: XstsToken):
-        payload = {
-            "identityToken": f"XBL3.0 x={xsts_token.user_hash};{xsts_token.token}"
-        }
-
-        response = None
-        try:
-            response = SESSION.post(MOJ_AUTH_URL, json=payload)
-            response.raise_for_status()
-        except (
-            requests.exceptions.ConnectionError,
-            requests.exceptions.ConnectTimeout,
-        ) as err:
-            log.warning(
-                "%s occured while attempting MSA token refresh",
-                type(err).__name__,
+        except WrappedUL3Exception as err:
+            log.error(
+                "Failed to get Minecraft token from %r:",
+                MOJ_AUTH_URL,
+                exc_info=err,
             )
-            offline_man.check_requests_error(err)
-            raise NoConnectionError(
-                MOJ_AUTH_URL, err, original_request=err.request
+            if offline_man.check_requests_error(err):
+                raise NoConnectionError(MOJ_AUTH_URL, err) from err
+            raise BaseAuthenticationException(
+                err.resp, "An unknown issue occured while authenticating."
             ) from err
-        except requests.HTTPError as err:
-            if err.response is not None:
-                if err.response.status_code in (400, 402, 403):
-                    log.warning(
-                        "Malformed request err; defaulting to alt auth url"
-                    )
-                    log.debug("returning `cls.auth_alternate(xsts_token)`")
-                    return cls.auth_alternate(xsts_token)
-                log.error(
-                    "Failed to refresh MSA token; response code %d\n"
-                    "Response text: %s",
-                    err.response.status_code,
-                    err.response.text,
-                )
-            else:
-                log.error(
-                    "Failed to refresh MSA token; no response", exc_info=err
-                )
-            raise UnauthorizedError(err.response) from err
 
-        if response is None:
-            raise ValueError("response should not be false!")
-
-        new_token = cls(response.json())
-        new_token.get_launcher_entitlements()
-        return new_token
+        return cls(resp.json())
 
     from_token = auth
     """Alias for `cls.auth()`"""
@@ -242,8 +186,16 @@ class MinecraftToken:
         return
 
     def get_launcher_entitlements(self):
-        resp = SESSION.get(LAUNCH_ENTITLEMENTS_URL, headers=self._req_header)
-        resp.raise_for_status()
+        try:
+            resp = make_request(
+                "get", LAUNCH_ENTITLEMENTS_URL, headers=self._req_header
+            )
+        except HTTPStatusCodeError as err:
+            raise UnauthorizedError(
+                err.response,
+                "Failed getting account entitlements (owned items): "
+                f"HTTP {err.code} {err.desc}",
+            ) from err
 
         game_list = resp.json()
 

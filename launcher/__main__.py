@@ -1,11 +1,12 @@
 from json import JSONDecodeError
+from types import NoneType
 from typing import NoReturn
 import atexit
 import logging
 import sys
 import warnings
 
-from PySide6.QtCore import QEventLoop, QFile, QTimer
+from PySide6.QtCore import QEventLoop, QFile, QTimer, Slot
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QApplication, QStyleFactory
 
@@ -112,7 +113,7 @@ class LauncherApp:
         # constructed
         if account_man.signals.thread() != self.qapp.thread():
             log.warning(
-                "Account manager lives on an incorrect thread, "
+                "Account manager signals object lives on an incorrect thread, "
                 "attempting to mediate this before UI creation."
             )
             account_man.signals = account_man._Signals()
@@ -126,6 +127,7 @@ class LauncherApp:
 
         self.main_window.home_page.game_crash.connect(self.show_crash_dialog)
 
+    @Slot()
     def _set_clean_exit(self):
         global clean_exit
         clean_exit = True
@@ -249,12 +251,6 @@ class LauncherApp:
                 self.lb_window.set_text(  # final "..." appended automatically
                     "...\n".join([a.ui_msg for a in self.bootstrap_threads])
                 )
-
-    def _on_thread_finished(self, thread: BaseBootstrapThread):
-        idx = self.bootstrap_threads.index(thread)
-        self.bootstrap_threads.pop(idx)
-        thread.deleteLater()
-        return
 
     def _on_accounts_loaded(self):
         if account_man.has_accounts:
@@ -427,6 +423,8 @@ class LauncherApp:
             self.show_login()
         self._refresh_account_ui()
 
+    @Slot(NoneType, bool)
+    @Slot(str, bool)
     def show_login(
         self, *, reason: str | None = None, automatic: bool = False
     ):
@@ -462,6 +460,7 @@ class LauncherApp:
             self.exit()
         return
 
+    @Slot(str, str)
     def show_crash_dialog(self, exit_code: str, stderr: str):
         log.debug("Showing crash dialog to user")
         dialog = ErrorDisplay(self.main_window, exit_code, stderr)
@@ -477,6 +476,7 @@ class LauncherApp:
             self._refresh_account_ui()
         return
 
+    @Slot()
     def logout(self):
         if account_man.active:
             account_man.remove(account_man.active)
@@ -490,6 +490,7 @@ class LauncherApp:
             return self.show_login()
         return
 
+    @Slot()
     def play(self):
         if not account_man.active:
             error_box("No active account! Please submit a bug report.")
@@ -545,6 +546,7 @@ class LauncherApp:
         self.install_worker.error.connect(self._on_install_error)
         self.install_worker.start()
 
+    @Slot(LauncherAccount)
     def _on_account_changed(
         self, acc: LauncherAccount, *, current_retries: int = 0
     ) -> None:
@@ -638,10 +640,12 @@ class LauncherApp:
                 account_man.replace_into(active_account)
         self.main_window.account_dropdown.refresh()
 
+    @Slot(Exception)
     def _on_install_error(self, err: Exception):
         log.debug("Notifying user of error in game launch process")
         error_box(str(err))
 
+    @Slot()
     def _close_event(self):
         self.exit()
 
@@ -664,7 +668,11 @@ def on_exit():
         log.error("Something went very wrong, not doing normal cleanup.")
         return
     log.info("Cleaning up")
-    if connectivity_poller.has_run and offline_man.offline:
+    if (
+        connectivity_poller
+        and connectivity_poller.has_run
+        and offline_man.offline
+    ):
         log.info("Terminating connectivity poller")
         connectivity_poller.terminate()
     config.save()

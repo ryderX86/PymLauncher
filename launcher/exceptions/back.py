@@ -52,3 +52,7 @@ class MarkExecutableError(JavaDownloadError):
         elif self.__context__ is not None:
             return self.__context__
         return None
+
+
+class LZMAEarlyQuitError(Exception):
+    """Reached EOF too early in LZMA"""

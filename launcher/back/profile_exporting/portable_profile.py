@@ -275,7 +275,7 @@ class PortableProfile:
 
         if os.path.splitext(output)[-1] == ".json":
             with open(output, "w") as f:
-                f.write(json.dumps(self.prof.dict()))
+                f.write(json.dumps(self.prof.to_dict_compat()))
             return True
 
         log.debug('Opening "%s" as NEW archive', str(output))
@@ -400,7 +400,7 @@ class PortableProfile:
                     os.path.join(b, "debug-profile.json"), "debug-profile.json"
                 )
 
-            profile_dump = self.prof.to_dict()
+            profile_dump = self.prof.to_dict_compat()
             profile_dump["_FORMAT"] = "beachhorse"
             profile_dump["_PATHS"] = []
             if mods:

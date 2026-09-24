@@ -3,7 +3,8 @@ import time
 
 from requests.exceptions import RequestException
 
-from launcher import SESSION, constants
+from launcher import constants
+from launcher.networking import make_request
 
 from .base_login_thread import BaseLoginThread
 
@@ -44,9 +45,10 @@ class DeviceCodePoller(BaseLoginThread):
                 return
 
             try:
-                resp = SESSION.post(
+                resp = make_request(
+                    "post",
                     constants.MS_TOKEN_URL,
-                    data={
+                    form={
                         "grant_type": constants.AZURE_GRANT_TYPE,
                         "client_id": constants.AZURE_CLIENT_ID,
                         "device_code": self.device_code,

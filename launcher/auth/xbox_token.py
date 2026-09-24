@@ -3,14 +3,15 @@ import json
 import logging
 import time
 
-import requests
-import requests.exceptions
-
-from launcher import SESSION
 from launcher.auth.microsoft_account import MicrosoftAccount
 from launcher.constants import (
     XBOX_AUTH_URL,
 )
+from launcher.exceptions.network import (
+    HTTPStatusCodeError,
+    WrappedUL3Exception,
+)
+from launcher.networking import make_request
 from launcher.offline import offline_man
 
 from .exceptions import (
@@ -88,42 +89,29 @@ class XboxToken:
         }
 
         try:
-            response = SESSION.post(
-                XBOX_AUTH_URL, json=payload, headers=headers
+            response = make_request(
+                "post", XBOX_AUTH_URL, body=payload, headers=headers
             )
-            response.raise_for_status()
-        except (
-            requests.exceptions.ConnectionError,
-            requests.exceptions.ConnectTimeout,
-        ) as err:
+        except HTTPStatusCodeError as err:
+            log.error(
+                "Failed to authenticate with Xbox: HTTP %d %s",
+                err.code,
+                err.desc,
+                exc_info=err,
+            )
+            if err.code == 401:
+                raise UnauthorizedError(err.response) from err
+            raise BaseAuthenticationException(err.response) from err
+        except WrappedUL3Exception as err:
             log.warning(
                 "%s occured while attempting MSA token refresh",
                 type(err).__name__,
             )
-            offline_man.check_requests_error(err)
-            raise NoConnectionError(
-                XBOX_AUTH_URL, err, original_request=err.request
+            if offline_man.check_requests_error(err):
+                raise NoConnectionError(XBOX_AUTH_URL, err) from err
+            raise BaseAuthenticationException(
+                None, "Failed to authenticate with Xbox"
             ) from err
-        except requests.HTTPError as err:
-            if err.response is not None:
-                log.error(
-                    "Failed to refresh MSA token; response code %d",
-                    err.response.status_code,
-                )
-                match err.response.status_code:
-                    case 401:
-                        raise UnauthorizedError(err.response) from err
-                    case _:
-                        raise BaseAuthenticationException(
-                            err.response
-                        ) from err
-            else:
-                log.error(
-                    "Failed to refresh Xbox token; no response", exc_info=err
-                )
-                raise BaseAuthenticationException(
-                    None, "Unknown error whilst authenticating with Xbox"
-                ) from err
         try:
             resp_json = response.json()
         except json.JSONDecodeError as err:

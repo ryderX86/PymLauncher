@@ -22,14 +22,14 @@ else:
 def get_user_data_dir():
     home = os.path.expanduser("~")
     match constants.PLATFORM:
-        case "Windows":
+        case "win32" | "cygwin":
             if "APPDATA" in os.environ:
                 return os.environ["APPDATA"]
             else:
                 return os.path.join(home, "AppData", "Roaming")
-        case "Linux":
+        case "linux":
             return home
-        case "Darwin":
+        case "darwin":
             return os.path.join(home, "Library", "Application Support")
         case _:
             if "XDG_DATA_HOME" in os.environ:

@@ -7,7 +7,7 @@ Home page, play button, profile info, progress bar, all that stuff.
 import logging
 import os
 
-from PySide6.QtCore import QItemSelection, QSize, Qt, QUrl, Signal
+from PySide6.QtCore import QItemSelection, QSize, Qt, QUrl, Signal, Slot
 from PySide6.QtGui import QDesktopServices, QIcon, QPalette
 from PySide6.QtWidgets import (
     QComboBox,
@@ -345,6 +345,7 @@ class HomePage(QWidget):
             launcher.game_log.connect(self._handle_game_log)
         self.game_logs.clear()
 
+    @Slot(str, float, float, bool)
     def _on_progress(
         self, label: str, current: float, total: float, use_mb: bool
     ):
@@ -358,9 +359,11 @@ class HomePage(QWidget):
                     f"{label}: {int(current)}/{int(total)}"
                 )
 
+    @Slot(str)
     def _on_status(self, text: str):
         self.progress_label.setText(text)
 
+    @Slot(str, str)
     def _on_game_closed(self, exit_code: str, stdout: str):
         if int(exit_code) == 0:
             self.game_closed.emit("0")
@@ -444,6 +447,7 @@ class HomePage(QWidget):
         else:
             self.play_button.setText("Launch Demo")
 
+    @Slot(bool, str)
     def _on_launch_finished(self, success: bool, message: str):
         if success:
             self.play_button.setText("Playing...")
@@ -461,6 +465,7 @@ class HomePage(QWidget):
                 self,
             )
 
+    @Slot(bool)
     def _on_install_finished(self, success: bool):
         if success:
             self.play_button.setText("Launching...")
@@ -514,5 +519,6 @@ class HomePage(QWidget):
                 )
                 self.game_logs.setPlainText("*taps mic* This thing on?")
 
+    @Slot(str)
     def _handle_game_log(self, log_text: str):
         self.game_logs.appendPlainText(log_text)

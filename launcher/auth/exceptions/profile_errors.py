@@ -4,7 +4,7 @@ class BaseProfileError(Exception):
 
     def __init__(
         self,
-        status_code: int,
+        status_code: int = -1,
         path: str = "unknown",
         error: str = "Unknown",
         error_message: str = "An unknown error occured",

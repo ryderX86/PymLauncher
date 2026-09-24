@@ -4,8 +4,8 @@ import hashlib
 import logging
 import os
 
-from launcher import SESSION
 from launcher.back.download_helpers import RunnableDownloader
+from launcher.networking import make_request
 from launcher.paths import paths
 
 log = logging.getLogger(__name__)
@@ -89,9 +89,9 @@ class Log4JConfig:
         if self.available():
             log.debug("Skipping Log4J config download, up to date already.")
             return
-        resp = SESSION.get(self.url)
+        resp = make_request("get", self.url)
         with open(self.path, "wb") as file:
-            file.write(resp.content)
+            file.write(resp.data)
         log.info("Downloaded Log4J config at %r", self.path)
         return
 

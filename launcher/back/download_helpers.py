@@ -6,7 +6,14 @@ from collections import Counter
 from datetime import timedelta
 from pathlib import Path
 from types import FunctionType
-from typing import Callable, Iterable, Literal, TypeVar, assert_never
+from typing import (
+    Callable,
+    Generator,
+    Iterable,
+    Literal,
+    TypeVar,
+    assert_never,
+)
 import hashlib
 import logging
 import lzma
@@ -14,16 +21,40 @@ import os
 import time
 
 from PySide6.QtCore import QRunnable
+from urllib3.response import BaseHTTPResponse
 import requests
 
-from launcher import SESSION, get_exit_status
+from launcher import get_exit_status
 from launcher.config import config
+from launcher.exceptions.back import LZMAEarlyQuitError
+from launcher.exceptions.network import (
+    HTTPStatusCodeError,
+    WrappedUL3Exception,
+)
 from launcher.functions import is_path_valid
+from launcher.networking import make_request, session
 from launcher.offline import offline_man
-from launcher.paths import paths
 
 log = logging.getLogger(__name__)
 T = TypeVar("T")
+
+
+def iter_lzma_stream(resp: BaseHTTPResponse) -> Generator[bytes]:
+    decompressor = lzma.LZMADecompressor()
+    try:
+        for chunk in resp.stream(None):
+            uncompressed_data = decompressor.decompress(chunk)
+
+            if uncompressed_data:
+                yield uncompressed_data
+    finally:
+        # pylint: disable-next=using-constant-test
+        if decompressor.eof:
+            resp.release_conn()
+        else:
+            resp.drain_conn()
+    if not decompressor.eof:
+        raise LZMAEarlyQuitError("EOF was never reached")
 
 
 def _offline_mode_warning(func: FunctionType):
@@ -51,7 +82,7 @@ def _download(
 ) -> requests.Response:
     if _retries > max_retries:
         raise RuntimeError(f"Repeatedly failed to download from {url!r}")
-    resp = SESSION.get(url, timeout=timeout)
+    resp = session.get(url, timeout=timeout)
     resp.raise_for_status()
     if isinstance(sha, str):
         if hashlib.sha1(resp.content).hexdigest() == sha:
@@ -196,7 +227,7 @@ class RunnableDownloader(QRunnable):
     """File download URL"""
     _path: str
     """File final path"""
-    _vpath: str | os.PathLike | None
+    _vpath: str | None
     """File final location for legacy assets"""
     _hash: set[str] | None
     """File hash to check against"""
@@ -246,8 +277,8 @@ class RunnableDownloader(QRunnable):
         """
         super().__init__()
         self._url = url
-        self._path = str(path)
-        self._vpath = vpath
+        self._path = str(path).rstrip("\\/")
+        self._vpath = str(vpath).rstrip("\\/") if vpath else None
         if not is_path_valid(self._path):
             raise ValueError(f"Invalid path: {self._path!r}")
         if self._vpath:
@@ -297,26 +328,28 @@ class RunnableDownloader(QRunnable):
                 )
                 return True
             return False
-        with open(self._path, "rb") as file:
-            content = file.read()
-        return hashlib.sha1(content).hexdigest() in self._hash
+        with open(self._path, "rb") as f:
+            filehash = hashlib.file_digest(f, "sha1").hexdigest()
+        return filehash in self._hash
 
     def run(self):
         if get_exit_status():
             self.log.debug("Quitting thread early")
             return
         elif self.sleep_time:
+            self.log.debug("Waiting for sleep timer")
             time.sleep(self.sleep_time)
 
         # check hash before trying to download the file
-        if self._should_check_hash and self._file_exists:
+        if self._should_check_hash:
             if self._check_sha1():
                 self.success = True
                 if self._callback:
                     self._callback(1)
                 return
-            self.log.debug("File exists but SHA1 doesn't match, deleting.")
-            os.unlink(self._path)
+            if self._file_exists:
+                self.log.debug("File exists but SHA1 doesn't match, deleting.")
+                os.unlink(self._path)
 
         # check/make directories
         if not os.path.isdir(os.path.dirname(self._path)):
@@ -341,9 +374,9 @@ class RunnableDownloader(QRunnable):
                 log.debug(
                     "Creating directory (plus non-existant parent "
                     "directories) at %r",
-                    os.path.dirname(self._path),
+                    os.path.dirname(self._vpath),
                 )
-                os.makedirs(os.path.dirname(self._path), exist_ok=True)
+                os.makedirs(os.path.dirname(self._vpath), exist_ok=True)
             except Exception as err:
                 self.log.error(
                     "Failed to create directory at %r",
@@ -367,55 +400,34 @@ class RunnableDownloader(QRunnable):
         # download the file
         self.success = False
         try:
-            resp = SESSION.get(self._url, timeout=30)
-            resp.raise_for_status()
-        except requests.HTTPError as err:
-            offline_man.check_requests_error(err)
-            self.last_exception = err
-            if err.response and err.response.status_code == 429:
-                self.log.error(
-                    "HTTP 429: Too many requests; waiting for cooldown"
-                )
-                type(self).sleep_time += 5
-                self.log.debug("Current wait time: %f", self.sleep_time)
-                return self.download()
-            elif (
-                err.args
-                and isinstance(err.args[0], str)
-                and err.args[0].startswith("404")
-            ):
+            resp = make_request("get", self._url, preload_response=False)
+        except HTTPStatusCodeError as err:
+            log.error(
+                "HTTP %d - %r returned by %r:",
+                err.code,
+                err.desc,
+                self._url,
+                exc_info=err,
+            )
+            if err.code == 404:
+                if self._file_exists:
+                    log.info("File exists, have to assume it works.")
+                    self.success = True
+                    return
+            raise
+        except WrappedUL3Exception as err:
+            # check if we need to raise before anything
+            if not err.should_retry:
+                self.last_exception = err
                 log.error(
-                    "404 client error trying to get the file at %r", self._url
+                    "Error in response from %r:", self._url, exc_info=err
                 )
-                if self.file_exists():
-                    log.info(
-                        "File from %r already exists at %r; have to assume it works.",
-                        self._url,
-                        self._path.replace(paths.game, "<default game dir>"),
-                    )
-                self.success = True
-                self._downloaded_file = False
-                if self._callback:
-                    self._callback(1)
-                return
-            else:
-                self.log.error(
-                    "HTTPError in download; status code %r",
-                    err.response.status_code if err.response else "<unknown>",
-                    exc_info=err,
-                )
-                type(self).sleep_time += 0.2
-                self._failed_downloads += 1
-                if self._failed_downloads > 2:
-                    log.warning(
-                        "Failed to download %d times, stopping process.",
-                        self._failed_downloads,
-                    )
-                    self.last_exception = err
-                    return None
-                if not offline_man.offline:
-                    return self.download()
-                raise
+                raise err
+
+            self._failed_downloads += 1
+            log.info("Retrying after 5s.")
+            type(self).sleep_time = 5
+            return self.download()
         except Exception as err:
             offline_man.check_requests_error(err)
             self.last_exception = err
@@ -426,14 +438,50 @@ class RunnableDownloader(QRunnable):
             raise err
         type(self).sleep_time = 0
 
+        files = {open(self._path, "wb")}
+        if self._vpath:
+            files.add(open(self._vpath, "wb"))
+        sha1 = hashlib.sha1()
+        try:
+            if not self._lzma:
+                for chunk in resp.stream(None):
+                    for f in files:
+                        f.write(chunk)
+                    sha1.update(chunk)
+            else:
+                for chunk in iter_lzma_stream(resp):
+                    for f in files:
+                        f.write(chunk)
+                    sha1.update(chunk)
+        except LZMAEarlyQuitError as err:
+            log.error("Download failed, EOF never reached by LZMA module.")
+            self._failed_downloads += 1
+            if self._failed_downloads > 2:
+                raise err
+            else:
+                return self.download()
+        except Exception as err:
+            log.debug("Error occured, releasing connection")
+            resp.release_conn()
+            offline_man.check_requests_error(err)
+            self.last_exception = err
+            self.log.error(
+                "Failed to get file from %r:", self._url, exc_info=err
+            )
+            self._failed_downloads += 1
+            type(self).sleep_time = 0.2
+            if not offline_man.offline and self._failed_downloads <= 2:
+                time.sleep(self.sleep_time)
+                return self.download()
+            else:
+                raise err
+        finally:
+            for f in files:
+                f.close()
+
         # check the download
-        if self._lzma:
-            content = lzma.decompress(resp.content)
-        else:
-            content = resp.content
         if self._hash:
-            sha1 = hashlib.sha1(content).hexdigest()
-            if sha1 not in self._hash:
+            if sha1.hexdigest() not in self._hash:
                 self.last_exception = RuntimeError(
                     "SHA mismatch occured after download"
                 )
@@ -443,7 +491,7 @@ class RunnableDownloader(QRunnable):
                         "max retries exceeded. "
                         "(SHA-1 mismatch, expected any of "
                         f"{tuple(self._hash)!r}, got "
-                        f"{sha1!r})"
+                        f"{sha1.hexdigest()!r})"
                     )
                     self.last_exception = err
                     raise err from self.last_exception
@@ -452,25 +500,15 @@ class RunnableDownloader(QRunnable):
                 resp = None
                 return self.download()
         else:
-            log.warning(
+            log.debug(
                 "No SHA1 provided for file downloaded at '%s'",
                 self._path,
             )
-
-        # write the file
-        with open(self._path, "wb") as f:
-            f.write(content)
-        if self._vpath:
-            with open(self._vpath, "wb") as f:
-                f.write(content)
         self.success = True
         self._downloaded_file = True
         if self._callback:
             self._callback(1)
         return
-
-    def file_exists(self):
-        return os.path.isfile(self._path)
 
     @property
     def hash(self) -> set[str] | None:

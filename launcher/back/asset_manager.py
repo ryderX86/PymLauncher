@@ -17,7 +17,6 @@ from PySide6.QtCore import QThreadPool
 from launcher.back.download_helpers import (
     BulkDownloadError,
     RunnableDownloader,
-    download,
 )
 from launcher.constants import (
     RESOURCES_URL,
@@ -29,6 +28,7 @@ from launcher.exceptions.back import (
     AssetDownloadError,
     Log4JConfigReadError,
 )
+from launcher.networking import make_request
 from launcher.paths import paths
 
 log = logging.getLogger(__name__)
@@ -106,7 +106,7 @@ def check_or_download_logging_config(version_json: dict) -> str | None:
 
     if os.path.isfile(dest_path):
         with open(dest_path, "rb") as fb:
-            f_sha1 = hashlib.sha1(fb.read()).hexdigest()
+            f_sha1 = hashlib.file_digest(fb, "sha1")
         if f_sha1 != sha1:
             log.warning(
                 "Logging config %r has a mismatched SHA, redownloading", id_
@@ -121,14 +121,15 @@ def check_or_download_logging_config(version_json: dict) -> str | None:
         log.info("Downloading logging config %r", id_)
     if not os.path.isfile(dest_path):
         try:
-            resp = download(url, sha=sha1)
-            with open(dest_path, "wb") as fb:
-                fb.write(resp.content)
+            resp = make_request("get", url)
         except Exception as err:
             log.error(
                 "Failed to download logging config from %r:", url, exc_info=err
             )
             raise AssetDownloadError(url) from err
+        else:
+            with open(dest_path, "wb") as file:
+                file.write(resp.data)
 
     if not os.path.isfile(dest_path_patched):
         final_logging_path = patch_logging_config(dest_path)

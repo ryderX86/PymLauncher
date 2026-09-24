@@ -80,8 +80,8 @@ JAVA_MANIFEST_URL = (
     "/2ec0cc96c44e5a76b9c8b7c39df7210883d12871/all.json"
 )
 
-PLATFORM = platform.system()
-_friendly_plat = " ".join([PLATFORM, platform.version()])
+PLATFORM = sys.platform
+_friendly_plat = " ".join([platform.system(), platform.version()])
 
 USER_AGENT = (
     f"{AUTHOR_USR}/{LAUNCHER_NAME} {LAUNCHER_VERSION} ({_friendly_plat}) "
@@ -93,12 +93,12 @@ OS: Literal["windows", "osx", "linux", "unknown"]
 OS_PATH_DELIM: Literal["\\", "/"] = "/"
 OS_VER: str = platform.version()
 match PLATFORM:
-    case "Windows":
+    case "win32" | "cygwin":
         OS = "windows"
         OS_PATH_DELIM = "\\"
-    case "Darwin":
+    case "darwin":
         OS = "osx"
-    case "Linux":
+    case "linux":
         OS = "linux"
         OS_VER = platform.release()
     case _:
@@ -206,7 +206,7 @@ DEFAULT_MEMORY_MAX = "4G"
 JVM_TEMP_DIR: str
 """The temporary directory used by the JVM"""
 match PLATFORM:
-    case "Windows":
+    case "win32" | "cygwin":
         JVM_TEMP_DIR = os.getenv("TMP", os.getenv("TEMP", ""))
     case _:
         JVM_TEMP_DIR = os.path.normpath("/tmp")

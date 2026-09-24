@@ -16,16 +16,14 @@ import os
 import re
 import time
 
-from launcher import SESSION
 from launcher.config import config
 from launcher.constants import (
     VERSION_MANIFEST_URL,
 )
 from launcher.datatypes.game_version import GameVersion, GameVersionStub
+from launcher.networking import make_request
 from launcher.offline import offline_man
 from launcher.paths import paths
-
-from .download_helpers import download
 
 log = logging.getLogger(__name__)
 
@@ -128,7 +126,7 @@ def fetch_version_manifest(force_refresh: bool = False):
     log.info("Fetching version manifest from '%s'", VERSION_MANIFEST_URL)
     os.makedirs(paths.versions, exist_ok=True)
     try:
-        resp = SESSION.get(VERSION_MANIFEST_URL, timeout=30)
+        resp = make_request("get", VERSION_MANIFEST_URL, timeout=30)
     except Exception as err:
         log.error(
             "Failed to get version manifest: %r",
@@ -147,8 +145,8 @@ def fetch_version_manifest(force_refresh: bool = False):
         manifest_cache["versions"] = []
     elif "latest" not in manifest_cache:
         manifest_cache["latest"] = {}
-    with open(mf_path, "w") as f:
-        f.write(resp.text)
+    with open(mf_path, "wb") as f:
+        f.write(resp.data)
     return manifest_cache
 
 
@@ -392,17 +390,24 @@ def _fetch_version_json(
     sha1 = mf_entry["sha1"]
     log.info("Downloading version JSON for %r from %r", version_id, url)
     try:
-        resp = download(url, sha=sha1)
+        resp = make_request("get", url)
     except Exception as err:
         log.error(
             "Failed to download version.json for %r!", version_id, exc_info=err
         )
         raise
 
+    dl_hash = hashlib.sha1(resp.data).hexdigest()
+    if dl_hash != sha1:
+        raise RuntimeError(
+            "SHA-1 of version info didn't match. "
+            f"Expected {sha1!r}, got {dl_hash!r}"
+        )
+
     if not os.path.isdir(ver_dir):
         os.makedirs(ver_dir)
-    with open(local_path, "w") as f:
-        f.write(resp.text)
+    with open(local_path, "wb") as f:
+        f.write(resp.data)
     _version_json_cache[version_id] = resp.json()
     return _version_json_cache[version_id]
 
@@ -552,13 +557,12 @@ def download_client_jar(
 
     os.makedirs(ver_dir, exist_ok=True)
 
-    resp = SESSION.get(url, stream=True, timeout=60)
-    resp.raise_for_status()
+    resp = make_request("get", url, preload_response=False, timeout=60)
 
     downloaded = 0
     sha1 = hashlib.sha1()
     with open(jar_path, "wb") as fb:
-        for chunk in resp.iter_content(chunk_size=None):
+        for chunk in resp.stream(None):
             fb.write(chunk)
             sha1.update(chunk)
             if progress_callback:

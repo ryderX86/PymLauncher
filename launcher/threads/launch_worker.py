@@ -13,7 +13,7 @@ import random
 import re
 import subprocess
 
-from PySide6.QtCore import QThread, Signal
+from PySide6.QtCore import QThread, Signal, Slot
 
 from launcher import constants
 from launcher.auth import LauncherAccount
@@ -563,6 +563,7 @@ class LaunchWorker(QThread):
         except Exception as err:
             log.error("Error in LaunchWorker bootstrap():", exc_info=err)
 
+    @Slot(bool)
     def start_if_success(self, success: bool):
         if success:
             self.start()
