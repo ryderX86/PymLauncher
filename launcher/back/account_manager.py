@@ -277,6 +277,8 @@ class AccountManager:
         for acc in self.list():
             if acc.xuid == preferred_xuid:
                 continue
+            if not acc.token_valid and ignore_refreshes:
+                continue
             try:
                 self._check_refresh_token(acc)
             except Exception as err:
