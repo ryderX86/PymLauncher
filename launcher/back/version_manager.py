@@ -1,9 +1,6 @@
 """
 Handles fetching & downloading version manifest JSON files, resolving version
 inheritence, and downloading the client JAR file.
-
-`OS_PATH_DELIM` from `minecraftlauncher.constants` is imported as `D` for use
-in `os.path` strings as a forward or back slash for OS independant behavior.
 """
 
 from copy import deepcopy
@@ -28,7 +25,6 @@ from launcher.paths import paths
 log = logging.getLogger(__name__)
 
 manifest_cache: dict = {"latest": {}, "versions": []}
-_manifest_loaded: bool = False
 
 FABRIC_VER_RE = re.compile(
     r"(?:fabric-loader-)((?:[0-9]+\.?)+)-((?:[0-9]+\.?)+(?:-snapshot-[0-9]+)?)"
@@ -38,20 +34,7 @@ _version_list_cache: list[GameVersionStub] = []
 
 _inheritence_cache: dict[str, dict] = {}
 
-_args_cache: dict[str, str] = {}
-
 _version_json_cache: dict[str, dict] = {}
-
-
-def _get_manifest_cache_ids():
-    fetch_version_manifest()
-    version_list: list[str] = []
-    for version in manifest_cache.get("versions", []):
-        id_ = version.get("id", "")
-        if not id_:
-            continue
-        version_list.append(id_)
-    return version_list
 
 
 def fetch_version_manifest(force_refresh: bool = False):
@@ -358,10 +341,10 @@ def _fetch_version_json(
 
     # check local files
     if os.path.isdir(ver_dir):
-        with open(local_path, "rb") as f:
-            local_bytes = f.read()
-            local_text = local_bytes.decode("utf-8")
-        local_sha1 = hashlib.sha1(local_bytes).hexdigest()
+        with open(local_path, "rb") as file:
+            local_sha1 = hashlib.file_digest(file, "sha1").hexdigest()
+            file.seek(0)
+            local_text = file.read()
         if (mf_entry and mf_entry["sha1"] == local_sha1) or (not mf_entry):
             try:
                 _version_json_cache[version_id] = json.loads(local_text)
@@ -580,30 +563,6 @@ def download_client_jar(
     return jar_path
 
 
-def check_client_jar(version_json: dict):
-    """
-    Checks if the client jar is installed or not.
-
-    Returns `True` if the client JAR is installed.
-    """
-    ver_id: str = version_json["id"]
-    client_info = get_client_jar_info(version_json)
-    if not client_info:
-        raise ValueError(f"No download info for version '{ver_id}'")
-    expected_sha1: str | None = client_info.get("sha1")
-
-    jar_path = os.path.join(paths.versions, ver_id, f"{ver_id}.jar")
-
-    if os.path.isfile(jar_path) and expected_sha1:
-        with open(jar_path, "rb") as f:
-            sha1 = hashlib.sha1(f.read()).hexdigest()
-        return bool(sha1 == expected_sha1)
-    elif os.path.isfile(jar_path):
-        log.warning("Unable to check SHA1 for JAR at '%s'", str(jar_path))
-        return True
-    return False
-
-
 def version_exists(id_: str):
     """
     Checks if a version exists in the Mojang manifest or locally
@@ -635,16 +594,6 @@ def version_exists(id_: str):
             )
         else:
             return True
-    return False
-
-
-def is_vanilla(id_: str):
-    """
-    Check if a version ID points towards a Mojang release, or a modded version
-    locally installed.
-    """
-    if id_ in [a.get("id", "") for a in manifest_cache["versions"]]:
-        return True
     return False
 
 
