@@ -5,7 +5,6 @@ Common functions for downloading files.
 from collections import Counter
 from datetime import timedelta
 from pathlib import Path
-from types import FunctionType
 from typing import (
     Callable,
     Generator,
@@ -22,7 +21,6 @@ import time
 
 from PySide6.QtCore import QRunnable
 from urllib3.response import BaseHTTPResponse
-import requests
 
 from launcher import get_exit_status
 from launcher.config import config
@@ -32,7 +30,7 @@ from launcher.exceptions.network import (
     WrappedUL3Exception,
 )
 from launcher.functions import is_path_valid
-from launcher.networking import make_request, session
+from launcher.networking import make_request
 from launcher.offline import offline_man
 
 log = logging.getLogger(__name__)
@@ -55,72 +53,6 @@ def iter_lzma_stream(resp: BaseHTTPResponse) -> Generator[bytes]:
             resp.drain_conn()
     if not decompressor.eof:
         raise LZMAEarlyQuitError("EOF was never reached")
-
-
-def _offline_mode_warning(func: FunctionType):
-    def wrapped_func(*args, **kwargs):
-        if offline_man.offline:
-            log.warning(
-                "'%s()' shouldn't have been called during offline mode!",
-                func.__name__,
-            )
-        return func(*args, **kwargs)
-
-    wrapped_func.__annotations__ = func.__annotations__
-    wrapped_func.__defaults__ = func.__defaults__
-    wrapped_func.__kwdefaults__ = func.__kwdefaults__
-    return wrapped_func
-
-
-def _download(
-    url: str,
-    max_retries: int,
-    timeout: int,
-    _retries: int = 0,
-    *,
-    sha: str | None = None,
-) -> requests.Response:
-    if _retries > max_retries:
-        raise RuntimeError(f"Repeatedly failed to download from {url!r}")
-    resp = session.get(url, timeout=timeout)
-    resp.raise_for_status()
-    if isinstance(sha, str):
-        if hashlib.sha1(resp.content).hexdigest() == sha:
-            return resp
-        else:
-            log.warning(
-                "Download from '%s' gave an unexpected hash! "
-                "Retrying for %d/%d",
-                url,
-                _retries + 1,
-                max_retries,
-            )
-            time.sleep(0.2)
-            return _download(url, max_retries, timeout, _retries + 1, sha=sha)
-    else:
-        return resp
-
-
-@_offline_mode_warning
-def download(
-    url: str,
-    max_retries: int = 2,
-    timeout: int = 30,
-    *,
-    sha: str | None = None,
-):
-    """
-    Attempts to download a file to memory using
-    `minecraftlauncher.session.get()`, returning the object if successful, else
-    retrying up to `max_retries:int` (default: `2`) times.
-
-    If `hash` is `str`, then the SHA1 will be checked upon download completion.
-    If it doesn't match, the download will be failed and will retry
-    automatically, counting as a failed download and using a retry.
-    """
-    if isinstance(sha, str) and not sha:
-        sha = None
-    return _download(url, max_retries, timeout, sha=sha)
 
 
 def _check_file_sha1(path: str | os.PathLike, sha1: str):
@@ -248,7 +180,6 @@ class RunnableDownloader(QRunnable):
 
     log = log.getChild("RunnableDownloader")
 
-    @_offline_mode_warning
     def __init__(
         self,
         url: str,
