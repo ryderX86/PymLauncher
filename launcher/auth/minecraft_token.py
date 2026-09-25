@@ -163,13 +163,6 @@ class MinecraftToken:
 
     def serialize(self):
         """Returns JSON-serializable dict of this token."""
-        # sort set
-        if self.owned_items:
-            owned_items = [*self.owned_items]
-            owned_items.sort()
-        else:
-            owned_items = None
-
         return {
             "username": self.username,
             "roles": self.roles,
@@ -178,7 +171,7 @@ class MinecraftToken:
             "expires_in": self._expires_in,
             "acquired_at": self.acquired_at,
             "jwt": self.jwt,
-            "owned_items": owned_items,
+            "owned_items": sorted(self.owned_items or ()),
         }
 
     def update_entitlements(self):
