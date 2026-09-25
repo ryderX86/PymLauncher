@@ -90,7 +90,7 @@ class HTTPStatusCodeError(BaseNetworkingError):
                 try:
                     ts = parsedate_to_datetime(ra).timestamp()
                 except Exception as err:
-                    log.error(
+                    log.warning(
                         "Couldn't get datetime from 'Retry-After' header:",
                         exc_info=err,
                     )
@@ -102,7 +102,13 @@ class HTTPStatusCodeError(BaseNetworkingError):
             else:
                 try:
                     ts = float(ra)
-                except ValueError:
+                except ValueError as err:
+                    log.error(
+                        "Couldn't get timestamp from %r in 'Retry-After' "
+                        "header:",
+                        ra,
+                        exc_info=err,
+                    )
                     ts = _RETRY_DEFAULT
         else:
             ts = _RETRY_DEFAULT
