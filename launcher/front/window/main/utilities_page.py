@@ -59,7 +59,7 @@ class UtilitiesPage(QWidget):
 
     def _build_ui(self):
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(40, 40, 40, 40)
+        layout.setContentsMargins(20, 20, 20, 20)
 
         title = QLabel("Utilities")
         title.setProperty("heading", True)

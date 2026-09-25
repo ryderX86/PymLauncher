@@ -31,6 +31,7 @@ from launcher.constants import (
     FLAG_ENABLE_WEBVIEW,
     MS_DEVICE_CODE_URL,
 )
+from launcher.front.qt.widgets import Header1
 from launcher.front.resources import link_to_qrcode
 from launcher.front.styles import ACCENT, TEXT_SECONDARY
 from launcher.functions import (
@@ -82,10 +83,7 @@ class LoginWindow(QDialog):
         layout.setAlignment(Qt.AlignmentFlag.AlignHCenter)
         layout.setSpacing(16)
 
-        title = QLabel("Sign in with Microsoft")
-        title.setStyleSheet(
-            f"font-size: 16px; font-weight: 700; color: {ACCENT}"
-        )
+        title = Header1("Sign in with Microsoft")
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(title)
 
@@ -94,7 +92,6 @@ class LoginWindow(QDialog):
             alignment=Qt.AlignmentFlag.AlignCenter,
             wordWrap=True,
         )
-        self.instruction_label.setStyleSheet(f"color: {TEXT_SECONDARY};")
         self.instruction_label.setWordWrap(True)
         self.instruction_label.setMinimumWidth(self.width() - 64)
         self.instruction_label.setMaximumWidth(self.width() - 32)

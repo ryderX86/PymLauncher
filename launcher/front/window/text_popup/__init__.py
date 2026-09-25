@@ -82,7 +82,9 @@ class TextPopup(QDialog):
         pixel_width = len(max(self._text.splitlines())) * 12
         size = self.size()
         size.setWidth(pixel_width + 156)
-        size.setHeight((min(len(self._text.splitlines()), 48) * 12) + 256)
+        size.setHeight(  # maximum of 700 pix
+            min((len(self._text.splitlines()) * 24) + 42, 700),
+        )
         self.resize(size)
         self._layout.addWidget(self._text_display)
 

@@ -87,7 +87,7 @@ class LauncherApp:
         self.qapp = get_qapp()
         self.fonts = get_fonts()
         detect_set_clipboard()
-        self.qapp.setApplicationName("PymLauncher")
+        self.qapp.setApplicationName(constants.LAUNCHER_NAME)
         match constants.OS:
             case "windows":
                 pass
@@ -444,6 +444,7 @@ class LauncherApp:
             self.login_dialog.open()
         return
 
+    @Slot()
     def _on_login_abort(self):
         global clean_exit
         active_acc = account_man.active
@@ -467,6 +468,7 @@ class LauncherApp:
         dialog.open()
         return
 
+    @Slot(LauncherAccount)
     def _on_login_complete(self, account: LauncherAccount):
         if account:
             self.close_if_login_aborted = False

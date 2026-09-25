@@ -38,7 +38,7 @@ class SettingsPage(QWidget):
         self._is_modal = is_modal
         super().__init__(parent)
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(40, 40, 40, 40)
+        layout.setContentsMargins(20, 20, 20, 20)
 
         self.mapper = CustomMapper(self)
         self.mapper.saved.connect(self.settings_changed.emit)

@@ -206,7 +206,7 @@ class ProfilesPage(QWidget):
         left = QWidget()
         left.setFixedWidth(250)
         left_layout = QVBoxLayout(left)
-        left_layout.setContentsMargins(12, 16, 12, 16)
+        left_layout.setContentsMargins(20, 20, 20, 20)
         left.setBackgroundRole(styles.CRole.Mid)
         left.setAutoFillBackground(True)
 
@@ -285,7 +285,7 @@ class ProfilesPage(QWidget):
         #
         right = QWidget()
         right_layout = QVBoxLayout(right)
-        right_layout.setContentsMargins(12, 16, 12, 16)
+        right_layout.setContentsMargins(20, 20, 20, 20)
         right.setBackgroundRole(styles.CRole.Base)
         right.setAutoFillBackground(True)
 

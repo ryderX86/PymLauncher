@@ -92,22 +92,23 @@ QLabel[secondary="true"], SecondaryLabel {{
     color: {TEXT_SECONDARY};
 }}
 QLabel[heading="true"], h1, Header1 {{
-    font-size: 20px;
+    font-size: 16px;
     font-weight: 700;
-    color: palette(accent);
+    /* color: palette(accent); */
     margin-bottom: 4px;
 }}
 QLabel[h2="true"], h2, Header2 {{
-    font-size: 16px;
+    font-size: 14px;
     font-weight: 700;
-    color: palette(accent);
+    /* color: palette(accent); */
     margin-left: 4px;
 }}
 QLabel[subheading="true"], Subheading {{
-    font-size: 14px;
+    font-size: 12px;
     color: {TEXT_SECONDARY};
 }}
 QLabel[section="true"], SectionLabel {{
+    padding-left: 1px;
     font-size: 14px;
     font-weight: 700;
 }}
@@ -442,7 +443,7 @@ QGroupBox::title {{
     subcontrol-origin: margin;
     left: 16px;
     padding: 0 6px;
-    color: {ACCENT};
+    /* color: {ACCENT}; */
 }}
 
 /* Tooltips

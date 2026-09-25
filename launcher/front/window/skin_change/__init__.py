@@ -179,14 +179,14 @@ class SkinChange(QDialog):
             mid.addWidget(self.cape_list, 0)
         self.cape_list.currentItemChanged.connect(self._cape_changed)
 
+        preview_label = QLabel("Preview")
+        mid.addWidget(preview_label)
+
         preview_row_w = QWidget()
         preview_row = QHBoxLayout(preview_row_w)
         preview_row_w.setContentsMargins(0, 0, 0, 0)
         preview_row.setContentsMargins(0, 0, 0, 0)
         preview_row.setSpacing(10)
-
-        preview_label = QLabel("Preview")
-        preview_row.addWidget(preview_label)
 
         self.show_anim_sel = QCheckBox("Animate")
         self.show_anim_sel.setChecked(config.show_animation_on_skin_dialog)

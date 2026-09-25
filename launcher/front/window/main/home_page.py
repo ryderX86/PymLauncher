@@ -74,7 +74,7 @@ class HomePage(QWidget):
 
     def _build_ui(self):
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(40, 40, 40, 40)
+        layout.setContentsMargins(20, 20, 20, 20)
         layout.setSpacing(16)
 
         title = Header1("Home")
