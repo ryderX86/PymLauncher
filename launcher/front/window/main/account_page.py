@@ -70,22 +70,22 @@ class AccountPage(QWidget):
             Qt.TextInteractionFlag.TextSelectableByMouse
         )
         info_layout.addWidget(self.username_label, 0, 1)
+        self.copy_username_button = CopyToClipboardButton(
+            self, self.username_label.text
+        )
+        info_layout.addWidget(self.copy_username_button, 0, 2)
 
         info_layout.addWidget(QLabel("UUID:"), 1, 0)
-        uuid_row = QHBoxLayout()
-        uuid_row.setSpacing(10)
         self.uuid_label = QLabel("<uuid1-uuid2-uuid3-uuid4-uuid5>")
         self.uuid_label.setStyleSheet("font-weight: 600;")
         self.uuid_label.setTextInteractionFlags(
             Qt.TextInteractionFlag.TextSelectableByMouse
         )
-        uuid_row.addWidget(self.uuid_label)
+        info_layout.addWidget(self.uuid_label, 1, 1)
         self.copy_uuid_button = CopyToClipboardButton(
             self, self.uuid_label.text
         )
-        uuid_row.addWidget(self.copy_uuid_button)
-
-        info_layout.addLayout(uuid_row, 1, 1)
+        info_layout.addWidget(self.copy_uuid_button, 1, 2)
 
         info_layout.addWidget(QLabel("Xbox Gamertag:"), 2, 0)
         self.gtg_label = QLabel("<gamertag>")
@@ -94,6 +94,8 @@ class AccountPage(QWidget):
             Qt.TextInteractionFlag.TextSelectableByMouse
         )
         info_layout.addWidget(self.gtg_label, 2, 1)
+        self.copy_gtg = CopyToClipboardButton(self, self.gtg_label.text)
+        info_layout.addWidget(self.copy_gtg, 2, 2)
 
         info_layout.addWidget(QLabel("XUID:"), 3, 0)
         self.xuid_label = QLabel("<xuid>")
@@ -102,6 +104,8 @@ class AccountPage(QWidget):
             Qt.TextInteractionFlag.TextSelectableByMouse
         )
         info_layout.addWidget(self.xuid_label, 3, 1)
+        self.copy_xuid = CopyToClipboardButton(self, self.xuid_label.text)
+        info_layout.addWidget(self.copy_xuid, 3, 2)
 
         for i in range(info_layout.rowCount()):
             info_layout.setRowMinimumHeight(i, 48)
