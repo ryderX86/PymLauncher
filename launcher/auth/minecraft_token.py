@@ -147,7 +147,9 @@ class MinecraftToken:
                 err.resp, "An unknown issue occured while authenticating."
             ) from err
 
-        return cls(resp.json())
+        token = cls(resp.json())
+        token.update_entitlements()
+        return token
 
     from_token = auth
     """Alias for `cls.auth()`"""
@@ -179,10 +181,9 @@ class MinecraftToken:
             "owned_items": owned_items,
         }
 
-    def _update_entitlements(self, use_web_request: bool = False):
-        if not self.owned_items and use_web_request:
+    def update_entitlements(self):
+        if not self.owned_items and not offline_man.offline:
             self.get_launcher_entitlements()
-            assert self.owned_items is not None
         return
 
     def get_launcher_entitlements(self):
@@ -201,8 +202,5 @@ class MinecraftToken:
 
         items: list[dict[str, str]] = game_list.get("items", [])
         self.owned_items = {i.get("name", "unidentified") for i in items}
-
-        self._update_entitlements()
-        assert self.owned_items is not None
 
         return self.owned_items
