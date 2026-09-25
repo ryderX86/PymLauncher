@@ -232,7 +232,7 @@ class LauncherApp:
             profile_manager.load_launcher_profiles()
         else:
             self._cancel_bootstrap()
-            self.exit()
+            self.exit(cleanup_save=False)
 
     def _cancel_bootstrap(self):
         for thread in self.bootstrap_threads:
@@ -649,10 +649,14 @@ class LauncherApp:
     def _close_event(self):
         self.exit()
 
-    def exit(self, return_code: int = 0) -> NoReturn:
+    def exit(
+        self, return_code: int = 0, cleanup_save: bool = True
+    ) -> NoReturn:
         global clean_exit
-        if return_code == 0:
+        if return_code == 0 and cleanup_save:
             clean_exit = True
+        else:
+            clean_exit = False
         if self.event_loop_running:
             self.qapp.exit(return_code)
             raise SystemExit()
