@@ -205,14 +205,12 @@ def download_assets(
             "Couldn't get thread pool, downloading single-threaded instead."
         )
         threaded = False
-    dl_list = asset_index.get_downloaders(progress_callback)
-    if not dl_list:
-        return 0
-    dl_count = len(dl_list)
+    dl_list = set()
 
     # start downloads
     if threaded:
-        for worker in dl_list:
+        for worker in asset_index.iter_downloaders(progress_callback):
+            dl_list.add(worker)
             pool.start(worker)
         timedout = not pool.waitForDone(900000)  # 15 min
         if timedout:
@@ -223,7 +221,7 @@ def download_assets(
         for worker in dl_list:
             worker.run()
     log.debug("Asset downloads complete")
-    return dl_count
+    return len(dl_list)
 
 
 def is_virtual_asset(asset_index: dict):

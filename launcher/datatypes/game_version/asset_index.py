@@ -87,6 +87,10 @@ class AssetIndex:
             a.get_downloader(callback, self.virtual) for a in self.assets
         )
 
+    def iter_downloaders(self, callback=None):
+        for asset in self.assets:
+            yield asset.get_downloader(callback)
+
     @classmethod
     def parse_dict(cls, index: dict):
         virtual: bool = index.get("map_to_resources", False)

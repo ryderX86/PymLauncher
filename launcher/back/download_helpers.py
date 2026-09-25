@@ -188,6 +188,7 @@ class RunnableDownloader(QRunnable):
         use_lzma: bool = False,
         callback: Callable[[int], None] | None = None,
         check_hash: bool | None = None,
+        download_hash: bool = False,
         *,
         vpath: str | os.PathLike | None = None,
     ):
@@ -430,11 +431,6 @@ class RunnableDownloader(QRunnable):
                 self.log.error("Download failed, retrying (SHA-1 mismatch)")
                 resp = None
                 return self.download()
-        else:
-            log.debug(
-                "No SHA1 provided for file downloaded at '%s'",
-                self._path,
-            )
         self.success = True
         self._downloaded_file = True
         if self._callback:
