@@ -94,6 +94,10 @@ class UtilitiesPage(QWidget):
             misc_info.clicked.connect(self.system_info)
             debug_section.addWidget(misc_info)
 
+            force_refresh = QPushButton("Force token refresh")
+            force_refresh.clicked.connect(self._refresh_token)
+            debug_section.addWidget(force_refresh)
+
             layout.addWidget(debug_section)
 
         # nf_row = HRow(self)
@@ -133,6 +137,13 @@ class UtilitiesPage(QWidget):
                 os.unlink(dump_path)
 
             QTimer.singleShot(1000, delete_temp_file)
+
+        def _refresh_token(self):
+            if account_man.active:
+                account_man.active.token = None
+                account_man.active.refresh()
+            else:
+                log.warning("No active account, not refreshing anything")
 
     def offline_mode_hook(self, offline: bool):
         self.f_win_button.setDisabled(offline)
