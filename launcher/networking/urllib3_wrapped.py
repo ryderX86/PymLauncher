@@ -126,7 +126,7 @@ def make_request(
         body = json.dumps(body).encode("utf-8")
     elif isinstance(body, str):
         body = body.encode("utf-8")
-    for attempt in range(1, max(retries + 1, 2)):
+    for attempt in range(1, max(retries, 2)):
         try:
             resp = mgr.request(
                 type_,
@@ -163,7 +163,15 @@ def make_request(
         if resp.status in range(200, 300):
             return resp
         error = HTTPStatusCodeError(resp.status, resp)
-        if error.retry_after:
+        if error.retry_after and attempt <= retries:
+            log.warning(
+                "HTTP %d %s returned by %r, retrying in %d seconds",
+                error.code,
+                error.desc,
+                url,
+                error.retry_after,
+            )
+            log.debug(resp.headers)
             _sleep(error.retry_after)
             log.debug(
                 "Request to %r failed, trying again (attempt %d/%d)",
