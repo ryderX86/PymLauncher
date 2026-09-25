@@ -9,7 +9,7 @@ Supports reading the official Minecraft launcher's
 """
 
 from collections.abc import Callable, Iterable
-from datetime import datetime
+from datetime import datetime, timezone
 from functools import lru_cache
 from types import FunctionType
 from typing import Any, Literal
@@ -280,7 +280,7 @@ def save_launcher_meta():
         reswrite(paths.profiles_meta_file, file_text)
 
 
-def last_used_timestamp(profile: LaunchProfile):
+def _last_used_timestamp(profile: LaunchProfile):
     try:
         t = datetime.fromisoformat(profile.last_used)
     except Exception as err:
@@ -300,7 +300,7 @@ def get_profile_sorting():
         return meta["order"]
     log.warning("No profile sorting order data, regenerating it...")
     profs = [*profiles.values()]
-    profs.sort(key=last_used_timestamp)
+    profs.sort(key=_last_used_timestamp)
     return [p.uuid for p in profs]
 
 
@@ -465,6 +465,12 @@ def load_launcher_profiles():
                                     other_dt_str,
                                 )
                                 other_dt = datetime.min
+                            if not other_dt.tzinfo:
+                                other_dt = other_dt.replace(
+                                    tzinfo=timezone.utc
+                                )
+                            if not dt.tzinfo:
+                                dt = dt.replace(tzinfo=timezone.utc)
                             if other_dt < dt:
                                 idx += 1
                         if idx >= len(creation_order) - 1:
