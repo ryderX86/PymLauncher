@@ -1,5 +1,5 @@
 # pylint: disable=redefined-builtin
-from typing import Literal, overload
+from typing import Literal, Mapping, overload
 import json
 import logging
 import time
@@ -72,7 +72,7 @@ def make_request(
     url: str,
     headers: dict[str, str] | None = None,
     body: str | bytes | dict | None = None,
-    form: dict[str, FormData] | None = None,
+    form: Mapping[str, FormData] | None = None,
     *,
     mgr=http,
     preload_response: bool = True,
@@ -113,7 +113,7 @@ def make_request(
     url: str,
     headers: dict[str, str] | None = None,
     body: str | bytes | dict | None = None,
-    form: dict[str, FormData] | None = None,
+    form: Mapping[str, FormData] | None = None,
     *,
     mgr=http,
     preload_response: bool = True,
