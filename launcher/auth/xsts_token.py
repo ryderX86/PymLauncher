@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Literal
 import json
 import logging
 import time
@@ -25,9 +26,6 @@ log = logging.getLogger(__name__)
 
 
 class XstsToken:
-    mojang_uri = "rp://api.minecraftservices.com/"
-    xbox_uri = "http://xboxlive.com"
-
     __slots__ = ("json", "token", "expires_at", "acquired_at")
     json: dict
     """
@@ -73,7 +71,9 @@ class XstsToken:
     def auth(
         cls,
         xbl_token: XboxToken,
-        relying_party: str = "rp://api.minecraftservices.com/",
+        relying_party: Literal[
+            "rp://api.minecraftservices.com/", "http://xboxlive.com"
+        ] = "rp://api.minecraftservices.com/",
     ):
         if xbl_token.expires_in < 20:
             raise ValueError("Xbox Live token expired alredy!")
