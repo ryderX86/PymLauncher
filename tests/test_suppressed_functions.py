@@ -3,7 +3,7 @@ import timeit
 from launcher.functions import suppressable
 
 
-class WrapperTimer:
+class Wrapper:
     @suppressable
     def wrapped_method(self):
         return True
@@ -12,9 +12,42 @@ class WrapperTimer:
         return True
 
 
+def test_ctx():
+    @suppressable
+    def suppressed_func():
+        a = 1
+        a += 2
+        return a
+
+    with suppressed_func.suppressed():
+        if suppressed_func() is not None:
+            raise RuntimeError("Supression w/ context manager didn't work")
+
+    w = Wrapper()
+    with w.wrapped_method.suppressed():
+        if w.wrapped_method():
+            raise RuntimeError(
+                "Method suppression w/ context manager didn't work"
+            )
+    if not w.wrapped_method():
+        raise RuntimeError(
+            "Method suppression w/ context manager didn't reset"
+        )
+    w.wrapped_method.suppress()
+    with w.wrapped_method.unsuppressed():
+        if not w.wrapped_method():
+            raise RuntimeError(
+                "Method unsuppression w/ context manager didn't work"
+            )
+    if w.wrapped_method():
+        raise RuntimeError(
+            "Method unsuppression w/ context manager didn't reset"
+        )
+
+
 def test_timings():
     # pylint: disable=possibly-unused-variable
-    instance = WrapperTimer()
+    instance = Wrapper()
 
     method_default = timeit.timeit(
         stmt="instance.non_wrapped_method()",

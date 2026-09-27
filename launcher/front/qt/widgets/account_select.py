@@ -11,7 +11,7 @@ from PySide6.QtWidgets import QAbstractItemView, QComboBox
 
 from launcher.back.account_manager import account_man
 from launcher.front.resources import symbol
-from launcher.functions import error_box, suppressable
+from launcher.functions import Suppressable, error_box
 from launcher.offline import offline_man
 
 log = logging.getLogger(__name__)
@@ -37,33 +37,31 @@ class AccountSelect(QComboBox):
 
     def refresh(self):
         """Reload the account list"""
-        self._on_index_changed.suppress()
+        with self._on_index_changed.suppressed():
+            self.clear()
+            active_xuid = (
+                account_man.active.xuid if account_man.active else None
+            )
 
-        self.clear()
-        active_xuid = account_man.active.xuid if account_man.active else None
+            for i, acc in enumerate(account_man):
+                gamertag = acc.gamertag
+                xuid = acc.xuid
+                username = acc.username
+                display = username if username else f"No profile ({gamertag})"
+                icon = acc.skin_icon()
+                self.addItem(icon, display, userData=xuid)
+                if xuid and xuid == active_xuid:
+                    self._previous_index = self.currentIndex()
+                    self.setCurrentIndex(i)
 
-        for i, acc in enumerate(account_man):
-            gamertag = acc.gamertag
-            xuid = acc.xuid
-            username = acc.username
-            display = username if username else f"No profile ({gamertag})"
-            icon = acc.skin_icon()
-            self.addItem(icon, display, userData=xuid)
-            if xuid and xuid == active_xuid:
-                self._previous_index = self.currentIndex()
-                self.setCurrentIndex(i)
-
-        self.insertSeparator(self.count())
-        self.addItem(symbol("profile-add"), ADD_ACCOUNT_TEXT)
-
-        self._on_index_changed.unsuppress()
+            self.insertSeparator(self.count())
+            self.addItem(symbol("profile-add"), ADD_ACCOUNT_TEXT)
 
     def revert_selection(self):
         """Revert to previous account"""
-        self._on_index_changed.suppress()
-        if 0 <= self._previous_index < self.count():
-            self.setCurrentIndex(self._previous_index)
-        self._on_index_changed.unsuppress()
+        with self._on_index_changed.suppressed():
+            if 0 <= self._previous_index < self.count():
+                self.setCurrentIndex(self._previous_index)
 
     def setCurrentIndex(self, index: int):
         ci = self.currentIndex()
@@ -71,7 +69,7 @@ class AccountSelect(QComboBox):
             self._previous_index = ci
         super().setCurrentIndex(index)
 
-    @suppressable
+    @Suppressable
     def _on_index_changed(self, index: int):
         if index < 0:
             return

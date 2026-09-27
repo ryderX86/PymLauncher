@@ -11,7 +11,7 @@ from PySide6.QtWidgets import QApplication
 from launcher import get_qapp
 
 from .error_box import error_box
-from .suppressables import suppressable
+from .suppressables import Suppressable
 from .text import (
     display_file_size,
     indent,
