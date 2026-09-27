@@ -126,7 +126,7 @@ def make_request(
         body = json.dumps(body).encode("utf-8")
     elif isinstance(body, str):
         body = body.encode("utf-8")
-    for attempt in range(1, max(retries, 2)):
+    for attempt in range(1, max(retries + 1, 2)):
         try:
             resp = mgr.request(
                 type_,
@@ -175,7 +175,7 @@ def make_request(
             if error.retry_after and error.got_nondefault_retry_after:
                 _sleep(error.retry_after)
             else:
-                _sleep(error.retry_after**attempt)
+                _sleep(min(error.retry_after**attempt, timeout))
             log.debug(
                 "Request to %r failed, trying again (attempt %d/%d)",
                 url,
