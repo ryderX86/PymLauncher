@@ -81,6 +81,10 @@ class HTTPStatusCodeError(BaseNetworkingError):
             self.body = resp.data.decode("utf-8")
 
     @property
+    def got_nondefault_retry_after(self):
+        return self.retry_after != _RETRY_DEFAULT
+
+    @property
     def retry_after(self):
         if self.code not in {429, 503}:
             return None

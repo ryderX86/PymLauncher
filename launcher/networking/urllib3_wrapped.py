@@ -146,11 +146,11 @@ def make_request(
             elif new.dns_related:
                 log.debug("Flushing DNS cache to see if we can try again")
                 flush_dns_cache()
-                _sleep(0.5 * attempt)
+                _sleep(5 * attempt)
                 log.debug("Trying again (attempt %d/%d)", attempt + 1, retries)
                 continue
             elif new.should_retry and not offline_man.offline:
-                _sleep(0.5 * attempt)
+                _sleep(2**attempt)
                 log.debug(
                     "Request to %r failed, trying again. (attempt %d/%d)",
                     url,
@@ -172,7 +172,10 @@ def make_request(
                 error.retry_after,
             )
             log.debug(resp.headers)
-            _sleep(error.retry_after)
+            if error.retry_after and error.got_nondefault_retry_after:
+                _sleep(error.retry_after)
+            else:
+                _sleep(error.retry_after**attempt)
             log.debug(
                 "Request to %r failed, trying again (attempt %d/%d)",
                 url,
