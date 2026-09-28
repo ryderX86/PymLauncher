@@ -297,7 +297,7 @@ class LauncherApp:
                 self.login_dialog.finished.connect(loop.quit)
                 loop.exec(QEventLoop.ProcessEventsFlag.AllEvents)
 
-        log.info("Finished loading. Showing main window")
+        log.info("Showtime!")
         self.main_window.show()
         # self.lb_window.setParent(self.main_window)
         focused = QApplication.focusWidget()
