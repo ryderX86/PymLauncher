@@ -130,10 +130,11 @@ class InstallWorker(QThread):
             raise err
         elif profile_jre:
             try:
-                subprocess.run(
+                r = subprocess.run(
                     [profile_jre.replace("javaw", "java"), "-version"],
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
+                    stdin=subprocess.DEVNULL,
                     check=True,
                 )
             except subprocess.CalledProcessError as err:
@@ -164,6 +165,7 @@ class InstallWorker(QThread):
                 new.filename = profile_jre
                 raise new from err
             else:
+                log.debug("Java executable output:\n%s", r.stderr.decode())
                 return profile_jre
         else:
             err = RuntimeError(
