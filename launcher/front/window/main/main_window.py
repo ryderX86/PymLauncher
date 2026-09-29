@@ -4,8 +4,6 @@ minecraftlauncher.front.window.main.main_window
 Main application window.
 """
 
-__lazy_imports__ = ["minecraftlauncher.front.ees.KonamiCode"]  # py3.15
-
 import logging
 import sys
 
@@ -23,14 +21,12 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from launcher import set_exiting
+from launcher import PostLaunchBehavior, config, launchargs, set_exiting
 from launcher.back import profile_manager
-from launcher.config import PostLaunchBehavior, config
 from launcher.constants import LAUNCHER_VERSION
 from launcher.front import styles
 from launcher.front.qt.widgets import AccountSelect
 from launcher.functions.error_box import error_box
-from launcher.launchargs import launchargs
 
 from .account_page import AccountPage
 from .home_page import HomePage
@@ -58,7 +54,6 @@ class MainWindow(QMainWindow):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("PymLauncher")
-        self.setMinimumSize(960, 620)
         width = config.window_size[0]
         height = config.window_size[1]
         self.resize(*config.window_size)
@@ -204,6 +199,7 @@ class MainWindow(QMainWindow):
 
         self.page_list = [
             self.home_page,
+            # self.profiles_page,
             self.profiles_page,
             self.account_page,
             self.utilities_page,
@@ -211,7 +207,7 @@ class MainWindow(QMainWindow):
         ]
 
         self.utilities_page.modloader_installed.connect(
-            self.profiles_page.refresh_version_combo
+            self.profiles_page.editor.refresh_version_combo
         )
 
         self.home_page.game_open.connect(self._process_game_open)

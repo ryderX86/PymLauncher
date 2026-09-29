@@ -14,6 +14,7 @@ import os
 
 from PySide6.QtCore import QThreadPool
 
+from launcher import paths
 from launcher.back.download_helpers import (
     BulkDownloadError,
     RunnableDownloader,
@@ -29,7 +30,6 @@ from launcher.exceptions.back import (
     Log4JConfigReadError,
 )
 from launcher.networking import make_request
-from launcher.paths import paths
 
 log = logging.getLogger(__name__)
 

@@ -8,11 +8,16 @@ import json
 import logging
 import os
 
-from .constants import FLAG_ENABLE_WEBVIEW
-from .functions import reswrite
-from .paths import paths
+import launcher._paths
+import launcher.constants
+import launcher.functions
 
 log = logging.getLogger(__name__)
+
+# pylint: disable-next=protected-access
+paths = launcher._paths.paths
+FLAG_ENABLE_WEBVIEW = launcher.constants.FLAG_ENABLE_WEBVIEW
+reswrite = launcher.functions.reswrite
 
 
 class PostLaunchBehavior(IntEnum):

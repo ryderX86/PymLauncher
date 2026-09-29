@@ -7,9 +7,14 @@ import logging
 import os
 import sys
 
-from . import constants
-from .functions import is_path_valid, pathsafe_str
-from .launchargs import launchargs
+import launcher._launchargs
+import launcher.constants as constants
+import launcher.functions
+
+# pylint: disable-next=protected-access
+launchargs = launcher._launchargs.launchargs
+is_path_valid = launcher.functions.is_path_valid
+pathsafe_str = launcher.functions.pathsafe_str
 
 log = logging.getLogger(__name__)
 

@@ -2,7 +2,9 @@ from string import digits
 
 from PySide6.QtGui import QValidator
 
-from .store_results import store_results, QValidatorWithStoredResults
+from launcher import constants
+
+from .store_results import QValidatorWithStoredResults, store_results
 
 ALLOWED_LETTERS = set("BbKkMmGg")
 DIGITS = set(digits)
@@ -25,9 +27,17 @@ class ProfileRAMValidator(QValidatorWithStoredResults):
             )
         elif not all(c in DIGITS for c in arg__1[:-1]):
             return (QValidator.State.Invalid, arg__1, arg__2)
+        elif (
+            arg__1[0] not in DIGITS
+            and arg__1[0] in ALLOWED_LETTERS
+            and len(arg__1) < 2
+        ):
+            return (QValidator.State.Intermediate, arg__1, arg__2)
         elif arg__1[0] not in DIGITS:
             return (QValidator.State.Invalid, arg__1, arg__2)
         elif arg__1[-1] not in ALLOWED_LETTERS:
+            return QValidator.State.Intermediate, arg__1, arg__2
+        elif arg__1[0] == "0":
             return QValidator.State.Intermediate, arg__1, arg__2
         return QValidator.State.Acceptable, arg__1, arg__2
 
@@ -49,4 +59,27 @@ class ProfileRAMValidator(QValidatorWithStoredResults):
                 text = "".join([text, "K"])
             else:
                 text = "".join([text, "M"])
+
+        if text[0] == "0":
+            while text:
+                match text[0]:
+                    case "0":
+                        pass
+                    case a if a in DIGITS:
+                        break
+                    case a if a in ALLOWED_LETTERS:
+                        match text[0].lower():
+                            case "g":
+                                text = constants.DEFAULT_MEMORY_MAX
+                            case "k":
+                                text = "1024K"
+                            case "b":
+                                text = "0B"
+                            case _:
+                                text = constants.DEFAULT_MEMORY_MIN
+                        break
+                text = f"{text[1:]}"
+                if len(text) < 1:
+                    text = "512M"
+                    break
         return text

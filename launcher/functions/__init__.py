@@ -1,5 +1,4 @@
-from collections.abc import Buffer, Iterable
-from typing import TypeVar
+from collections.abc import Buffer
 import logging
 import os
 import time
@@ -7,8 +6,6 @@ import time
 from PySide6.QtCore import QCoreApplication, QSize
 from PySide6.QtGui import QClipboard, QIcon, QImage, QPixmap
 from PySide6.QtWidgets import QApplication
-
-from launcher import get_qapp
 
 from .error_box import error_box
 from .suppressables import Suppressable

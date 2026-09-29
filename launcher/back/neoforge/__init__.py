@@ -5,9 +5,9 @@ import json
 import logging
 import os
 
+from launcher import paths
 from launcher.functions.text import indent
 from launcher.networking import make_request
-from launcher.paths import paths
 
 FALLBACK_DOMAIN = "maven.creeperhost.net"
 

@@ -2,11 +2,10 @@ import hashlib
 import logging
 import os
 
-from launcher import get_qapp
+from launcher import get_qapp, paths
 from launcher.functions import display_file_size
 from launcher.networking import make_request
 from launcher.offline import offline_man
-from launcher.paths import paths
 
 log = logging.getLogger(__name__)
 

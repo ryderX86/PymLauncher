@@ -157,6 +157,9 @@ class GameVersion:
                 )
             else:
                 self.default_user_jvm_args = DEFAULT_USER_JVM
+                self.default_user_jvm_args_set = frozenset(
+                    DEFAULT_USER_JVM.split()
+                )
             jvm_args_raw = self._rem_mem_args(arguments_all["jvm"])
             game_args_raw: list[dict | str] = arguments_all["game"]
             self.arguments_jvm = [

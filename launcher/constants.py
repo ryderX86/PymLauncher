@@ -153,6 +153,8 @@ LOG4J_VULN_MIN_TIME = "2013-09-26T15:11:19+00:00"
 
 LATEST_VERSION_TEXT = "latest-release"
 LATEST_SNAPSHOT_TEXT = "latest-snapshot"
+LATEST_VERSION_TEXT_UI = "Latest Release ({})"
+LATEST_SNAPSHOT_TEXT_UI = "Latest Snapshot ({})"
 LATEST_VERSIONS_SET = {LATEST_VERSION_TEXT, LATEST_SNAPSHOT_TEXT}
 
 # uuids
@@ -210,3 +212,13 @@ match PLATFORM:
         JVM_TEMP_DIR = os.getenv("TMP", os.getenv("TEMP", ""))
     case _:
         JVM_TEMP_DIR = os.path.normpath("/tmp")
+
+match platform.system():
+    case "Windows":
+        FP_REGEX = (
+            r"(([A-Za-z]:\\)|(%[a-zA-Z0-9]+%\\?))(((?!(\.\.)|(CON)|(PRN)|(AUX)"
+            r"|(NUL)|(COM[0-9¹²³])|(LPT[0-9¹²³])|([^\\]+\.[\\\.])|([<>:\"/?*\x"
+            r"00-\x1f\\]))[^<>:\"/?*\x00-\x1f\\]*)\\?)+"
+        )
+    case _:
+        FP_REGEX = r"((~/|/)((?![^/]+\.)[^\x00\n\r\/]+/?)+)|~"

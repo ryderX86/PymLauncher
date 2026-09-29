@@ -1,9 +1,9 @@
 import logging
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, Signal, SignalInstance
 from PySide6.QtWidgets import QCheckBox, QHBoxLayout, QWidget
 
-from launcher.config import config
+from launcher import config
 
 from .tooltip_hint import TooltipHint
 
@@ -17,6 +17,7 @@ class ConfigCheckbox(QWidget):
     _checkbox: QCheckBox
     _tooltip: TooltipHint | None
     _lo: QHBoxLayout
+    clicked: SignalInstance
 
     def __init__(
         self,
@@ -47,6 +48,7 @@ class ConfigCheckbox(QWidget):
             self._tooltip = None
 
         self._checkbox.checkStateChanged.connect(self._check_state_changed)
+        self.clicked = self._checkbox.clicked
 
     def _check_state_changed(self, check_state: Qt.CheckState):
         match check_state:

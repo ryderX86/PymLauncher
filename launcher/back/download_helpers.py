@@ -22,8 +22,7 @@ import time
 from PySide6.QtCore import QRunnable
 from urllib3.response import BaseHTTPResponse
 
-from launcher import get_exit_status
-from launcher.config import config
+from launcher import config, get_exit_status
 from launcher.exceptions.back import LZMAEarlyQuitError
 from launcher.exceptions.network import (
     HTTPStatusCodeError,

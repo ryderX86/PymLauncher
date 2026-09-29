@@ -7,7 +7,7 @@ Home page, play button, profile info, progress bar, all that stuff.
 import logging
 import os
 
-from PySide6.QtCore import QItemSelection, QSize, Qt, QUrl, Signal, Slot
+from PySide6.QtCore import QSize, Qt, QUrl, Signal, Slot
 from PySide6.QtGui import QDesktopServices, QIcon, QPalette
 from PySide6.QtWidgets import (
     QComboBox,
@@ -22,27 +22,26 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from launcher import config, paths
 from launcher.auth import LauncherAccount
 from launcher.back import profile_manager
 from launcher.back.account_manager import account_man
 from launcher.back.profile_manager import LaunchProfile
-from launcher.config import config
 from launcher.exceptions.datatypes import InvalidVersionIdError
 from launcher.front import resources
-from launcher.front.qt.models import ProfileSelectionModel
+from launcher.front.qt.binding_mixin import BindingMixin
 from launcher.front.qt.widgets import Header1, SecondaryLabel
 from launcher.front.styles import get_fonts
 from launcher.front.window.text_popup import TextPopup
-from launcher.functions import error_box, is_path_valid
+from launcher.functions import Suppressable, error_box, is_path_valid
 from launcher.offline import offline_man
-from launcher.paths import paths
 from launcher.threads.install_worker import InstallWorker
 from launcher.threads.launch_worker import LaunchWorker
 
 log = logging.getLogger(__name__)
 
 
-class HomePage(QWidget):
+class HomePage(BindingMixin, QWidget):
     """Home/Play button page"""
 
     play_requested = Signal()
@@ -58,7 +57,6 @@ class HomePage(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.fonts = get_fonts()
-        self.selection_model = ProfileSelectionModel.instance()
         self._launcher: LaunchWorker | None = None
         self._no_icon = QIcon().pixmap(QSize(32, 32))
         self._build_ui()
@@ -66,6 +64,9 @@ class HomePage(QWidget):
 
     def build(self):
         pass
+
+    def bind(self):
+        self._profile_change(profile_manager.get_current_profile())
 
     def kill_worker(self):
         if self._launcher:
@@ -113,7 +114,7 @@ class HomePage(QWidget):
             QListView.ScrollMode.ScrollPerPixel
         )
         self.profile_dropdown.activated.connect(self._on_dropdown_select)
-        self.selection_model.currentChanged.connect(self._on_global_profile)
+        profile_manager.add_profile_switch_handler(self._on_profile_change)
         profile_manager.add_profile_refresh_handler(self._refresh_profiles)
         self.profile_dropdown.setIconSize(QSize(32, 32))
         self.profile_dropdown.setProperty("bigIcons", True)
@@ -260,30 +261,19 @@ class HomePage(QWidget):
 
     def _on_dropdown_select(self, index: int):
         prof: LaunchProfile = self.profile_dropdown.itemData(index)
-        self.profile_dropdown.blockSignals(True)
-        current_prof = profile_manager.get_current_profile()
-        if prof != current_prof:
-            self.selection_model.setCurrentIndex(
-                self.selection_model.model().index(index, 0),
-                self.selection_model.SelectionFlag.ClearAndSelect,
-            )
-            # handle what happens if the pop-up is cancelled/ignored
-            if self.selection_model.currentIndex().row() != index:
-                log.debug("Looks like user aborted the change?")
-                self.profile_dropdown.setCurrentIndex(
-                    self.selection_model.currentIndex().row()
-                )
-        self.profile_dropdown.blockSignals(False)
+        with self._on_profile_change.suppressed():
+            current_prof = profile_manager.get_current_profile()
+            if prof != current_prof:
+                profile_manager.set_current_profile(prof)
+        self._profile_change(prof)
 
-    def _on_global_profile(
-        self, current: QItemSelection, previous: QItemSelection
-    ):
-        if current.isValid():  # type: ignore
-            self.profile_dropdown.blockSignals(True)
-            self.profile_dropdown.setCurrentIndex(current.row())  # type: ignore
-            self.profile_dropdown.blockSignals(False)
-        row: int = current.row()  # type: ignore
-        profile = profile_manager.get_profile(row)
+    @Suppressable
+    def _on_profile_change(self, profile: LaunchProfile):
+        self.profile_dropdown.blockSignals(True)
+        self.profile_dropdown.setCurrentIndex(
+            profile_manager.get_row_from_profile(profile)
+        )
+        self.profile_dropdown.blockSignals(False)
         self._profile_change(profile)
 
     def _profile_change(self, profile: LaunchProfile):

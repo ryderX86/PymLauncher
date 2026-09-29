@@ -19,11 +19,10 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from launcher.config import config
+from launcher import config, paths
 from launcher.front.qt import CustomMapper
 from launcher.front.qt.widgets import Section, TooltipHint
 from launcher.front.window import TextPopup
-from launcher.paths import paths
 
 log = logging.getLogger(__name__)
 

@@ -311,6 +311,10 @@ class LaunchProfile:
     def jvm_args(self, args: str):
         self._jvm_args = args
 
+    @property
+    def literal_jvm_args(self):
+        return self._jvm_args or None
+
     @overload
     def __setitem__(
         self, index: Literal[0, 1, "name", "version_id"], new_val: str
@@ -383,7 +387,7 @@ class LaunchProfile:
     def resolution(self):
         """Resolution width + height as a single string"""
         if (not self.resolution_height) or (not self.resolution_width):
-            return "Auto"
+            return None
         return str(self.resolution_width) + "x" + str(self.resolution_height)
 
     @resolution.setter
@@ -516,9 +520,6 @@ class LaunchProfile:
             }.items()
             if v
         }
-
-    def to_dict_meta(self):
-        return {"jvm_args": self.jvm_args, "custom_args": self.has_custom_args}
 
     def check_install(self):
         """Returns `True` if the version is installed"""

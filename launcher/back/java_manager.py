@@ -15,6 +15,7 @@ import time
 
 from PySide6.QtCore import QThreadPool
 
+from launcher import paths
 from launcher.constants import (
     ARCH,
     JAVA_MANIFEST_URL,
@@ -28,7 +29,6 @@ from launcher.exceptions.back import (
 )
 from launcher.functions.text import indent
 from launcher.networking import make_request
-from launcher.paths import paths
 
 from .download_helpers import BulkDownloadError, RunnableDownloader
 

@@ -1,14 +1,13 @@
+from warnings import deprecated
 import platform
 
 from PySide6.QtGui import QValidator
 
 from launcher.functions import is_path_valid
 
-from .store_results import QValidatorWithStoredResults, store_results
 
-
-class FilePathValidator(QValidatorWithStoredResults):
-    @store_results
+@deprecated("Use PySide6.QRegularExpressionValidator() instead.")
+class FilePathValidator(QValidator):
     def validate(
         self, arg__1: str, arg__2: int
     ) -> tuple[QValidator.State, str, int]:
@@ -24,5 +23,5 @@ class FilePathValidator(QValidatorWithStoredResults):
 
         def fixup(self, arg__1: str) -> str:
             if arg__1:
-                return super().fixup(arg__1.replace("/", "\\"))
-            return super().fixup(arg__1)
+                return arg__1.replace("/", "\\")
+            return arg__1

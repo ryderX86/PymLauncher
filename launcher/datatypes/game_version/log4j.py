@@ -4,9 +4,9 @@ import hashlib
 import logging
 import os
 
+from launcher import paths
 from launcher.back.download_helpers import RunnableDownloader
 from launcher.networking import make_request
-from launcher.paths import paths
 
 log = logging.getLogger(__name__)
 

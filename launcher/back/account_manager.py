@@ -9,13 +9,13 @@ import time
 
 from PySide6.QtCore import QObject, Signal
 
+from launcher import paths
 from launcher.auth import LauncherAccount, encryption
 from launcher.auth.encryption import data_load_hook, data_save_hook
 from launcher.auth.exceptions import NoConnectionError
 from launcher.exceptions import EncryptedDataDecodeError
 from launcher.functions import reswrite
 from launcher.offline import offline_man
-from launcher.paths import paths
 
 log = logging.getLogger(__name__)
 
@@ -97,12 +97,28 @@ class AccountManager:
         return self.set_active(account_or_xuid)
 
     @property
+    def active_usable(self):
+        """Checks if we have an active account and if its token is valid."""
+        if offline_man.offline and self.active:
+            return True
+        elif self.active and self.active.token_valid:
+            return True
+        return False
+
+    @property
     def loaded(self):
         return self._loaded
 
     @property
     def has_accounts(self):
         return len(self._accounts) > 0
+
+    @property
+    def has_usable_account(self):
+        """
+        Checks if we have any accounts and if any of them have valid tokens.
+        """
+        return len(self) > 0 and any(a.token_valid for a in self)
 
     def __bool__(self):
         return self._loaded

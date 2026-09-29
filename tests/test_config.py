@@ -1,7 +1,7 @@
 from collections.abc import Callable
 
 from launcher import constants
-from launcher.config import (
+from launcher._config import (
     ConfigHolder,
     JarRedownloadBehavior,
     PostLaunchBehavior,

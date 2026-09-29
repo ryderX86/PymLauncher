@@ -9,6 +9,7 @@ import subprocess
 
 from PySide6.QtCore import QThread, Signal
 
+from launcher import paths
 from launcher.auth import LauncherAccount
 from launcher.back import (
     asset_manager,
@@ -22,7 +23,6 @@ from launcher.exceptions.back import (
     MarkExecutableError,
 )
 from launcher.functions import is_path_valid
-from launcher.paths import paths
 
 log = logging.getLogger(__name__)
 

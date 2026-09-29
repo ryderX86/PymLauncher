@@ -1,9 +1,8 @@
 import hashlib
 import os
 
-from launcher import constants
+from launcher import constants, paths
 from launcher.back.download_helpers import RunnableDownloader
-from launcher.paths import paths
 
 
 class GameAsset:

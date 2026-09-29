@@ -10,7 +10,16 @@ from PySide6.QtCore import QEventLoop, QFile, QTimer, Slot
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QApplication, QStyleFactory
 
-from . import constants, get_qapp, logs, setup_qapp
+from . import (
+    config,
+    constants,
+    get_qapp,
+    launchargs,
+    lifecycle,
+    logs,
+    paths,
+    setup_qapp,
+)
 from .auth import LauncherAccount
 from .auth.exceptions import (
     BaseAuthenticationException,
@@ -21,7 +30,6 @@ from .back import (
     profile_manager,
 )
 from .back.account_manager import account_man
-from .config import config
 from .exceptions import EncryptedDataDecodeError
 from .exceptions.encryption import EncryptionUnavailableWarning
 from .front.event_filters import FocusEventFilter
@@ -33,10 +41,8 @@ from .front.window.main.main_window import MainWindow
 from .front.window.warning import ButtonConfig, WarningDialog, WarningType
 from .functions import detect_set_clipboard, uisleep
 from .functions.error_box import error_box
-from .launchargs import launchargs
 from .offline import connectivity_poller, offline_man
 from .ostools.win32 import setup_app_id
-from .paths import paths
 from .threads.bootstrap import (
     AccountManagerBootstrap,
     BaseBootstrapThread,
@@ -253,7 +259,9 @@ class LauncherApp:
                 )
 
     def _on_accounts_loaded(self):
-        if account_man.has_accounts:
+        if account_man.has_accounts and any(
+            a.token_valid for a in account_man
+        ):
             self.close_if_login_aborted = False
         else:
             self.close_if_login_aborted = True
@@ -285,17 +293,27 @@ class LauncherApp:
         loop_timer.timeout.connect(
             lambda: self._wait_on_threads_loop(loop, loop_timer)
         )
-        log.debug("Starting event loop")
+        log.debug("Waiting for bootstrap w/ event loop")
         with self.lb_window.shown("Loading..."):
             loop_timer.start()
             loop.exec()
         with self.lb_window.shown("Polishing UI"):
+            lifecycle.bootstrap_done.emit()
             self.buildall()
-        with self.lb_window.shown("Waiting on login"):
+        if (not account_man.has_accounts) or (not account_man.active_usable):
+            if (not self.login_dialog) or (not self.login_dialog.isVisible()):
+                if account_man.has_accounts:
+                    reason = "Your session has expired, please log in again."
+                else:
+                    reason = None
+                self.close_if_login_aborted = True
+                self.show_login(reason=reason)
             if self.login_dialog and self.login_dialog.isVisible():
-                loop = QEventLoop(self.qapp)
-                self.login_dialog.finished.connect(loop.quit)
-                loop.exec(QEventLoop.ProcessEventsFlag.AllEvents)
+                with self.lb_window.hidden():
+                    loop = QEventLoop(self.qapp)
+                    self.login_dialog.finished.connect(loop.quit)
+                    loop.exec(QEventLoop.ProcessEventsFlag.AllEvents)
+            self._refresh_account_ui()
 
         log.info("Showtime!")
         self.main_window.show()
@@ -334,114 +352,33 @@ class LauncherApp:
         self.event_loop_running = True
         return self.qapp.exec()
 
-    def load_accounts(self):
-        global clean_exit
-        log.debug("Attempting to load accounts from cache...")
-        if not offline_man.offline:
-            self.lb_window.set_text("Authenticating")
-        try:
-            account_man.load_accounts()
-        except PermissionError as err:
-            log.error("Failed to read accounts.bin:", exc_info=err)
-            error_box(
-                "Failed to read accounts from storage.\n"
-                "The launcher cannot continue loading and will close.\n"
-                "Please make sure you are using the right account with the "
-                "necessary permissions.\n"
-                f"Error type: {type(err).__name__}"
-            )
-            self.exit(1)
-        except AttributeError as err:
-            log.error("AttributeError in account loading:", exc_info=err)
-            if err.obj is not None:
-                log.debug("Object type at fault: %r", type(err.obj).__name__)
-            else:
-                log.debug("Can't retrieve object type from exception")
-            if err.name is not None:
-                log.debug("Missing key: %r", err.name)
-            else:
-                log.debug("Can't retrieve key name from exception")
-            error_box(str(err))
-            self.exit(1)
-        except (JSONDecodeError, EncryptedDataDecodeError) as err:
-            # get user input before proceeding, if True then the user answered
-            # yes to deleting the accounts.bin file
-            if isinstance(err, EncryptedDataDecodeError):
-                dialog_text = (
-                    "Failed to load accounts from storage.\n"
-                    "The file may be unrecoverable due to a decryption error.\n"
-                    "Would you like to reset the storage file and try again?\n"
-                    "(A backup will remain in place)"
-                )
-            else:
-                dialog_text = (
-                    "Failed to load accounts from storage.\n"
-                    "The file may have invalid formatting.\n"
-                    "Would you like to reset the storage file and try again?\n"
-                    "(A backup will remain in place)"
-                )
-            delete_accounts = WarningDialog.warn(
-                text=dialog_text,
-                title="Error loading accounts",
-                button_config=ButtonConfig.YES_NO,
-                button_labels={"no": "Close Launcher"},
-                parent=self.lb_window,
-            )
-            if delete_accounts:
-                account_man.reset_accounts_file()
-                account_man.load_accounts()
-            else:
-                clean_exit = True
-                self.exit()
-        except BaseAuthenticationException as err:
-            if len(account_man) > 1:
-                self.close_if_login_aborted = False
-            else:
-                self.close_if_login_aborted = True
-            self.show_login()
-            if not account_man.active:
-                try:
-                    account_man.auto_set_active()
-                except RuntimeError:
-                    log.debug(
-                        "User aborted login and no accounts have up-to-date "
-                        "credentials. Exiting."
-                    )
-                    clean_exit = True
-                    self.exit()
-        except Exception as err:
-            log.error("Unexpected error in account loading:", exc_info=err)
-            error_box(
-                "Failed to read accounts from storage.\n"
-                "The launcher cannot continue loading and will now close."
-            )
-            self.exit()
-        if account_man.has_accounts:
-            self.close_if_login_aborted = False
-        else:
-            self.close_if_login_aborted = True
-            self.show_login()
-        self._refresh_account_ui()
-
     @Slot(NoneType, bool)
     @Slot(str, bool)
     def show_login(
         self, *, reason: str | None = None, automatic: bool = False
     ):
         with self.lb_window.hidden():
-            if offline_man.offline and not automatic:
+            if offline_man.offline and not account_man.has_usable_account:
                 error_box(
                     "Cannot log in while offline! Please wait and try again."
                 )
                 return self._on_login_abort()
             elif offline_man.offline:  # TODO: confirm this works
-                if len(account_man) > 1:
+                if account_man.has_usable_account:
                     account_man.auto_set_active()
                     return
             self.login_dialog = LoginWindow(self.main_window, reason=reason)
             self.login_dialog.login_complete.connect(self._on_login_complete)
             self.login_dialog.rejected.connect(self._on_login_abort)
             self.login_dialog.open()
+            self.login_dialog.finished.connect(
+                lambda _: (
+                    (
+                        self.login_dialog.deleteLater(),  # type: ignore
+                        setattr(self, "login_dialog", None),
+                    )
+                )
+            )
         return
 
     @Slot()

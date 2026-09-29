@@ -24,7 +24,8 @@ from PySide6.QtCore import (
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import QLabel, QPushButton, QVBoxLayout, QWidget
 
-from launcher import constants
+from launcher import constants, paths
+from launcher._launchargs import launchargs
 from launcher.back.account_manager import account_man
 from launcher.front.qt.widgets import Section
 from launcher.front.window import TextPopup
@@ -33,9 +34,7 @@ from launcher.front.window.modloaders import (
     NeoForgeInstallWindow,
 )
 from launcher.functions import beep
-from launcher.launchargs import launchargs
 from launcher.offline import offline_man
-from launcher.paths import paths
 
 from . import HRow
 

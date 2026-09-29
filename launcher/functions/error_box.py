@@ -40,6 +40,10 @@ def error_box(
         error_win.setWindowTitle(str(error_type))
     else:
         error_win.setWindowTitle("Error")
+    if fatal:
+        error_win.setIcon(QMessageBox.Icon.Critical)
+    else:
+        error_win.setIcon(QMessageBox.Icon.Warning)
     if open_link:
         error_win.addButton(QMessageBox.StandardButton.Open)
         error_win.addButton(QMessageBox.StandardButton.Ok)

@@ -31,9 +31,9 @@ from PySide6.QtWidgets import (
 from requests.exceptions import ConnectionError as RequestsConnectionError
 from requests.exceptions import ConnectTimeout, HTTPError
 
+from launcher import config
 from launcher.auth import LauncherAccount, SkinModel
 from launcher.back.account_manager import account_man
-from launcher.config import config
 from launcher.constants import (
     CAPE_URL,
     OS_PATH_DELIM,

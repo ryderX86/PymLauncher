@@ -1,6 +1,7 @@
+from types import NoneType
 import logging
 
-from PySide6.QtCore import QSize, Signal
+from PySide6.QtCore import QSize, Signal, Slot
 from PySide6.QtGui import QFocusEvent, QIcon, QMouseEvent, QWheelEvent
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QPushButton
 
@@ -39,6 +40,9 @@ class IconPickerButton(QPushButton):
         self._label.setPixmap(
             resources.symbol("dropdown").pixmap(QSize(12, 12))
         )
+
+    def view(self):
+        return self.dropdown
 
     def focusInEvent(self, arg__1: QFocusEvent):
         self.setChecked(False)
@@ -108,9 +112,11 @@ class IconPickerButton(QPushButton):
             self.dropdown.view.setCurrentRow(new_row)
         return super().wheelEvent(event)
 
+    @Slot()
     def revert(self):
         self.dropdown.revert()
 
+    @Slot(str, QIcon)
     def _on_change_icon(self, name: str, ico: QIcon):
         self._icon_name = name
         # wh = int(self.height() / 1.6)
@@ -130,8 +136,11 @@ class IconPickerButton(QPushButton):
     def text(self):
         return self._icon_name
 
+    @Slot(str)
+    @Slot(NoneType)
     def setText(self, text: str | None):
         self.dropdown.set_icon_to(text)
 
+    @Slot(LaunchProfile)
     def profile_selected(self, prof: LaunchProfile):
         self.dropdown.profile_selected(prof)

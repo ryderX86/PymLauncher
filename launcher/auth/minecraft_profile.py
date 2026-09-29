@@ -10,7 +10,7 @@ import uuid
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QIcon, QImage, QPainter, QPixmap
 
-from launcher import constants
+from launcher import constants, paths
 from launcher.auth.minecraft_token import MinecraftToken
 from launcher.exceptions.network import (
     HTTPStatusCodeError,
@@ -19,7 +19,6 @@ from launcher.exceptions.network import (
 from launcher.front import resources
 from launcher.networking import make_request
 from launcher.offline import offline_man
-from launcher.paths import paths
 
 from .exceptions import BaseProfileError, NoConnectionError, UnauthorizedError
 

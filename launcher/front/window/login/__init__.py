@@ -18,13 +18,13 @@ from PySide6.QtWidgets import (
 )
 import requests
 
+from launcher import config
 from launcher.auth import LauncherAccount, MicrosoftAccount, auth_flow
 from launcher.auth.exceptions import (
     BaseProfileError,
     NoConnectionError,
     ProfileNotFoundError,
 )
-from launcher.config import config
 from launcher.constants import (
     AZURE_CLIENT_ID,
     AZURE_SCOPE,
@@ -55,7 +55,7 @@ class LoginWindow(QDialog):
     On complete, emits `login_complete` with full auth chain result.
     """
 
-    login_complete = Signal(object)
+    login_complete = Signal(LauncherAccount)
     login_aborted = Signal()
 
     # instance
@@ -386,6 +386,13 @@ class LoginWindow(QDialog):
     def closeEvent(self, a0):
         self.cleanup_threads()
         super().closeEvent(a0)
+
+    def deleteLater(self) -> None:
+        if self._thread:
+            self._thread.terminate()
+            self._thread.wait()
+            self._thread.deleteLater()
+        return super().deleteLater()
 
     def _set_use_device_code(self, a0: Qt.CheckState):
         checked = self.use_device_code.isChecked()

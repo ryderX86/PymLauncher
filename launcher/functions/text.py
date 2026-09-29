@@ -43,26 +43,12 @@ def truncate(
     return text
 
 
-_WIN_PATH_REGEX = (
-    r"(([A-Za-z]:\\)|(%[a-zA-Z0-9]+%\\?))(((?!(\.\.)|(CON)|(PRN)|(AUX)|(NUL)|("
-    r"COM[0-9¹²³])|(LPT[0-9¹²³])|([^\\]+\.[\\\.])|([<>:\"/?*\x00-\x1f\\]))[^<>"
-    r":\"/?*\x00-\x1f\\]*)\\?)+"
-)
-_POSIX_PATH_REGEX = r"((~/|/)((?![^/]+\.)[^\x00\n\r\/]+/?)+)|~"
-
-match platform.system():
-    case "Windows":
-        FP_REGEX = _WIN_PATH_REGEX
-    case _:
-        FP_REGEX = _POSIX_PATH_REGEX
-
-
 def is_path_valid(fp: str | os.PathLike):
     if not isinstance(fp, str):
         fp = str(fp)
     if platform.system() == "Windows":
         fp = fp.replace("/", "\\")
-    m = re.match(FP_REGEX, fp)
+    m = re.match(constants.FP_REGEX, fp)
     if not m:
         return False
     return m.string == fp

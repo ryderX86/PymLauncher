@@ -2,8 +2,7 @@ from datetime import datetime
 import hashlib
 import os
 
-from launcher import constants
-from launcher.paths import paths
+from launcher import constants, paths
 
 
 class JavaVersionStub:

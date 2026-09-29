@@ -1,5 +1,5 @@
 # pylint: disable=e1101
-from typing import Callable, Any
+from typing import Any, Callable
 
 from PySide6.QtGui import QValidator
 

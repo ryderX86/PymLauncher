@@ -9,7 +9,7 @@ from PySide6.QtWidgets import (
     QMessageBox,
 )
 
-from launcher.config import config
+from launcher import config
 
 log = logging.getLogger(__name__)
 

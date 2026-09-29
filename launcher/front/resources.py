@@ -10,6 +10,7 @@ import qrcode
 import qrcode.constants
 import qrcode.image.svg
 
+from launcher import launchargs, paths
 from launcher.constants import OS
 from launcher.front.styles import (
     ACCENT,
@@ -20,8 +21,6 @@ from launcher.front.styles import (
     TEXT_PRIMARY,
     uses_dark_mode,
 )
-from launcher.launchargs import launchargs
-from launcher.paths import paths
 
 from . import _resources_bundled  # pylint: disable=W0611
 

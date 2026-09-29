@@ -5,7 +5,7 @@ from pathlib import Path
 import logging
 import os
 
-from launcher.paths import paths
+from launcher import paths
 
 log = logging.getLogger(__name__)
 

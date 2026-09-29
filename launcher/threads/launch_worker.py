@@ -15,15 +15,18 @@ import subprocess
 
 from PySide6.QtCore import QThread, Signal, Slot
 
-from launcher import constants
+from launcher import (
+    JarRedownloadBehavior,
+    config,
+    constants,
+    launchargs,
+    paths,
+)
 from launcher.auth import LauncherAccount
 from launcher.back import java_manager, library_manager
-from launcher.config import JarRedownloadBehavior, config
 from launcher.datatypes import LaunchProfile
 from launcher.datatypes.game_version import GameVersion, JVMLaunchArg
 from launcher.functions import is_path_valid, remove_empty_strings, truncate
-from launcher.launchargs import launchargs
-from launcher.paths import paths
 
 from .install_worker import InstallWorker
 

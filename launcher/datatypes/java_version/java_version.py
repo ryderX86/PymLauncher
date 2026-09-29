@@ -2,8 +2,8 @@ from collections.abc import Callable
 import logging
 import os
 
+from launcher import paths
 from launcher.back.download_helpers import RunnableDownloader
-from launcher.paths import paths
 
 from .java_file import JavaFile
 

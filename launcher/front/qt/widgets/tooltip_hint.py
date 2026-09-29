@@ -3,7 +3,7 @@ import weakref
 from PySide6.QtCore import QSize, Qt, Signal
 from PySide6.QtWidgets import QLabel
 
-from launcher.config import config
+from launcher import config
 from launcher.front import resources
 
 

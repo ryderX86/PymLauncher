@@ -2,7 +2,7 @@ from pathlib import Path
 import base64
 import logging
 
-from PySide6.QtCore import QBuffer, QByteArray, QSize, Qt, Signal
+from PySide6.QtCore import QBuffer, QByteArray, QSize, Qt, Signal, Slot
 from PySide6.QtGui import (
     QFocusEvent,
     QGuiApplication,
@@ -72,6 +72,7 @@ class IconPicker(QWidget):
         )
         self.view.setVerticalScrollMode(self.view.ScrollMode.ScrollPerPixel)
 
+    @Slot(bool)
     def _set_automated(self, auto: bool):
         self._automated_status = auto
 
@@ -210,6 +211,7 @@ class IconPicker(QWidget):
             return
         self.view.setCurrentItem(self._previous)
 
+    @Slot(QListWidgetItem)
     def _emit_item_change(self, item: QListWidgetItem):
         ico = item.icon()
         name = item.data(256)
@@ -224,15 +226,24 @@ class IconPicker(QWidget):
         match_found = False
         idx = 0
         if not name.startswith("data:image/"):
+            self.view.setRowHidden(1, True)
+            self.view.item(1).setData(256, "<CUSTOM>")
             for i in range(self.view.count()):
                 current_name = self.view.item(i).data(256)
-                idx += 1
+                idx = i
                 if current_name == name:
                     match_found = True
                     break
         else:
             match_found = True
             idx = 1
+            current_icon = self.view.item(1).icon()
+            new_icon = resources.profile_icon(name)
+            self.view.item(1).setIcon(new_icon)
+            self.view.item(1).setData(256, name)
+            self.view.setRowHidden(1, False)
+            if current_icon != new_icon:
+                self.icon_chosen.emit(name, new_icon)
         if match_found:
             self.view.setCurrentRow(idx)
             return
@@ -287,13 +298,12 @@ class IconPicker(QWidget):
     # def hide(self):
     #     return super().hide()
 
+    @Slot()
     def _add_custom_icon(self):
         def errout(fp: str):
             error_box(f'Failed to read image at "{fp}"')
             return
 
-        if not self._current_profile:
-            return
         idx = self.view.item(1)
         file_filter = (
             "Image Files (*.png *.jpeg *.jpg *.bmp "

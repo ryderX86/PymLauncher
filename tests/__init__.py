@@ -1,6 +1,6 @@
 import os
 
-from launcher.paths import paths
+from launcher._paths import paths
 
 BASE_DIR = os.path.dirname(__file__)
 paths.setup(

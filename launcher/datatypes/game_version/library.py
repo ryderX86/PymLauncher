@@ -4,10 +4,8 @@ import hashlib
 import logging
 import os
 
-from launcher import constants
+from launcher import config, constants, paths
 from launcher.back.download_helpers import RunnableDownloader
-from launcher.config import config
-from launcher.paths import paths
 
 from .rules import OSRule
 

@@ -15,6 +15,7 @@ import zipfile
 from packaging.version import Version, parse
 from PySide6.QtCore import QThreadPool
 
+from launcher import paths
 from launcher.constants import (
     ARCH,
     CLASSPATH_SEPARATOR,
@@ -24,7 +25,6 @@ from launcher.constants import (
 from launcher.datatypes.game_version import Library
 from launcher.functions import is_path_valid
 from launcher.networking import make_request
-from launcher.paths import paths
 
 from .download_helpers import (
     BulkDownloadError,

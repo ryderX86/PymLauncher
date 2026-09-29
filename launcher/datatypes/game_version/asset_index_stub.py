@@ -6,10 +6,10 @@ import os
 
 from requests.exceptions import HTTPError as HTTPError_
 
+from launcher import paths
 from launcher.exceptions import InvalidAssetError
 from launcher.networking import make_request
 from launcher.offline import offline_man
-from launcher.paths import paths
 
 from .asset_index import AssetIndex
 

@@ -1,6 +1,16 @@
-from PySide6.QtGui import QValidator
+from PySide6.QtGui import QScreen, QValidator
 
-from .store_results import store_results, QValidatorWithStoredResults
+from .store_results import QValidatorWithStoredResults, store_results
+
+COMMON_RESOLUTIONS = [
+    (854, 480),
+    (1280, 720),
+    (1366, 768),
+    (1600, 900),
+    (1920, 1080),
+    (2560, 1440),
+    (3840, 2160),
+]
 
 
 class ProfileResolutionTextValidator(QValidatorWithStoredResults):
@@ -8,16 +18,31 @@ class ProfileResolutionTextValidator(QValidatorWithStoredResults):
         super().__init__(parent)
         self.resolutions: list[str] = []
 
-    def set_resolutions(self, resolution_list: list[str]):
-        self.resolutions = resolution_list
+    def set_resolutions(self, screen: QScreen) -> list[str]:
+        res_list = [f"{w}x{h}" for w, h in COMMON_RESOLUTIONS]
+        geo = screen.geometry()
+        if screen:
+            sw, sh = geo.width(), geo.height()
+            for frac in [1.0, 0.8, 0.75, 0.6]:
+                w = int(sw * frac)
+                h = int(sh * frac)
+                res = f"{w}x{h}"
+                if res not in res_list:
+                    res_list.append(res)
+            for x, y in COMMON_RESOLUTIONS:
+                if x > sw or y > sh:
+                    res_list.remove(f"{x}x{y}")
+        self.resolutions = sorted(res_list, key=lambda r: int(r.split("x")[0]))
+        self.resolutions.insert(0, "Automatic")
+        return self.resolutions
 
     @store_results
     def validate(
         self, a0: str | None, a1: int
     ) -> tuple[QValidator.State, str, int]:
         if not a0:
-            return self.State.Intermediate, self.resolutions[0], 0
-        if a0 == "Auto":
+            return self.State.Acceptable, "Automatic", 0
+        if a0 == "Automatic":
             return self.State.Acceptable, a0, a1
 
         # QOL autofill 1080p -> 1920x1080

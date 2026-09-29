@@ -10,9 +10,7 @@ from PySide6.QtCore import (
     qInstallMessageHandler,
 )
 
-from launcher import constants
-from launcher.launchargs import launchargs
-from launcher.paths import paths
+from launcher import constants, launchargs, paths
 
 ROOT_LOGGER = logging.getLogger()
 

@@ -6,12 +6,11 @@ import logging
 import os
 import zipfile
 
-from launcher import constants
+from launcher import constants, paths
+from launcher._launchargs import launchargs
 from launcher.back import profile_manager
 from launcher.datatypes.launch_profile import LaunchProfile
 from launcher.functions import is_path_valid
-from launcher.launchargs import launchargs
-from launcher.paths import paths
 
 log = logging.getLogger(__name__)
 if launchargs.exporting_debug:

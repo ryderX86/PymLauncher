@@ -21,11 +21,9 @@ import uuid
 
 from PySide6.QtCore import QObject, Signal
 
-from launcher import get_exit_status
-from launcher.config import config
+from launcher import config, get_exit_status, paths
 from launcher.datatypes import LaunchProfile
 from launcher.functions import reswrite
-from launcher.paths import paths
 
 log = logging.getLogger(__name__)
 
@@ -96,8 +94,8 @@ def reorder_profiles(new_order: Iterable[str]):
             )
             new_profiles[profile_id] = profiles[profile_id]
     profiles = new_profiles
+    _meta_cache["order"] = list(profiles.keys())
     _refresh_profiles()
-    _save_sorting_order(profiles.keys())
     return
 
 
@@ -602,7 +600,6 @@ def get_last_used_profile(profiles_: dict[str, LaunchProfile] | None = None):
 def save_single_profile(profile: LaunchProfile):
     profiles[profile.uuid] = profile
     save_launcher_profiles()
-    _refresh_profiles()
 
 
 def delete_single_profile(profile: LaunchProfile):

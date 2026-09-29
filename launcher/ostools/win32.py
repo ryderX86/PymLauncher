@@ -7,8 +7,8 @@ from win32com.shell import shell  # type: ignore
 import pythoncom
 import win32api
 
+from launcher import config
 from launcher.back import profile_manager
-from launcher.config import config
 from launcher.constants import APP_SLUG, DEV, OS
 from launcher.front import resources
 
