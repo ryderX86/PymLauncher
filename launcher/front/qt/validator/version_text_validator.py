@@ -76,10 +76,9 @@ class VersionTextValidator(QValidatorWithStoredResults):
 
             self._last_good_val = a0
             return self.State.Acceptable, a0, a1
+        if a0 in self.ver_ids:
+            return self.State.Acceptable, a0, a1
         for id_ in self.ver_ids:
-            if id_ == a0:
-                self._last_good_val = a0
-                return self.State.Acceptable, a0, a1
             if id_.startswith(a0):
                 return self.State.Intermediate, a0, a1
         return self.State.Invalid, LATEST_VERSION_TEXT, 0
