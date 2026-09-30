@@ -13,6 +13,7 @@ from datetime import datetime, timezone
 from functools import lru_cache
 from types import FunctionType
 from typing import Any, Literal
+import copy
 import json
 import logging
 import os
@@ -56,6 +57,8 @@ _profile_switch_handlers: list[Callable[[LaunchProfile], None]] = []
 _profile_refresh_handlers: list[Callable] = []
 
 _launcher_settings = {**_DEFAULT_SETTINGS_JSON}
+
+_default_factory_cache: dict[str, LaunchProfile] | None = None
 
 
 @lru_cache(maxsize=32)
@@ -319,9 +322,12 @@ def _default_profs_factory():
     Returns the default `latest-release` and `latest-snapshot` profiles in
     JSON format.
     """
+    global _default_factory_cache
+    if _default_factory_cache is not None:
+        return _default_factory_cache
     latest_uid = str(uuid.uuid4())
     snapshot_uid = str(uuid.uuid4())
-    return {
+    _default_factory_cache = {
         latest_uid: LaunchProfile(
             name="Latest Release",
             type="latest-release",
@@ -336,6 +342,9 @@ def _default_profs_factory():
             icon="Dirt",
         ),
     }
+    # deepcopy so we can compare any modifications when saving, and avoid
+    # writing the file if nothing changed at all from defaults.
+    return copy.deepcopy(_default_factory_cache)
 
 
 def _default_lp_file_factory():
@@ -538,16 +547,33 @@ def save_launcher_profiles(
         log.warning("Overriding global profiles list!")
         profiles = profiles_
     if not profiles:
-        log.warning("No profiles are present! Saving default list...")
-        profiles = _default_profs_factory()
-    if _launcher_settings != _DEFAULT_SETTINGS_JSON and not settings:
-        settings = _launcher_settings
-    elif settings:
+        log.warning("No profiles are present! Aborting save...")
+        return
+    elif _default_factory_cache and len(profiles) == 2:
+        # this can help with bugs related to profile load failing, i.e. the
+        # user clicks "Close Launcher" when profile loading fails but the
+        # cleanup functions are still run for whatever reason.
+
+        profiles_are_still_default = True
+        for uid, p in profiles.items():
+            if not p.is_exact_match(_default_factory_cache[uid]):
+                profiles_are_still_default = False
+
+        if profiles_are_still_default:
+            log.info("Profiles are strictly default, aborting save.")
+            return
+
+    # this entire section with settings should be unnecessary in theory since
+    # the launcher uses its own config that's very separate from this vanilla
+    # settings section, although it's worth checking since it's not run often.
+    if not settings:
+        settings = {**_DEFAULT_SETTINGS_JSON, **_launcher_settings}
+    else:
         log.warning(
             'Overriding launcher_profiles["settings"] with defined value'
         )
-    else:
-        settings = _DEFAULT_SETTINGS_JSON
+        settings = {**_DEFAULT_SETTINGS_JSON, **_launcher_settings, **settings}
+
     profiles_json = {k: v.to_dict_compat() for k, v in profiles.items()}
     output = {"profiles": profiles_json, "settings": settings, "version": 6}
     _save_sorting_order(profiles_json.keys())

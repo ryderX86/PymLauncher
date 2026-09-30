@@ -487,6 +487,39 @@ class LaunchProfile:
             return self.icon
         return "_".join([a.capitalize() for a in self.icon.split("_")])
 
+    def to_dict(self):
+        """
+        Returns the profile as meta JSON for saving PymLauncher-specific
+        profiles, or comparison.
+        """
+        return {
+            k: v
+            for k, v in {
+                "name": self.name,
+                "type": self.type,
+                "created": self.created,
+                "used_at": self.last_used,
+                "game_dir": self.game_dir,
+                "icon": self.icon,
+                "java_binary": self.java_path,
+                "jvm_args": (
+                    self.jvm_args
+                    if self.has_custom_args or self.needs_save_args()
+                    else None
+                ),
+                "version_id": self.version_id,
+                "resolution": (
+                    {
+                        "width": self.resolution_width,
+                        "height": self.resolution_height,
+                    }
+                    if self.resolution_width or self.resolution_height
+                    else None
+                ),
+            }.items()
+            if v
+        }
+
     def to_dict_compat(self):
         """
         Returns the profile as vanilla compatible JSON with any null or
@@ -625,3 +658,16 @@ class LaunchProfile:
                 return "Latest Release"
             case "latest-snapshot":
                 return "Latest Snapshot"
+
+    def is_exact_match(self, other: LaunchProfile | dict):
+        """
+        Compares both profiles by the value of `to_dict()`, for difference
+        checking.
+
+        Can also pass `other.to_dict()` directly, however it must be the result
+        of `to_dict()`, and not `to_dict_compat()`, else the results will be
+        inaccurate.
+        """
+        return self.to_dict() == (
+            other.to_dict() if isinstance(other, LaunchProfile) else other
+        )
