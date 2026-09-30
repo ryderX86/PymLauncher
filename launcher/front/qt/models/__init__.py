@@ -1,2 +1,0 @@
-from .profile_selection_model import ProfileSelectionModel
-from .profile_model import ProfileModel
