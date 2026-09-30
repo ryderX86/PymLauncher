@@ -269,7 +269,7 @@ class LauncherAccount:
 
     def get_demo_profile(self):
         prof_info = MinecraftProfile(
-            {"name": f"Demo-Player-{self.gamertag}", "id": "0"}, self.token
+            {"name": f"DemoPlayer-{self.gamertag}", "id": "0"}, self.token
         )
         self.profile = prof_info
         return prof_info
