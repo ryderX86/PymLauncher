@@ -242,22 +242,21 @@ class HomePage(BindingMixin, QWidget):
     def _refresh_profiles(self):
         profs = [*profile_manager.profiles.values()]
         current = profile_manager.get_current_profile()
-        if not current:
-            log.warning("Cannot get current profile! Aborting refresh.")
-            return
-        self.profile_dropdown.clear()
-        for prof in profs:
-            if prof.icon:
-                ico = resources.profile_icon(prof.icon)
-                self.profile_dropdown.addItem(
-                    ico, prof.name or prof.uuid, prof
-                )
-            else:
-                self.profile_dropdown.addItem(
-                    self._no_icon, prof.name or prof.uuid, prof
-                )
-            if prof == current:
-                self.profile_dropdown.setCurrentIndex(profs.index(current))
+        with self._on_profile_change.suppressed():
+            self.profile_dropdown.clear()
+            for prof in profs:
+                if prof.icon:
+                    ico = resources.profile_icon(prof.icon)
+                    self.profile_dropdown.addItem(
+                        ico, prof.name or prof.uuid, prof
+                    )
+                else:
+                    self.profile_dropdown.addItem(
+                        self._no_icon, prof.name or prof.uuid, prof
+                    )
+                if prof == current:
+                    self.profile_dropdown.setCurrentIndex(profs.index(current))
+        self._profile_change(current)
 
     def _on_dropdown_select(self, index: int):
         prof: LaunchProfile = self.profile_dropdown.itemData(index)
