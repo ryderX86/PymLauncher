@@ -1,5 +1,5 @@
 from PySide6.QtCore import QChildEvent, QEvent, QSize, Qt, Slot
-from PySide6.QtGui import QContextMenuEvent, QMouseEvent, QShowEvent
+from PySide6.QtGui import QContextMenuEvent, QMouseEvent
 from PySide6.QtWidgets import (
     QListWidget,
     QListWidgetItem,
@@ -33,13 +33,6 @@ class ProfileList(BindingMixin, QWidget):
         profile_manager.add_profile_switch_handler(self._switch_profile)
         self._list_profiles()
 
-    def showEvent(self, event: QShowEvent) -> None:
-        super().showEvent(event)
-        self._right_click_list_filter = MiscEventFilter(
-            QMouseEvent, return_true_on_catch=self._block_right_clicks
-        )
-        self._view.viewport().installEventFilter(self._right_click_list_filter)
-
     def _build(self):
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
@@ -69,6 +62,10 @@ class ProfileList(BindingMixin, QWidget):
         self._view.setDragDropMode(QListWidget.DragDropMode.InternalMove)
         self._view.setDefaultDropAction(Qt.DropAction.MoveAction)
         self._view.currentItemChanged.connect(self._on_select)
+        self._right_click_list_filter = MiscEventFilter(
+            QMouseEvent, return_true_on_catch=self._block_right_clicks
+        )
+        self._view.viewport().installEventFilter(self._right_click_list_filter)
 
     def _switch_profile(self, new: LaunchProfile):
         if new is None:
