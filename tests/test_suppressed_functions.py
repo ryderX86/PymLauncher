@@ -1,10 +1,10 @@
 import timeit
 
-from launcher.functions import suppressable
+from launcher.functions import Suppressable
 
 
 class Wrapper:
-    @suppressable
+    @Suppressable
     def wrapped_method(self):
         return True
 
@@ -13,7 +13,7 @@ class Wrapper:
 
 
 def test_ctx():
-    @suppressable
+    @Suppressable
     def suppressed_func():
         a = 1
         a += 2
@@ -62,7 +62,7 @@ def test_timings():
     def func_default():
         return True
 
-    @suppressable
+    @Suppressable
     def func_wrapped():
         return True
 

@@ -61,6 +61,10 @@ class _InstanceSuppressable(Generic[I, P, R]):
     def unsuppressed(self):
         return _SuppressableContextManager(self, False)
 
+    @property
+    def is_suppressed(self):
+        return self._suppressed
+
     def __enter__(self):
         self.suppress()
         return self
@@ -100,6 +104,10 @@ class Suppressable(Generic[I, P, R]):
 
     def unsuppressed(self):
         return _SuppressableContextManager(self, False)
+
+    @property
+    def is_suppressed(self):
+        return self._suppressed
 
     @overload
     def __get__(
