@@ -4,14 +4,33 @@ rewritten from scratch or deleted permenantly and replaced with a generic
 QImage thumbnail
 """
 
+from copy import copy
 from pathlib import Path
+from statistics import fmean
 from string import ascii_letters
+from typing import Generator
 import hashlib
 import logging
 import os
+import shutil
 
-from PySide6.QtCore import QObject, QSize, Qt, QUrl, Signal
-from PySide6.QtGui import QCloseEvent, QImage, QPixmap, QSurfaceFormat
+from PySide6.QtCore import (
+    QObject,
+    QPoint,
+    QRect,
+    QSize,
+    Qt,
+    QUrl,
+    Signal,
+    Slot,
+)
+from PySide6.QtGui import (
+    QCloseEvent,
+    QImage,
+    QPainter,
+    QPixmap,
+    QSurfaceFormat,
+)
 from PySide6.QtQuickWidgets import QQuickWidget
 from PySide6.QtWidgets import (
     QButtonGroup,
@@ -23,15 +42,15 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QListWidget,
     QListWidgetItem,
+    QMenu,
+    QMessageBox,
     QPushButton,
     QRadioButton,
     QVBoxLayout,
     QWidget,
 )
-from requests.exceptions import ConnectionError as RequestsConnectionError
-from requests.exceptions import ConnectTimeout, HTTPError
 
-from launcher import config
+from launcher import config, paths
 from launcher.auth import LauncherAccount, SkinModel
 from launcher.back.account_manager import account_man
 from launcher.constants import (
@@ -39,17 +58,61 @@ from launcher.constants import (
     OS_PATH_DELIM,
     SKIN_CHANGE_URL,
 )
-from launcher.exceptions.network import (
-    ConnectError,
-    HTTPStatusCodeError,
-    WrappedUL3Exception,
-)
-from launcher.front import resources
+from launcher.datatypes.default_skins import DefaultSkin, DefaultSkinSHA
+from launcher.exceptions.network import HTTPStatusCodeError
+from launcher.front.icon_helpers import IconName, get_icon
 from launcher.functions.error_box import error_box
 from launcher.networking import make_request
 from launcher.offline import offline_man
 
 log = logging.getLogger(__name__)
+
+
+def iter_qrect(rect: QRect) -> Generator[tuple[int, int]]:
+    r = copy(rect)
+
+    for x in range(r.x(), r.x() + r.width()):
+        for y in range(r.y(), r.y() + r.height()):
+            yield x, y
+
+
+def get_skin_type(skin: QPixmap | QImage):
+    if isinstance(skin, QPixmap):
+        skin = skin.toImage()
+    skin.save("%USERPROFILE%\\Pictures\\test.png")
+    check_1 = QRect(50, 16, 2, 4)
+    check_2 = QRect(54, 20, 2, 12)
+
+    # skip 4&5 if 3 isn't present/image is 32x32
+    check_3 = QRect(32, 52, 14, 12)
+    check_4 = QRect(46, 52, 2, 12)
+    check_5 = QRect(42, 48, 2, 4)
+
+    alpha_values: list[int] = []
+
+    # true = pixels exist
+    # false = pixels are alpha <2
+    for x, y in iter_qrect(check_1):
+        alpha_values.append(skin.pixelColor(x, y).alpha())
+    for x, y in iter_qrect(check_2):
+        alpha_values.append(skin.pixelColor(x, y).alpha())
+    check_3_result: bool = True
+    for x, y in iter_qrect(check_3):
+        if skin.pixelColor(x, y).alpha() < 2:
+            check_3_result = False
+    if check_3_result is True:
+        for x, y in iter_qrect(check_4):
+            alpha_values.append(skin.pixelColor(x, y).alpha())
+        for x, y in iter_qrect(check_5):
+            alpha_values.append(skin.pixelColor(x, y).alpha())
+
+    if fmean(alpha_values) > 64:
+        return SkinModel.CLASSIC
+    return SkinModel.SLIM
+
+
+QURL_CLASSIC = QUrl("qrc:/3d/steve/scene.qml")
+QURL_SLIM = QUrl("qrc:/3d/alex/scene.qml")
 
 
 class SkinChange(QDialog):
@@ -100,11 +163,10 @@ class SkinChange(QDialog):
         self._root_lo.addWidget(mid_w)
         self._root_lo.addWidget(bottom_w)
 
-        reset_ico = resources.symbol("circle-counter-clockwise")
-        self.reset_button = QPushButton(reset_ico, "")
+        reset_ico = get_icon(IconName.RESET)
+        self.reset_button = QPushButton()
+        self.reset_button.setIcon(reset_ico)
         self.reset_button.setDisabled(True)
-        self.reset_button.setProperty("large", True)
-        self.reset_button.setFixedHeight(33)
         self.reset_button.clicked.connect(self.set_skin_initial)
 
         self.file_input = QLineEdit()
@@ -112,8 +174,7 @@ class SkinChange(QDialog):
         self.file_input.setDisabled(True)
         self.file_input.textChanged.connect(self._change_preview)
 
-        browse_button = QPushButton(resources.symbol("folder-plus"), "Browse")
-        browse_button.setProperty("large", True)
+        browse_button = QPushButton(get_icon(IconName.OPEN_IMAGE), "Browse")
         browse_button.clicked.connect(self._open_file_picker)
 
         top.addWidget(self.reset_button)
@@ -124,15 +185,16 @@ class SkinChange(QDialog):
 
         self.cape_list = QListWidget()
         self.cape_list.setViewMode(QListWidget.ViewMode.IconMode)
-        self.cape_list.setIconSize(QSize(64, 64))
+        self.cape_list.setIconSize(QSize(54, 80))
         cape_list_none = QListWidgetItem()
         cape_list_none.setText("None")
         cape_list_none.setData(256, None)
         cape_list_none.setData(257, None)
         cape_list_none.setSizeHint(QSize(54, 80))
         self.cape_list.addItem(cape_list_none)
-        self.cape_list.setProperty("icons", True)
         self.cape_list.setMovement(QListWidget.Movement.Static)
+        self.cape_list.setMinimumHeight(self.cape_list.sizeHintForRow(0))
+        self.cape_list.setMaximumHeight(self.cape_list.sizeHintForRow(0))
         if self.account.profile:
             not_found_cape = True
             if self.account.profile.capes:
@@ -152,8 +214,14 @@ class SkinChange(QDialog):
                     item.setToolTip(alias)
                     item.setData(256, id_)
                     item.setData(257, p)
-                    item.setIcon(thumb)
+                    new_pix = QPixmap(QSize(54, 80))
+                    new_pix.fill(Qt.GlobalColor.transparent)
+                    painter = QPainter(new_pix)
+                    painter.drawPixmap(QRect(7, 5, 40, 64), thumb)
+                    painter.end()
+                    item.setIcon(new_pix)
                     item.setSizeHint(QSize(54, 80))
+                    item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
                     self.cape_list.addItem(item)
                     if not_found_cape:
                         if cape.get("state", "INACTIVE") == "ACTIVE":
@@ -165,8 +233,6 @@ class SkinChange(QDialog):
                 if not_found_cape:
                     self.cape_list.setCurrentRow(0)
                     self.current_cape_cloud_idx = 0
-        self.cape_list.setMaximumHeight(94)
-        self.cape_list.setMinimumHeight(94)
         self.cape_list.setAutoScroll(False)
         self.cape_list.setFlow(QListWidget.Flow.LeftToRight)
         self.cape_list.setWrapping(False)
@@ -215,6 +281,12 @@ class SkinChange(QDialog):
             QQuickWidget.ResizeMode.SizeRootObjectToView
         )
         self.skin_preview.setClearColor(Qt.GlobalColor.transparent)
+        self.skin_preview.setContextMenuPolicy(
+            Qt.ContextMenuPolicy.CustomContextMenu
+        )
+        self.skin_preview.customContextMenuRequested.connect(
+            self._3d_view_context_menu
+        )
         self.skin_preview.setFormat(surface_format)
         self.engine = self.skin_preview.engine()
         self.skin_preview.setSource(QUrl("qrc:/3d/steve/scene.qml"))
@@ -234,12 +306,23 @@ class SkinChange(QDialog):
         bottom.addWidget(cancel_button)
         bottom.addWidget(self.submit_button)
 
+    @classmethod
+    def change_skin(cls, parent=None):
+        if not account_man.active:
+            log.warning("No active account, aborting")
+            return
+        inst = cls(account_man.active, parent)
+        inst.exec()
+        inst.deleteLater()
+        return
+
     def exec(self) -> int:
         self.set_skin_initial()
         return super().exec()
 
+    @Slot()
     def _slim_selected(self):
-        self.skin_preview.setSource(QUrl("qrc:/3d/alex/scene.qml"))
+        self.skin_preview.setSource(QURL_SLIM)
         self.sp_root = self.skin_preview.rootObject()
         self.player_model = self.sp_root.findChild(QObject, "steveModel")
         if self.player_model:
@@ -252,8 +335,9 @@ class SkinChange(QDialog):
         self.variant = "slim"
         self._show_anim(self.show_anim_sel.checkState())
 
+    @Slot()
     def _classic_selected(self):
-        self.skin_preview.setSource(QUrl("qrc:/3d/steve/scene.qml"))
+        self.skin_preview.setSource(QURL_CLASSIC)
         self.sp_root = self.skin_preview.rootObject()
         self.player_model = self.sp_root.findChild(QObject, "steveModel")
         if self.player_model:
@@ -266,6 +350,7 @@ class SkinChange(QDialog):
         self.variant = "classic"
         self._show_anim(self.show_anim_sel.checkState())
 
+    @Slot()
     def set_skin_initial(self):
         self.reset_button.setDisabled(True)
         self.file_input.setText(None)
@@ -302,6 +387,7 @@ class SkinChange(QDialog):
         super().closeEvent(arg__1)
         return self.deleteLater()
 
+    @Slot(str)
     def _change_preview(self, fp: str):
         if not os.path.isfile(fp):
             return
@@ -313,6 +399,10 @@ class SkinChange(QDialog):
         with open(fp, "rb") as file:
             sha = hashlib.sha256(file.read()).hexdigest()
             self.current_hash = sha
+        img = QImage()
+        if not img.load(fp):
+            log.warning("Failed to load image at %r", fp)
+            return
         if (
             sha == self.current_cloud_hash
             and self.current_cape == self.current_cape_cloud
@@ -322,9 +412,17 @@ class SkinChange(QDialog):
         else:
             self.reset_button.setDisabled(False)
             self.submit_button.setDisabled(False)
+        match get_skin_type(img):
+            case SkinModel.CLASSIC:
+                if self.skin_preview.source() != QURL_CLASSIC:
+                    self.classic_sel.click()
+            case SkinModel.SLIM:
+                if self.skin_preview.source() != QURL_SLIM:
+                    self.slim_sel.click()
         if self.player_model:
             self.player_model.setProperty("skin", QUrl.fromLocalFile(fp))
 
+    @Slot()
     def _open_file_picker(self):
         file, _ = QFileDialog.getOpenFileName(
             self,
@@ -346,6 +444,7 @@ class SkinChange(QDialog):
         del img
         self.file_input.setText(file)
 
+    @Slot()
     def _upload(self):
         if self.current_hash != self.current_cloud_hash:
             skin_success = self._upload_skin()
@@ -476,6 +575,7 @@ class SkinChange(QDialog):
         else:
             return True
 
+    @Slot(Qt.CheckState)
     def _show_anim(self, s: Qt.CheckState):
         if s == Qt.CheckState.Checked:
             config.show_animation_on_skin_dialog = True
@@ -491,12 +591,13 @@ class SkinChange(QDialog):
                     self.player_model, "disableAnimation"  # type: ignore
                 )
 
+    @Slot(QListWidgetItem)
     def _cape_changed(self, item: QListWidgetItem):
         id_: str | None = item.data(256)
         path: Path | None = item.data(257)
 
         self.current_cape = id_
-        self.current_cape_path = path
+        self.current_cape_path = path  # type: ignore
 
         if self.player_model:
             self.player_model.setProperty(
@@ -512,3 +613,55 @@ class SkinChange(QDialog):
         else:
             self.reset_button.setEnabled(True)
             self.submit_button.setEnabled(True)
+
+    @Slot(QPoint)
+    def _3d_view_context_menu(self, pos: QPoint):
+        pos = self.skin_preview.mapToGlobal(pos)
+        menu = QMenu(self)
+        menu.addAction("Save skin as...", self._save_skin)
+        menu.addAction("Remove skin", self._set_to_profile_default)
+        menu.exec(pos)
+
+    @Slot()
+    def _set_to_profile_default(self):
+        if self.account.profile:
+            self._change_preview(self.account.profile.get_default_skin_path())
+
+    @Slot()
+    def _save_skin(self):
+        name, _ = QFileDialog.getSaveFileName(
+            self,
+            "Save skin as",
+            paths.get_pics_dir(),
+            filter="PNG Image (*.png);;",
+        )
+        if not os.path.exists((parent := os.path.split(name)[0])):
+            try:
+                os.makedirs(parent, exist_ok=True)
+            except OSError as err:
+                log.error(
+                    "Failed to create parent directory for image file: %r",
+                    parent,
+                    exc_info=err,
+                )
+                QMessageBox.warning(
+                    self,
+                    "Failed to save image",
+                    f"Failed to save image to {name!r}, "
+                    "couldn't make parent directory.",
+                )
+                return
+        try:
+            shutil.copyfile(self.current_texture_path, name)
+        except Exception as err:
+            log.error(
+                "Failed to copy image from %r -> %r",
+                self.current_texture_path,
+                name,
+                exc_info=err,
+            )
+            QMessageBox.warning(
+                self,
+                "Failed to save image",
+                f"Failed to save image to {name!r}",
+            )

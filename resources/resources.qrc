@@ -1,253 +1,89 @@
 <RCC>
     <qresource prefix="/profile">
-        <file alias="bedrock.png">icon/profile_icons/bedrock.png</file>
-        <file alias="bookshelf.png">icon/profile_icons/bookshelf.png</file>
-        <file alias="brick.png">icon/profile_icons/brick.png</file>
-        <file alias="creeper_head.png">icon/profile_icons/creeper_head.png</file>
-        <file alias="default.png">icon/profile_icons/default.png</file>
-        <file alias="dirt.png">icon/profile_icons/dirt.png</file>
-        <file alias="fabric.png">icon/profile_icons/fabric.png</file>
-        <file alias="furnace.png">icon/profile_icons/furnace.png</file>
-        <file alias="grass.png">icon/profile_icons/grass.png</file>
-        <file alias="optifine.png">icon/profile_icons/optifine.png</file>
-        <file alias="portal.png">icon/profile_icons/portal.png</file>
-        <file alias="cake.png">icon/profile_icons/cake.png</file>
-        <file alias="carved_pumpkin.png">icon/profile_icons/carved_pumpkin.png</file>
-        <file alias="chest.png">icon/profile_icons/chest.png</file>
-        <file alias="clay.png">icon/profile_icons/clay.png</file>
-        <file alias="coal_block.png">icon/profile_icons/coal_block.png</file>
-        <file alias="coal_ore.png">icon/profile_icons/coal_ore.png</file>
-        <file alias="cobblestone.png">icon/profile_icons/cobblestone.png</file>
-        <file alias="crafting_table.png">icon/profile_icons/crafting_table.png</file>
-        <file alias="diamond_block.png">icon/profile_icons/diamond_block.png</file>
-        <file alias="diamond_ore.png">icon/profile_icons/diamond_ore.png</file>
-        <file alias="dirt_pozdol.png">icon/profile_icons/dirt_podzol.png</file>
-        <file alias="dirt_snow.png">icon/profile_icons/dirt_snow.png</file>
-        <file alias="emerald_block.png">icon/profile_icons/emerald_block.png</file>
-        <file alias="emerald_ore.png">icon/profile_icons/emerald_ore.png</file>
-        <file alias="enchanting_table.png">icon/profile_icons/enchanting_table.png</file>
-        <file alias="end_stone.png">icon/profile_icons/end_stone.png</file>
-        <file alias="farmland.png">icon/profile_icons/farmland.png</file>
-        <file alias="furnace_on.png">icon/profile_icons/furnace_on.png</file>
-        <file alias="glass.png">icon/profile_icons/glass.png</file>
-        <file alias="glazed_terracotta_light_blue.png">icon/profile_icons/glazed_terracotta_light_blue.png</file>
-        <file alias="glazed_terracotta_orange.png">icon/profile_icons/glazed_terracotta_orange.png</file>
-        <file alias="glazed_terracotta_white.png">icon/profile_icons/glazed_terracotta_white.png</file>
-        <file alias="glowstone.png">icon/profile_icons/glowstone.png</file>
-        <file alias="gold_block.png">icon/profile_icons/gold_block.png</file>
-        <file alias="gold_ore.png">icon/profile_icons/gold_ore.png</file>
-        <file alias="gravel.png">icon/profile_icons/gravel.png</file>
-        <file alias="hardened_clay.png">icon/profile_icons/hardened_clay.png</file>
-        <file alias="ice_packed.png">icon/profile_icons/ice_packed.png</file>
-        <file alias="iron_block.png">icon/profile_icons/iron_block.png</file>
-        <file alias="iron_ore.png">icon/profile_icons/iron_ore.png</file>
-        <file alias="lapis_ore.png">icon/profile_icons/lapis_ore.png</file>
-        <file alias="leaves_birch.png">icon/profile_icons/leaves_birch.png</file>
-        <file alias="leaves_jungle.png">icon/profile_icons/leaves_jungle.png</file>
-        <file alias="leaves_oak.png">icon/profile_icons/leaves_oak.png</file>
-        <file alias="leaves_spruce.png">icon/profile_icons/leaves_spruce.png</file>
-        <file alias="lectern_book.png">icon/profile_icons/lectern_book.png</file>
-        <file alias="log_acacia.png">icon/profile_icons/log_acacia.png</file>
-        <file alias="log_birch.png">icon/profile_icons/log_birch.png</file>
-        <file alias="log_darkoak.png">icon/profile_icons/log_darkoak.png</file>
-        <file alias="log_jungle.png">icon/profile_icons/log_jungle.png</file>
-        <file alias="log_oak.png">icon/profile_icons/log_oak.png</file>
-        <file alias="log_spruce.png">icon/profile_icons/log_spruce.png</file>
-        <file alias="mycelium.png">icon/profile_icons/mycelium.png</file>
-        <file alias="nether_brick.png">icon/profile_icons/nether_brick.png</file>
-        <file alias="netherrack.png">icon/profile_icons/netherrack.png</file>
-        <file alias="obsidian.png">icon/profile_icons/obsidian.png</file>
-        <file alias="planks_acacia.png">icon/profile_icons/planks_acacia.png</file>
-        <file alias="planks_birch.png">icon/profile_icons/planks_birch.png</file>
-        <file alias="planks_darkoak.png">icon/profile_icons/planks_darkoak.png</file>
-        <file alias="planks_jungle.png">icon/profile_icons/planks_jungle.png</file>
-        <file alias="planks_oak.png">icon/profile_icons/planks_oak.png</file>
-        <file alias="planks_spruce.png">icon/profile_icons/planks_spruce.png</file>
-        <file alias="quartz_ore.png">icon/profile_icons/quartz_ore.png</file>
-        <file alias="red_sand.png">icon/profile_icons/red_sand.png</file>
-        <file alias="red_sandstone.png">icon/profile_icons/red_sandstone.png</file>
-        <file alias="redstone_block.png">icon/profile_icons/redstone_block.png</file>
-        <file alias="redstone_ore.png">icon/profile_icons/redstone_ore.png</file>
-        <file alias="sand.png">icon/profile_icons/sand.png</file>
-        <file alias="sandstone.png">icon/profile_icons/sandstone.png</file>
-        <file alias="skeleton_skull.png">icon/profile_icons/skeleton_skull.png</file>
-        <file alias="snow.png">icon/profile_icons/snow.png</file>
-        <file alias="soul_sand.png">icon/profile_icons/soul_sand.png</file>
-        <file alias="stone.png">icon/profile_icons/stone.png</file>
-        <file alias="stone_andesite.png">icon/profile_icons/stone_andesite.png</file>
-        <file alias="stone_diorite.png">icon/profile_icons/stone_diorite.png</file>
-        <file alias="stone_granite.png">icon/profile_icons/stone_granite.png</file>
-        <file alias="tnt.png">icon/profile_icons/tnt.png</file>
-        <file alias="water.png">icon/profile_icons/water.png</file>
-        <file alias="wool.png">icon/profile_icons/wool.png</file>
+        <file alias="bedrock.png">icons/profile_icons/bedrock.png</file>
+        <file alias="bookshelf.png">icons/profile_icons/bookshelf.png</file>
+        <file alias="brick.png">icons/profile_icons/brick.png</file>
+        <file alias="creeper_head.png">icons/profile_icons/creeper_head.png</file>
+        <file alias="default.png">icons/profile_icons/default.png</file>
+        <file alias="dirt.png">icons/profile_icons/dirt.png</file>
+        <file alias="fabric.png">icons/profile_icons/fabric.png</file>
+        <file alias="furnace.png">icons/profile_icons/furnace.png</file>
+        <file alias="grass.png">icons/profile_icons/grass.png</file>
+        <file alias="optifine.png">icons/profile_icons/optifine.png</file>
+        <file alias="portal.png">icons/profile_icons/portal.png</file>
+        <file alias="cake.png">icons/profile_icons/cake.png</file>
+        <file alias="carved_pumpkin.png">icons/profile_icons/carved_pumpkin.png</file>
+        <file alias="chest.png">icons/profile_icons/chest.png</file>
+        <file alias="clay.png">icons/profile_icons/clay.png</file>
+        <file alias="coal_block.png">icons/profile_icons/coal_block.png</file>
+        <file alias="coal_ore.png">icons/profile_icons/coal_ore.png</file>
+        <file alias="cobblestone.png">icons/profile_icons/cobblestone.png</file>
+        <file alias="crafting_table.png">icons/profile_icons/crafting_table.png</file>
+        <file alias="diamond_block.png">icons/profile_icons/diamond_block.png</file>
+        <file alias="diamond_ore.png">icons/profile_icons/diamond_ore.png</file>
+        <file alias="dirt_pozdol.png">icons/profile_icons/dirt_podzol.png</file>
+        <file alias="dirt_snow.png">icons/profile_icons/dirt_snow.png</file>
+        <file alias="emerald_block.png">icons/profile_icons/emerald_block.png</file>
+        <file alias="emerald_ore.png">icons/profile_icons/emerald_ore.png</file>
+        <file alias="enchanting_table.png">icons/profile_icons/enchanting_table.png</file>
+        <file alias="end_stone.png">icons/profile_icons/end_stone.png</file>
+        <file alias="farmland.png">icons/profile_icons/farmland.png</file>
+        <file alias="furnace_on.png">icons/profile_icons/furnace_on.png</file>
+        <file alias="glass.png">icons/profile_icons/glass.png</file>
+        <file alias="glazed_terracotta_light_blue.png">icons/profile_icons/glazed_terracotta_light_blue.png</file>
+        <file alias="glazed_terracotta_orange.png">icons/profile_icons/glazed_terracotta_orange.png</file>
+        <file alias="glazed_terracotta_white.png">icons/profile_icons/glazed_terracotta_white.png</file>
+        <file alias="glowstone.png">icons/profile_icons/glowstone.png</file>
+        <file alias="gold_block.png">icons/profile_icons/gold_block.png</file>
+        <file alias="gold_ore.png">icons/profile_icons/gold_ore.png</file>
+        <file alias="gravel.png">icons/profile_icons/gravel.png</file>
+        <file alias="hardened_clay.png">icons/profile_icons/hardened_clay.png</file>
+        <file alias="ice_packed.png">icons/profile_icons/ice_packed.png</file>
+        <file alias="iron_block.png">icons/profile_icons/iron_block.png</file>
+        <file alias="iron_ore.png">icons/profile_icons/iron_ore.png</file>
+        <file alias="lapis_ore.png">icons/profile_icons/lapis_ore.png</file>
+        <file alias="leaves_birch.png">icons/profile_icons/leaves_birch.png</file>
+        <file alias="leaves_jungle.png">icons/profile_icons/leaves_jungle.png</file>
+        <file alias="leaves_oak.png">icons/profile_icons/leaves_oak.png</file>
+        <file alias="leaves_spruce.png">icons/profile_icons/leaves_spruce.png</file>
+        <file alias="lectern_book.png">icons/profile_icons/lectern_book.png</file>
+        <file alias="log_acacia.png">icons/profile_icons/log_acacia.png</file>
+        <file alias="log_birch.png">icons/profile_icons/log_birch.png</file>
+        <file alias="log_darkoak.png">icons/profile_icons/log_darkoak.png</file>
+        <file alias="log_jungle.png">icons/profile_icons/log_jungle.png</file>
+        <file alias="log_oak.png">icons/profile_icons/log_oak.png</file>
+        <file alias="log_spruce.png">icons/profile_icons/log_spruce.png</file>
+        <file alias="mycelium.png">icons/profile_icons/mycelium.png</file>
+        <file alias="nether_brick.png">icons/profile_icons/nether_brick.png</file>
+        <file alias="netherrack.png">icons/profile_icons/netherrack.png</file>
+        <file alias="obsidian.png">icons/profile_icons/obsidian.png</file>
+        <file alias="planks_acacia.png">icons/profile_icons/planks_acacia.png</file>
+        <file alias="planks_birch.png">icons/profile_icons/planks_birch.png</file>
+        <file alias="planks_darkoak.png">icons/profile_icons/planks_darkoak.png</file>
+        <file alias="planks_jungle.png">icons/profile_icons/planks_jungle.png</file>
+        <file alias="planks_oak.png">icons/profile_icons/planks_oak.png</file>
+        <file alias="planks_spruce.png">icons/profile_icons/planks_spruce.png</file>
+        <file alias="quartz_ore.png">icons/profile_icons/quartz_ore.png</file>
+        <file alias="red_sand.png">icons/profile_icons/red_sand.png</file>
+        <file alias="red_sandstone.png">icons/profile_icons/red_sandstone.png</file>
+        <file alias="redstone_block.png">icons/profile_icons/redstone_block.png</file>
+        <file alias="redstone_ore.png">icons/profile_icons/redstone_ore.png</file>
+        <file alias="sand.png">icons/profile_icons/sand.png</file>
+        <file alias="sandstone.png">icons/profile_icons/sandstone.png</file>
+        <file alias="skeleton_skull.png">icons/profile_icons/skeleton_skull.png</file>
+        <file alias="snow.png">icons/profile_icons/snow.png</file>
+        <file alias="soul_sand.png">icons/profile_icons/soul_sand.png</file>
+        <file alias="stone.png">icons/profile_icons/stone.png</file>
+        <file alias="stone_andesite.png">icons/profile_icons/stone_andesite.png</file>
+        <file alias="stone_diorite.png">icons/profile_icons/stone_diorite.png</file>
+        <file alias="stone_granite.png">icons/profile_icons/stone_granite.png</file>
+        <file alias="tnt.png">icons/profile_icons/tnt.png</file>
+        <file alias="water.png">icons/profile_icons/water.png</file>
+        <file alias="wool.png">icons/profile_icons/wool.png</file>
     </qresource>
     <qresource prefix="/">
-        <file>acknowledgements.txt</file>
+        <file>acknowledgements.md</file>
         <file alias="icon.ico">dist/icon.ico</file>
-        <file>icon/symbol/add.svg</file>
-        <file>icon/symbol/add-dark.svg</file>
-        <file>icon/symbol/alt-toggle-on.svg</file>
-        <file>icon/symbol/alt-toggle-on-dark.svg</file>
-        <file>icon/symbol/alt-toggle-off.svg</file>
-        <file>icon/symbol/alt-toggle-off-dark.svg</file>
-        <file>icon/symbol/bandaid.svg</file>
-        <file>icon/symbol/bandaid-dark.svg</file>
-        <file>icon/symbol/bandaid-fill.svg</file>
-        <file>icon/symbol/bandaid-fill-dark.svg</file>
-        <file>icon/symbol/bulb.svg</file>
-        <file>icon/symbol/bulb-dark.svg</file>
-        <file>icon/symbol/bulb-off.svg</file>
-        <file>icon/symbol/bulb-off-dark.svg</file>
-        <file>icon/symbol/box.svg</file>
-        <file>icon/symbol/box-dark.svg</file>
-        <file>icon/symbol/box-fill.svg</file>
-        <file>icon/symbol/box-fill-dark.svg</file>
-        <file>icon/symbol/braces.svg</file>
-        <file>icon/symbol/braces-dark.svg</file>
-        <file>icon/symbol/cancel.svg</file>
-        <file>icon/symbol/cancel-dark.svg</file>
-        <file>icon/symbol/capslock.svg</file>
-        <file>icon/symbol/capslock-dark.svg</file>
-        <file>icon/symbol/checkbox-checked.svg</file>
-        <file>icon/symbol/checkbox-checked-dark.svg</file>
-        <file>icon/symbol/circle.svg</file>
-        <file>icon/symbol/circle-clockwise.svg</file>
-        <file>icon/symbol/circle-clockwise-dark.svg</file>
-        <file>icon/symbol/circle-counter-clockwise.svg</file>
-        <file>icon/symbol/circle-counter-clockwise-dark.svg</file>
-        <file>icon/symbol/circle-dark.svg</file>
-        <file>icon/symbol/circle-fill.svg</file>
-        <file>icon/symbol/circle-fill-dark.svg</file>
-        <file>icon/symbol/circle-half.svg</file>
-        <file>icon/symbol/circle-half-dark.svg</file>
-        <file>icon/symbol/clipboard.svg</file>
-        <file>icon/symbol/clipboard-checked.svg</file>
-        <file>icon/symbol/clipboard-checked-dark.svg</file>
-        <file>icon/symbol/clipboard-dark.svg</file>
-        <file>icon/symbol/cloud-download.svg</file>
-        <file>icon/symbol/cloud-download-dark.svg</file>
-        <file>icon/symbol/code-slash.svg</file>
-        <file>icon/symbol/code-slash-dark.svg</file>
-        <file>icon/symbol/cup-hot-fill.svg</file>
-        <file>icon/symbol/cup-hot-fill-dark.svg</file>
-        <file>icon/symbol/download.svg</file>
-        <file>icon/symbol/download-dark.svg</file>
-        <file>icon/symbol/dropdown.svg</file>
-        <file>icon/symbol/dropdown-dark.svg</file>
-        <file>icon/symbol/dropdown-up.svg</file>
-        <file>icon/symbol/dropdown-up-dark.svg</file>
-        <file>icon/symbol/emoji-frown.svg</file>
-        <file>icon/symbol/emoji-frown-dark.svg</file>
-        <file>icon/symbol/emoji-frown-fill.svg</file>
-        <file>icon/symbol/emoji-frown-fill-dark.svg</file>
-        <file>icon/symbol/file.svg</file>
-        <file>icon/symbol/file-add.svg</file>
-        <file>icon/symbol/file-add-dark.svg</file>
-        <file>icon/symbol/file-dark.svg</file>
-        <file>icon/symbol/file-diff.svg</file>
-        <file>icon/symbol/file-diff-dark.svg</file>
-        <file>icon/symbol/file-image.svg</file>
-        <file>icon/symbol/file-image-dark.svg</file>
-        <file>icon/symbol/font.svg</file>
-        <file>icon/symbol/font-dark.svg</file>
-        <file>icon/symbol/folder.svg</file>
-        <file>icon/symbol/folder-dark.svg</file>
-        <file>icon/symbol/import.svg</file>
-        <file>icon/symbol/import-dark.svg</file>
-        <file>icon/symbol/info.svg</file>
-        <file>icon/symbol/info-dark.svg</file>
-        <file>icon/symbol/info-filled.svg</file>
-        <file>icon/symbol/info-filled-dark.svg</file>
-        <file>icon/symbol/info-square.svg</file>
-        <file>icon/symbol/info-square-dark.svg</file>
-        <file>icon/symbol/invisible.svg</file>
-        <file>icon/symbol/invisible-dark.svg</file>
-        <file>icon/symbol/link.svg</file>
-        <file>icon/symbol/link-dark.svg</file>
-        <file>icon/symbol/missing.svg</file>
-        <file>icon/symbol/missing-dark.svg</file>
-        <file>icon/symbol/microsoft.svg</file>
-        <file>icon/symbol/microsoft-dark.svg</file>
-        <file>icon/symbol/notification.svg</file>
-        <file>icon/symbol/notification-dark.svg</file>
-        <file>icon/symbol/notification-silent.svg</file>
-        <file>icon/symbol/notification-silent-dark.svg</file>
-        <file>icon/symbol/profile.svg</file>
-        <file>icon/symbol/profile-add.svg</file>
-        <file>icon/symbol/profile-add-dark.svg</file>
-        <file>icon/symbol/profile-dark.svg</file>
-        <file>icon/symbol/profile-remove.svg</file>
-        <file>icon/symbol/profile-remove-dark.svg</file>
-        <file>icon/symbol/refresh.svg</file>
-        <file>icon/symbol/refresh-dark.svg</file>
-        <file>icon/symbol/remove.svg</file>
-        <file>icon/symbol/remove-dark.svg</file>
-        <file>icon/symbol/save.svg</file>
-        <file>icon/symbol/save-dark.svg</file>
-        <file>icon/symbol/settings.svg</file>
-        <file>icon/symbol/settings-dark.svg</file>
-        <file>icon/symbol/share.svg</file>
-        <file>icon/symbol/share-dark.svg</file>
-        <file>icon/symbol/square.svg</file>
-        <file>icon/symbol/square-dark.svg</file>
-        <file>icon/symbol/square-filled.svg</file>
-        <file>icon/symbol/square-filled-dark.svg</file>
-        <file>icon/symbol/tools.svg</file>
-        <file>icon/symbol/tools-dark.svg</file>
-        <file>icon/symbol/toggle-on.svg</file>
-        <file>icon/symbol/toggle-on-dark.svg</file>
-        <file>icon/symbol/toggle-off.svg</file>
-        <file>icon/symbol/toggle-off-dark.svg</file>
-        <file>icon/symbol/volume-50.svg</file>
-        <file>icon/symbol/volume-50-dark.svg</file>
-        <file>icon/symbol/volume-100.svg</file>
-        <file>icon/symbol/volume-100-dark.svg</file>
-        <file>icon/symbol/volume.svg</file>
-        <file>icon/symbol/volume-dark.svg</file>
-        <file>icon/symbol/volume-mute.svg</file>
-        <file>icon/symbol/volume-mute-dark.svg</file>
-        <file>icon/symbol/visible.svg</file>
-        <file>icon/symbol/visible-dark.svg</file>
-        <file>icon/symbol/warning.svg</file>
-        <file>icon/symbol/warning-dark.svg</file>
-        <file>icon/symbol/copy.svg</file>
-        <file>icon/symbol/copy-dark.svg</file>
-        <file>icon/symbol/edit.svg</file>
-        <file>icon/symbol/edit-dark.svg</file>
-        <file>icon/symbol/file-zip.svg</file>
-        <file>icon/symbol/file-zip-dark.svg</file>
-        <file>icon/symbol/folder-check.svg</file>
-        <file>icon/symbol/folder-check-dark.svg</file>
-        <file>icon/symbol/folder-minus.svg</file>
-        <file>icon/symbol/folder-minus-dark.svg</file>
-        <file>icon/symbol/folder-plus.svg</file>
-        <file>icon/symbol/folder-plus-dark.svg</file>
-        <file>icon/symbol/folder-symlink.svg</file>
-        <file>icon/symbol/folder-symlink-dark.svg</file>
-        <file>icon/symbol/image.svg</file>
-        <file>icon/symbol/image-dark.svg</file>
-        <file>icon/symbol/images.svg</file>
-        <file>icon/symbol/images-dark.svg</file>
-        <file>icon/symbol/journal.svg</file>
-        <file>icon/symbol/journal-bookmark.svg</file>
-        <file>icon/symbol/journal-bookmark-dark.svg</file>
-        <file>icon/symbol/journal-bookmarked.svg</file>
-        <file>icon/symbol/journal-bookmarked-dark.svg</file>
-        <file>icon/symbol/journal-code.svg</file>
-        <file>icon/symbol/journal-code-dark.svg</file>
-        <file>icon/symbol/journal-dark.svg</file>
-        <file>icon/symbol/journal-minus.svg</file>
-        <file>icon/symbol/journal-minus-dark.svg</file>
-        <file>icon/symbol/journal-plus.svg</file>
-        <file>icon/symbol/journal-plus-dark.svg</file>
-        <file>icon/symbol/journals.svg</file>
-        <file>icon/symbol/journals-dark.svg</file>
-        <file>icon/symbol/journal-x.svg</file>
-        <file>icon/symbol/journal-x-dark.svg</file>
-        <file>icon/symbol/trash.svg</file>
-        <file>icon/symbol/trash-dark.svg</file>
-        <file>icon/symbol/trash-disabled.svg</file>
-        <file>icon/symbol/trash-disabled-dark.svg</file>
     </qresource>
     <qresource prefix="/3d/steve">
         <file alias="Steve.qml">3d/steve/Steve.qml</file>
@@ -300,5 +136,31 @@
         <file alias="left_Leg_rotation_0.qad">3d/alex/animations/left_Leg_rotation_0.qad</file>
         <file alias="right_Arm_rotation_0.qad">3d/alex/animations/right_Arm_rotation_0.qad</file>
         <file alias="right_Leg_rotation_0.qad">3d/alex/animations/right_Leg_rotation_0.qad</file>
+    </qresource>
+    <qresource prefix="/skin-placeholders">
+        <file alias="default_alex.png">icons/account/default_alex.png</file>
+        <file alias="default_ari.png">icons/account/default_ari.png</file>
+        <file alias="default_kai.png">icons/account/default_kai.png</file>
+        <file alias="default_efe.png">icons/account/default_efe.png</file>
+        <file alias="default_makena.png">icons/account/default_makena.png</file>
+        <file alias="default_steve.png">icons/account/default_steve.png</file>
+        <file alias="default_noor.png">icons/account/default_noor.png</file>
+        <file alias="default_zuri.png">icons/account/default_zuri.png</file>
+        <file alias="default_sunny.png">icons/account/default_sunny.png</file>
+        <file alias="unknown.png">icons/account/unknown.png</file>
+    </qresource>
+    <qresource prefix="/">
+        <file>icons/fallback/dark/download.svg</file>
+        <file>icons/fallback/dark/database.svg</file>
+        <file>icons/fallback/dark/preferences-desktop-theme.svg</file>
+        <file>icons/fallback/dark/bug.svg</file>
+        <file>icons/fallback/dark/person-sync.svg</file>
+        <file>icons/fallback/dark/settings.svg</file>
+        <file>icons/fallback/light/database.svg</file>
+        <file>icons/fallback/light/download.svg</file>
+        <file>icons/fallback/light/bug.svg</file>
+        <file>icons/fallback/light/person-sync.svg</file>
+        <file>icons/fallback/light/settings.svg</file>
+        <file>icons/fallback/light/preferences-desktop-theme.svg</file>
     </qresource>
 </RCC>

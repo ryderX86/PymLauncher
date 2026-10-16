@@ -1,8 +1,9 @@
-PySide6 >= 6.11.2
+PySide6 >= 6.12.0
 nuitka >= 4.2.2
 requests == 2.34.2
 qrcode == 8.2
-packaging == 26.2
-pywin32 == 311; platform_system == "Windows"
+packaging == 26.3
+pywin32 == 312; platform_system == "Windows"
 keyring == 25.7.0; platform_system != "Windows"
 cryptography == 47.0.0; platform_system != "Windows"
+urllib3 == 2.8.0

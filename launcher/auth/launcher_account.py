@@ -147,7 +147,7 @@ class LauncherAccount:
     def skin_icon(self):
         if self.profile:
             return self.profile.current_skin_icon()
-        return MinecraftProfile.steve_skin_icon()
+        return MinecraftProfile.default_skin_icon()
 
     def cape_path(self):
         if self.profile:
@@ -274,6 +274,7 @@ class LauncherAccount:
                 "id": "00000000-0000-0000-0000-000000000000",
             },
             self.token,
+            demo_profile=True,
         )
         self.profile = prof_info
         return prof_info

@@ -7,6 +7,8 @@ substitution, and starts the game process.
 
 from collections.abc import Callable
 from string import Template
+from typing import Any
+from xml.etree.ElementTree import Element, XMLPullParser
 import logging
 import os
 import random
@@ -22,13 +24,13 @@ from launcher import (
     launchargs,
     paths,
 )
-from launcher.auth import LauncherAccount
+from launcher.auth import LauncherAccount, MinecraftToken
 from launcher.back import java_manager, library_manager
+from launcher.back.account_manager import account_man
+from launcher.back.game_installer import GameInstaller
 from launcher.datatypes import LaunchProfile
 from launcher.datatypes.game_version import GameVersion, JVMLaunchArg
-from launcher.functions import is_path_valid, remove_empty_strings, truncate
-
-from .install_worker import InstallWorker
+from launcher.functions import is_path_valid, remove_empty_strings
 
 log = logging.getLogger(__name__)
 
@@ -46,11 +48,16 @@ LEGACY_LAUNCH_ARGS_DEFAULT = (
 )
 
 
+def _get_session_arg(token: MinecraftToken):
+    return f"token:{token.access_token}:{token.uuid}"
+
+
 def _substitute(template: str, values: dict[str, str]):
     values = {k: v for k, v in values.items() if v is not None}
     t = Template(template)
     subbed = t.safe_substitute(values)
     # unfrozen only so auth tokens don't get leaked into logs when built:
+    # startdebug
     if constants.DEV and "${" in subbed:
         leftovers: list[str] = TEMPLATE_LEFTOVERS_REGEX.findall(subbed)
         if "xuid" in leftovers:
@@ -60,6 +67,7 @@ def _substitute(template: str, values: dict[str, str]):
                 "Unsubstituted template leftover(s) in string: '%s'",
                 str(leftovers),
             )
+    # enddebug
     return subbed
 
 
@@ -282,15 +290,13 @@ def build_launch_command(
             f"Account provided (gt {account.gamertag}) has no profile"
         )
 
-    session = f"token:{account.token.access_token}:{account.token.uuid}"
-
     values = {
         "auth_player_name": account.profile.name,
         "auth_uuid": account.token.uuid,
         "version_name": version_id,
         "version_type": version.type,
         "auth_access_token": account.token.access_token,
-        "auth_session": session,
+        "auth_session": _get_session_arg(account.token),
         "user_properties": "{}",
         "user_type": account.player_type,
         "assets_index_name": asset_index_id,
@@ -375,6 +381,76 @@ def build_launch_command(
     return cmd
 
 
+class LogParser:
+    ROOT_TAG = b'<root xmlns:log4j="mc">\n'
+    EVENT_TAG = "{mc}Event"
+    MSG_TAG = "{mc}Message"
+    END = "end"
+    DEFAULT_INFO = "INFO"
+    reset_threshold = 500
+
+    # instance attributes
+    _parser: XMLPullParser
+    _current_log_count: int
+    _callback: Callable[[str, str, str, str, str], Any]
+
+    def __init__(
+        self, callback: Callable[[str, str, str, str, str], Any] | None = None
+    ):
+        self._callback = callback or self._default_callback_do_nothing
+        self._init_or_reset_parser()
+
+    def update(self, game_log: bytes | str):
+        try:
+            self._parser.feed(game_log)
+
+            for event, el in self._parser.read_events():  # type: ignore
+                assert isinstance(el, Element)
+                if event == self.END and el.tag == self.EVENT_TAG:
+                    msg = el.find(self.MSG_TAG)
+                    if msg is not None:
+                        self._callback(
+                            el.get("logger", "<unknown logger>"),
+                            el.get("timestamp", "0"),
+                            el.get("level", "<unknown level>"),
+                            el.get("thread", "<unknown thread>"),
+                            msg.text or "",
+                        )
+
+                    del msg
+                    el.clear()
+
+                    self._current_log_count += 1
+            if self._current_log_count >= self.reset_threshold:
+                self._init_or_reset_parser()
+        except Exception as err:
+            log.error("XML parsing error:", exc_info=err)
+            log.debug("Current log object: %r", game_log)
+            log.info("Resetting parser")
+            self._init_or_reset_parser()
+
+    @property
+    def callback(self):
+        return self._callback
+
+    @callback.setter
+    def callback(self, new: Callable[[str, str, str, str, str], Any]):
+        self._callback = new
+
+    @callback.deleter
+    def callback(self):
+        self._callback = self._default_callback_do_nothing
+
+    def _init_or_reset_parser(self):
+        self._parser = XMLPullParser(["end"])
+        self._current_log_count = 0
+        self._parser.feed(self.ROOT_TAG)
+
+    @staticmethod
+    def _default_callback_do_nothing(*_: str):
+        pass
+
+
 class LaunchWorker(QThread):
     """Background worker for launching the game."""
 
@@ -383,19 +459,20 @@ class LaunchWorker(QThread):
     )  # step label, current, total, is mb
     done = Signal(bool, str)  # successful, message
     status = Signal(str)  # status text
-    game_closed = Signal(str, str)
-    game_log = Signal(str)
+    game_closed = Signal(str)
+    game_log = Signal(str, str, str, str, str)
     """
     `[0]` (`int`) - Exit code<br>
     `[1]` (`str`) - stdout<br>
     `[2]` (`str`) - stderr
     """
+    _instance: LaunchWorker | None = None
 
     log = log.getChild("LaunchWorker")
 
     # instance attributes
     _ready_for_launch: bool
-    installer: InstallWorker
+    installer: GameInstaller
     cwd: str | os.PathLike
     cmd: list[str]
     _p: subprocess.Popen[str] | None
@@ -403,7 +480,7 @@ class LaunchWorker(QThread):
 
     def __init__(
         self,
-        installer: InstallWorker,
+        installer: GameInstaller,
         log_hook: Callable[[str], None] | None = None,
         parent=None,
     ):
@@ -412,6 +489,13 @@ class LaunchWorker(QThread):
         self._callback = log_hook
         self.installer = installer
         self._p = None
+        type(self)._instance = self
+
+    @classmethod
+    def get_instance(cls):
+        if cls._instance:
+            return cls._instance
+        raise RuntimeError("Called without an active instance")
 
     def startup_process(self):
         if not self._ready_for_launch:
@@ -463,9 +547,6 @@ class LaunchWorker(QThread):
                     False, "Unknown error (return %d)", self._p.returncode
                 )
 
-        # reverse this when reading:
-        stdout_cache: list[str] = []
-
         if config.show_logs_on_home and not self._callback:
             self._callback = self.game_log.emit
         elif not self._callback:
@@ -474,33 +555,24 @@ class LaunchWorker(QThread):
 
             self._callback = callback
 
-        line_count = MAXIMUM_LOG_LINES - 1
-
         def loop(self):
-            nonlocal stdout_cache
             assert isinstance(self, LaunchWorker)
             assert self._callback
             assert self._p
             if self._p.stdout:
+                parser = LogParser(self.game_log.emit)
                 for line in iter(self._p.stdout.readline, ""):
-                    trimmed_line = truncate(line, MAXIMUM_LINE_LENGTH, "...\n")
-                    stdout_cache.insert(0, trimmed_line)
-                    self._callback(trimmed_line)
-
+                    parser.update(line)
                     self._p.stdout.flush()
-                    stdout_cache = stdout_cache[:line_count]
             self._p.wait()
 
         loop(self)
-
-        stdout_cache.reverse()
-        stdout = "".join(stdout_cache)
 
         self.log.info("Game process returned with code %d", self._p.returncode)
         if self._p.returncode == 0:
             if config.redownload_option > 1:
                 config.redownload_option = JarRedownloadBehavior.NEVER
-        self.game_closed.emit(str(self._p.returncode), stdout)
+        self.game_closed.emit(str(self._p.returncode))
 
     def bootstrap(self):
         """
@@ -508,13 +580,20 @@ class LaunchWorker(QThread):
         finished (a check is in `start()` for this.)
         """
         self.version_json = self.installer.version
-        self.launch_profile = self.installer.launch_profile
-        self.account = self.installer.account
-        self.java_executable_path = self.installer.java_executable_path
-        self.jar_path = self.installer.jar_path
-        self.log4j_cfg_path = self.installer.log4j_cfg_path
-        self.libraries = self.installer.libraries
-        self.natives_dir = self.installer.natives_dir
+        self.launch_profile = self.installer.profile
+        self.account = account_man.active
+        self.java_executable_path = self.installer.java_bin
+        self.jar_path = self.installer.version.jar_file.path
+        if self.installer.version.logging:
+            self.log4j_cfg_path = self.installer.version.logging.path
+        else:
+            self.log4j_cfg_path = None
+        self.libraries = self.installer.version.libraries
+        self.natives_dir = os.path.join(
+            paths.game,
+            "bin",
+            self.version_json.inherits_from or self.version_json.id,
+        )
 
         # this is probably the one thing that can't catastrophically fail
         classpath = library_manager.build_classpath(
@@ -523,6 +602,9 @@ class LaunchWorker(QThread):
 
         # DO NOT add reauthentication logic here. we do this in LauncherApp
         # before even the thought of running this is conjured.
+
+        if not self.account:
+            raise RuntimeError("LaunchWorker started with no account active")
 
         if not self.account.token:
             raise RuntimeError(
@@ -608,14 +690,3 @@ class LaunchWorker(QThread):
             )
 
         return log_file
-
-    def start(
-        self, /, priority: QThread.Priority = QThread.Priority.NormalPriority
-    ) -> None:
-        """
-        Simple override to add a check that the installer passed at init() is
-        done before launching
-        """
-        if not self.installer.isFinished():
-            raise RuntimeError("InstallWorker hasn't finished yet!")
-        return super().start(priority)

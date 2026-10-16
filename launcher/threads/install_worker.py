@@ -6,6 +6,7 @@ from typing import Iterable
 import logging
 import os
 import subprocess
+import time
 
 from PySide6.QtCore import QThread, Signal
 
@@ -74,6 +75,9 @@ class InstallWorker(QThread):
         self._cb_progress = 0
 
     def run(self):
+        # startdebug
+        started = time.time()
+        # enddebug
         try:
             self.install()
         except Exception as err:
@@ -83,6 +87,12 @@ class InstallWorker(QThread):
             )
             self.error.emit(err)
             return
+        # startdebug
+        else:
+            self.log.debug(
+                "Finished installation in %.4fs", time.time() - started
+            )
+        # enddebug
 
     def install(self):
         match self.version_id:

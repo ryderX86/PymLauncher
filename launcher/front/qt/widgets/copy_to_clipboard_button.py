@@ -3,10 +3,10 @@ from enum import StrEnum
 import logging
 
 from PySide6.QtCore import QTimer
-from PySide6.QtWidgets import QApplication, QPushButton, QWidget
+from PySide6.QtWidgets import QApplication, QPushButton, QToolTip, QWidget
 
 from launcher import constants
-from launcher.front.resources import symbol
+from launcher.front.icon_helpers import IconName, get_icon
 from launcher.functions import truncate
 
 log = logging.getLogger(__name__)
@@ -27,11 +27,10 @@ class CopyToClipboardButton(QPushButton):
     ):
         super().__init__(parent)
         if is_icon_button:
-            self._default_icon = symbol("clipboard")
+            self._default_icon = get_icon(IconName.COPY)
             self.setIcon(self._default_icon)
             self.setFixedHeight(40)
             self.setFixedWidth(40)
-            self._clicked_icon = symbol("clipboard-checked")
         else:
             self.setText("Copy to clipboard")
 
@@ -132,11 +131,13 @@ class CopyToClipboardButton(QPushButton):
             self._animation()
 
     def _animate_icon_finish(self):
-        self.setIcon(self._default_icon)
         self.setDisabled(False)
 
     def _animate_icon(self):
-        self.setIcon(self._clicked_icon)
+        p = self.mapToGlobal(self.pos())
+        QToolTip.showText(
+            p, "Copied!", self, msecShowTime=constants.DONE_VISUAL_DELAY
+        )
         self.setDisabled(True)
         QTimer.singleShot(
             constants.DONE_VISUAL_DELAY, self._animate_icon_finish

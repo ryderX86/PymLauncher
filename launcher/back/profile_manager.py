@@ -295,10 +295,11 @@ def _last_used_timestamp(profile: LaunchProfile):
     return t.timestamp()
 
 
-def get_profile_sorting():
+def get_profile_sorting() -> list[str]:
     meta = get_launcher_meta()
-    if meta and meta.get("order"):
-        return meta["order"]
+    if meta and "order" in meta:
+        if meta["order"]:
+            return meta["order"]
     log.warning("No profile sorting order data, regenerating it...")
     profs = [*profiles.values()]
     profs.sort(key=_last_used_timestamp)
@@ -432,14 +433,18 @@ def load_launcher_profiles():
             ):  # TODO: change sorting methods to less crappy ones
                 new_order = []
                 keys_leftover = [*profs_raw.keys()]
+                rm_from_ordering = set()
                 for key in profile_order:
                     if key not in profs_raw:
                         log.warning(
                             "Sorting key doesn't exist as a profile, ignoring..."
                         )
+                        rm_from_ordering.add(key)
                         continue
                     new_order.append(key)
                     keys_leftover.pop(keys_leftover.index(key))
+                for key in rm_from_ordering:
+                    profile_order.remove(key)
                 if keys_leftover:
                     log.warning(
                         "Orphaned profiles from sorting list, sorting "
@@ -490,7 +495,7 @@ def load_launcher_profiles():
                 profile_order = profs_raw.keys()
             for key in profile_order:
                 val = profs_raw[key]
-                profs[key] = LaunchProfile.from_storage(val, key)
+                profs[key] = LaunchProfile.from_storage_compat(val, key)
                 match profs[key].type:
                     case "latest-release":
                         has_latest_profile = True
@@ -556,7 +561,7 @@ def save_launcher_profiles(
 
         profiles_are_still_default = True
         for uid, p in profiles.items():
-            if not p.is_exact_match(_default_factory_cache[uid]):
+            if not p.is_exact_match(_default_factory_cache.get(uid)):
                 profiles_are_still_default = False
 
         if profiles_are_still_default:

@@ -6,34 +6,38 @@ import logging
 import sys
 import warnings
 
-from PySide6.QtCore import QEventLoop, QFile, QTimer, Slot
+from PySide6.QtCore import QEventLoop, QFile, Qt, Slot
 from PySide6.QtGui import QIcon
-from PySide6.QtWidgets import QApplication, QStyleFactory
+from PySide6.QtWidgets import QApplication
+
+from launcher.front.icon_helpers import ico_mgr
+from launcher.threads.lro_thread import LROThread
 
 from . import (
     config,
     constants,
-    get_qapp,
     launchargs,
     lifecycle,
     logs,
     paths,
-    setup_qapp,
 )
 from .auth import LauncherAccount
 from .auth.exceptions import (
     BaseAuthenticationException,
     MSAServerUnavailableError,
     NoConnectionError,
+    UnauthorizedError,
 )
 from .back import (
     profile_manager,
 )
 from .back.account_manager import account_man
+from .back.game_installer import installer
 from .exceptions import EncryptedDataDecodeError
 from .exceptions.encryption import EncryptionUnavailableWarning
 from .front.event_filters import FocusEventFilter
-from .front.styles import STYLESHEET, FontList, gen_palette, get_fonts
+from .front.styles import FontList, get_fonts
+from .front.theming import theme_manager
 from .front.window.game_error import ErrorDisplay
 from .front.window.loading_blocker import LoadingBlockerWindow
 from .front.window.login import LoginWindow
@@ -89,44 +93,51 @@ class LauncherApp:
         self.version_mf_loaded = False
         self.bootstrap_threads = []
         self.close_if_login_aborted = True
+        self.relog_after_bootstrap = False
 
-        self.qapp = get_qapp()
+        self._loop = QEventLoop()
+
         self.fonts = get_fonts()
         detect_set_clipboard()
-        self.qapp.setApplicationName(constants.LAUNCHER_NAME)
-        match constants.OS:
-            case "windows":
-                pass
-            case _:
-                self.qapp.setStyle(QStyleFactory.create("Windows"))
-        self.qapp.setStyleSheet(STYLESHEET)
-        self.qapp.setFont(self.fonts.main)
-        self.qapp.setPalette(gen_palette())
+        lifecycle.qapp.setApplicationName(constants.LAUNCHER_NAME)
+        # lifecycle.qapp.setStyleSheet(STYLESHEET)
+        # lifecycle.qapp.setFont(self.fonts.main)
+        # lifecycle.qapp.setPalette(gen_palette())
+        lifecycle.qapp.setApplicationVersion(constants.LAUNCHER_VERSION)
+        lifecycle.qapp.setApplicationDisplayName(constants.LAUNCHER_NAME)
+        ico_mgr.add_search_path(paths.icon_themes)
+        ico_mgr.load_themes()
+        ico_mgr.set_theme(config.icon_theme)
+        theme_manager.load()
+        theme_manager.set_theme(config.theme)
         if QFile(":/icon.ico").exists():
-            self.qapp.setWindowIcon(QIcon(":/icon.ico"))
+            lifecycle.qapp.setWindowIcon(QIcon(":/icon.ico"))
         else:
             log.debug("Couldn't set app icon")
         self._event_filter = FocusEventFilter()
-        self.qapp.installEventFilter(self._event_filter)
+        lifecycle.qapp.installEventFilter(self._event_filter)
+        lifecycle.config_updated.connect(self._on_config_update)
 
         self.lb_window = LoadingBlockerWindow()
         self.lb_window.rejected.connect(self._close_event)
         # just in case it doesn't fully run the rest of main():
-        self.qapp.aboutToQuit.connect(self._set_clean_exit)
+        lifecycle.qapp.aboutToQuit.connect(self._set_clean_exit)
 
+        # startdebug
         # anything that potentially can be made outside of the main thread
         # should probably be checked here before any of the base UI is
         # constructed
-        if account_man.signals.thread() != self.qapp.thread():
+        if account_man.signals.thread() != lifecycle.qapp.thread():
             log.warning(
                 "Account manager signals object lives on an incorrect thread, "
                 "attempting to mediate this before UI creation."
             )
             account_man.signals = account_man._Signals()
+        # enddebug
 
         self.main_window = MainWindow()
         self.main_window.login_requested.connect(self.show_login)
-        self.main_window.account_page.logout_requested.connect(self.logout)
+        account_man.signals.logout_requested.connect(self.logout)
         self.main_window.home_page.play_requested.connect(self.play)
 
         account_man.signals.account_changed.connect(self._on_account_changed)
@@ -134,12 +145,22 @@ class LauncherApp:
         self.main_window.home_page.game_crash.connect(self.show_crash_dialog)
 
     @Slot()
+    def _on_config_update(self):
+        # adjust icon theme
+        # adjust theme
+        current_name = lifecycle.qapp.style().name()
+        new_name = config.theme
+        if current_name != new_name:
+            theme_manager.set_theme(new_name)
+        ico_mgr.set_theme(config.icon_theme)
+
+    @Slot()
     def _set_clean_exit(self):
         global clean_exit
         clean_exit = True
 
     def buildall(self):
-        for page in self.main_window.page_list:
+        for page in self.main_window.tab_list.values():
             page.build()
 
     def _on_bootstrap_error(
@@ -165,20 +186,14 @@ class LauncherApp:
                 f"{'\n'.join((str(a) for a in err.args))}"
             )
             self.exit(1)
+        return None
 
     def _auth_thread_error(
         self, thread: BaseBootstrapThread, err: Exception, can_continue: bool
     ):
         match err:
-            case PermissionError():
-                error_box(
-                    "Failed to read accounts from storage.\n"
-                    "The launcher cannot continue loading and will close.\n"
-                    "Please make sure you are using the right account with the "
-                    "necessary permissions.\n"
-                    f"Error type: {type(err).__name__}"
-                )
-                self.exit(1)
+            case UnauthorizedError():
+                self.relog_after_bootstrap = True
             case AttributeError():
                 log.error("AttributeError in account loading:", exc_info=err)
                 if err.obj is not None:
@@ -220,6 +235,15 @@ class LauncherApp:
                     return thread.run()
                 else:
                     self.exit(0)
+            case _:
+                error_box(
+                    "Failed to read accounts from storage.\n"
+                    "The launcher cannot continue loading and will close.\n"
+                    "Please make sure you are using the right account with the "
+                    "necessary permissions.\n"
+                    f"Error type: {type(err).__name__}"
+                )
+                self.exit(1)
 
     def _profile_thread_error(
         self, thread: BaseBootstrapThread, err: Exception, can_continue: bool
@@ -244,19 +268,17 @@ class LauncherApp:
         for thread in self.bootstrap_threads:
             thread.requestInterruption()
 
-    def _wait_on_threads_loop(self, loop: QEventLoop, timer: QTimer):
+    def _check_threads_finished(self):
         if all(a.isFinished() for a in self.bootstrap_threads):
-            loop.quit()
-            timer.stop()
+            self._loop.quit()
             self.bootstrap_threads = []
             return
+        for i in range(len(self.bootstrap_threads) - 1, -1, -1):
+            if self.bootstrap_threads[i].isFinished():
+                self.bootstrap_threads.pop(i)
         match len(self.bootstrap_threads):
             case 1:
                 self.lb_window.set_text(self.bootstrap_threads[0].ui_msg)
-            case _:
-                self.lb_window.set_text(  # final "..." appended automatically
-                    "...\n".join([a.ui_msg for a in self.bootstrap_threads])
-                )
 
     def _on_accounts_loaded(self):
         if account_man.has_accounts and any(
@@ -280,27 +302,25 @@ class LauncherApp:
         # setup thread signals
         for thread in self.bootstrap_threads:
             thread.error.connect(self._on_bootstrap_error)
+            thread.finished.connect(self._check_threads_finished)
         account_loader.finished.connect(self._on_accounts_loaded)
-
-        loop = QEventLoop(self.lb_window)
 
         # start threads
         version_mf_loader.start()
         java_mf_loader.start()
         account_loader.start()
 
-        loop_timer = QTimer(singleShot=False, interval=25)
-        loop_timer.timeout.connect(
-            lambda: self._wait_on_threads_loop(loop, loop_timer)
-        )
         log.debug("Waiting for bootstrap w/ event loop")
         with self.lb_window.shown("Loading..."):
-            loop_timer.start()
-            loop.exec()
+            self._loop.exec(QEventLoop.ProcessEventsFlag.AllEvents)
         with self.lb_window.shown("Polishing UI"):
             lifecycle.bootstrap_done.emit()
             self.buildall()
-        if (not account_man.has_accounts) or (not account_man.active_usable):
+        if (
+            (not account_man.has_accounts)
+            or (not account_man.active_usable)
+            or (self.relog_after_bootstrap)
+        ):
             if (not self.login_dialog) or (not self.login_dialog.isVisible()):
                 if account_man.has_accounts:
                     reason = "Your session has expired, please log in again."
@@ -310,7 +330,7 @@ class LauncherApp:
                 self.show_login(reason=reason)
             if self.login_dialog and self.login_dialog.isVisible():
                 with self.lb_window.hidden():
-                    loop = QEventLoop(self.qapp)
+                    loop = QEventLoop(lifecycle.qapp)
                     self.login_dialog.finished.connect(loop.quit)
                     loop.exec(QEventLoop.ProcessEventsFlag.AllEvents)
             self._refresh_account_ui()
@@ -321,6 +341,9 @@ class LauncherApp:
         focused = QApplication.focusWidget()
         if focused:
             focused.clearFocus()
+        installer.download_error.connect(
+            self._on_install_error, Qt.ConnectionType.QueuedConnection
+        )
         self.main_window.check_for_launch_arg()
 
     def run(self) -> int:
@@ -350,7 +373,7 @@ class LauncherApp:
                     )
                     raise
         self.event_loop_running = True
-        return self.qapp.exec()
+        return lifecycle.qapp.exec()
 
     @Slot(NoneType, bool)
     @Slot(str, bool)
@@ -386,7 +409,7 @@ class LauncherApp:
         global clean_exit
         active_acc = account_man.active
         while self.login_dialog and self.login_dialog.isVisible():
-            self.qapp.processEvents()
+            lifecycle.qapp.processEvents()
         if not active_acc or (
             not offline_man.offline and not active_acc.token_valid
         ):
@@ -472,18 +495,27 @@ class LauncherApp:
                 self.show_login(reason=str(err))
                 return
 
-        self.install_worker = InstallWorker(
-            profile.version_id, profile, active, True, self.main_window
+        self.launch_worker = LaunchWorker(installer, None, self.main_window)
+        self.launch_worker.done.connect(
+            self.main_window.home_page.on_launch_finished,
+            Qt.ConnectionType.UniqueConnection,
         )
-        self.launch_worker = LaunchWorker(
-            self.install_worker, None, self.main_window
+        self.launch_worker.game_closed.connect(
+            self.main_window.home_page.on_game_closed,
+            Qt.ConnectionType.UniqueConnection,
         )
-        self.main_window.home_page.prep_for_launch(
-            self.install_worker, self.launch_worker
+        self.launch_worker.game_log.connect(
+            self.main_window.home_page.handle_game_log,
+            Qt.ConnectionType.UniqueConnection,
         )
-        self.install_worker.done.connect(self.launch_worker.start_if_success)
-        self.install_worker.error.connect(self._on_install_error)
-        self.install_worker.start()
+        self.launch_worker.finished.connect(
+            self.launch_worker.deleteLater, Qt.ConnectionType.UniqueConnection
+        )
+        installer.finished.connect(
+            self.launch_worker.start_if_success,
+            Qt.ConnectionType.UniqueConnection,
+        )
+        installer.install()
 
     @Slot(LauncherAccount)
     def _on_account_changed(
@@ -501,8 +533,13 @@ class LauncherApp:
                     f"(attempt {current_retries+1} of {MAX_RETRIES+1})"
                 )
             with self.lb_window.shown(text):
+                runner = LROThread(
+                    lifecycle.qapp,
+                    dialog_instance_or_type=self.lb_window,
+                    msg=text,
+                )
                 try:
-                    acc.refresh()
+                    runner.go(acc.refresh)
                 except NoConnectionError:
                     pass  # handled elsewhere already
                 except MSAServerUnavailableError:
@@ -597,7 +634,7 @@ class LauncherApp:
         else:
             clean_exit = False
         if self.event_loop_running:
-            self.qapp.exit(return_code)
+            lifecycle.qapp.exit(return_code)
             raise SystemExit()
         else:
             sys.exit(return_code)
@@ -636,16 +673,22 @@ def main():
     try:
         paths.setup()
     except Exception as err:
+        log.error("Error initializing PathFinder:", exc_info=err)
         error_box(str(err))
         raise
     try:
         paths.generate_folder_structure()
     except Exception as err:
-        error_box(f"Failed to generate folder structure! ({type(err)}: {err})")
+        log.error("Failed to generate folder structure:", exc_info=err)
+        error_box(
+            "Failed to generate folder structure! "
+            f"({type(err).__name__}: {err})"
+        )
         raise
     try:
         logs.setup()
     except Exception as err:
+        log.error("Failed to set up logging files:", exc_info=err)
         error_box(str(err))
         raise
     try:
@@ -658,7 +701,7 @@ def main():
         from PySide6.QtWebView import QtWebView
 
         QtWebView.initialize()
-    setup_qapp()
+    lifecycle.qapp = QApplication(sys.argv)
     app = LauncherApp()
     atexit.register(on_exit)
     code = app.run()

@@ -8,7 +8,6 @@ import logging
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
-    QApplication,
     QDialog,
     QFrame,
     QHBoxLayout,
@@ -16,6 +15,7 @@ from PySide6.QtWidgets import (
     QPlainTextEdit,
     QPushButton,
     QVBoxLayout,
+    QDialogButtonBox,
 )
 
 from launcher.front.qt.widgets import CopyToClipboardButton
@@ -105,8 +105,11 @@ class TextPopup(QDialog):
 
         self._layout.addWidget(buttons_parent)
 
-        close_button = QPushButton()
-        close_button.setText("Close")
-        close_button.clicked.connect(self.close)
-        close_button.setMaximumWidth(200)
-        self._layout.addWidget(close_button, 0, Qt.AlignmentFlag.AlignCenter)
+        close_button = QDialogButtonBox(
+            standardButtons=QDialogButtonBox.StandardButton.Close
+        )
+        close = close_button.button(QDialogButtonBox.StandardButton.Close)
+        close.setText("Close")
+        close.clicked.connect(self.close)
+        self._layout.addWidget(close_button)
+        close.setDefault(True)

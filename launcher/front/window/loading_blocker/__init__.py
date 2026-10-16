@@ -1,16 +1,13 @@
 import logging
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import (
-    QDialog,
-    QLabel,
-    QVBoxLayout,
-)
+from PySide6.QtWidgets import QApplication, QProgressBar, QProgressDialog
 
-from launcher import constants, get_qapp
+from launcher import constants, lifecycle
+from launcher.front.qt.binding_mixin import BindingMixin
 
 match constants.OS:
-    case "windows" | "osx":
+    case "windows":
         _FLAGS = Qt.WindowType.SplashScreen
     case _:
         _FLAGS = Qt.WindowType.SplashScreen | Qt.WindowType.FramelessWindowHint
@@ -18,8 +15,7 @@ match constants.OS:
 log = logging.getLogger(__name__)
 
 
-class LoadingBlockerWindow(QDialog):
-
+class LoadingBlockerWindow(BindingMixin, QProgressDialog):
     class LoadingBlockerContextManager:
         def __init__(
             self,
@@ -58,13 +54,15 @@ class LoadingBlockerWindow(QDialog):
             self.previous_text: str = "Loading..."
 
         def __enter__(self):
+            # startdebug
             self.parent.recursion_count += 1
+            # enddebug
             if self.allowed:
                 if self.shown_text:
                     self.previous_text = self.parent.current_text
                     self.parent.set_text(self.shown_text)
                 if not self.parent.isVisible():
-                    self.parent.show()
+                    self.parent.open()
                     self.shown = True
             else:
                 if self.parent.isVisible():
@@ -83,71 +81,82 @@ class LoadingBlockerWindow(QDialog):
             else:
                 if self.hidden:
                     self.parent.set_text(self.previous_text)
-                    self.parent.show()
+                    self.parent.open()
                     self.hidden = False
+            # startdebug
             self.parent.recursion_count -= 1
+            # enddebug
 
     def __init__(self, parent=None, flags=_FLAGS):
         log.debug("Making loading blocker window")
         super().__init__(parent, flags)
-        self.setMinimumSize(500, 360)
-        self.setMaximumSize(500, 360)
-        self.resize(500, 360)
-        self._build_layout()
-        self.qapp = get_qapp()
-        self._recursion_count = 0
 
+        # legacy QDialog-subclass code:
+
+        # self.setMinimumSize(500, 360)
+        # self.setMaximumSize(500, 360)
+        # self.resize(500, 360)
+        # self._build_layout()
+
+        # startdebug
+        self._recursion_count = 0
+        # enddebug
+        self.setMaximum(0)
+        self.setLabelText("Loading...")
+        self.setCancelButton(None)
+        self.setFixedWidth(250)
+        self.setMinimumDuration(0)
+        self._bar = QProgressBar(
+            self,
+            minimum=0,
+            maximum=0,
+            alignment=Qt.AlignmentFlag.AlignCenter,
+        )
+        self._bar.setTextVisible(False)
+        self.setBar(self._bar)
+
+    # startdebug
     @property
     def recursion_count(self):
         return self._recursion_count
 
-    if constants.DEV:
+    @recursion_count.setter
+    def recursion_count(self, value: int):
+        self._recursion_count = value
+        if self._recursion_count > 5:
+            log.warning(
+                "Heavy recursion with context managers! Current: %d",
+                self._recursion_count,
+            )
 
-        @recursion_count.setter
-        def recursion_count(self, new_val: int):
-            self._recursion_count = new_val
-            if self._recursion_count > 5:
-                log.warning(
-                    "Heavy recursion with context managers! Current: %d",
-                    self._recursion_count,
-                )
+    # enddebug
 
-    else:
+    # def _build_layout(self):  # dead
+    #     _layout = QVBoxLayout(self)
 
-        @recursion_count.setter
-        def recursion_count(self, new_val: int):
-            self._recursion_count = new_val
+    #     self.label = QLabel("Loading...", wordWrap=True)
+    #     self.label.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-    def _build_layout(self):
-        _layout = QVBoxLayout(self)
-
-        self.label = QLabel("Loading...", wordWrap=True)
-        self.label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-
-        _layout.addWidget(self.label)
-        return
+    #     _layout.addWidget(self.label, 1)
+    #     return
 
     def set_text(self, text: str = "Loading..."):
         if not text.endswith("..."):
             text = "".join((text, "..."))
-        self.label.setText(text)
-        self.qapp.processEvents()
+        self.setLabelText(text)
+        lifecycle.qapp.processEvents()
 
     @property
     def current_text(self):
-        return self.label.text()
-
-    def open(self) -> None:
-        super().open()
-        self.qapp.processEvents()
+        return self.labelText()
 
     def show(self) -> None:
         super().show()
-        self.qapp.processEvents()
+        QApplication.processEvents()
 
-    def hide(self):
-        super().hide()
-        self.set_text()
+    def open(self, *_) -> None:
+        super().open()
+        QApplication.processEvents()
 
     def shown(self, text: str | None = None):
         """

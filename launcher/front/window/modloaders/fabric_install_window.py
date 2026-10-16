@@ -1,6 +1,7 @@
 import logging
+import re
 
-from PySide6.QtCore import QSize, Qt, QThread, Signal
+from PySide6.QtCore import QSize, Qt, QThread, Signal, Slot
 from PySide6.QtGui import QCloseEvent
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -14,6 +15,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from launcher import config
 from launcher.back import fabric
 from launcher.front.window import (
     ButtonConfig,
@@ -30,6 +32,9 @@ class FabricLoadThread(QThread):
     loaded = Signal()
     error = Signal(Exception)
     log = log.getChild(__name__)
+
+    game_versions: list[tuple[str, bool]]
+    loader_versions: list[str]
 
     def run(self):
         try:
@@ -58,13 +63,27 @@ class FabricLoadThread(QThread):
 class FabricInstallWindow(QDialog):
     installed_fabric = Signal()
 
+    _instance: FabricInstallWindow | None = None
+
     # instance attributes
+    _instance_initialized: bool
     is_loaded: bool
     loader_thread: FabricLoadThread | None
     game_vers: list[tuple[str, bool]]
     loader_vers: list[str]
 
+    def __new__(cls, *args, **kwargs):
+        if cls._instance:
+            return cls._instance
+        else:
+            new = super().__new__(cls, *args, **kwargs)
+            new._instance_initialized = False
+            cls._instance = new
+            return new
+
     def __init__(self, parent=None):
+        if self._instance_initialized:
+            return
         super().__init__(parent)
         flags = Qt.WindowType.Window
         flags |= Qt.WindowType.CustomizeWindowHint
@@ -83,6 +102,8 @@ class FabricInstallWindow(QDialog):
         self.is_loaded = False
         self.game_vers = []
         self.loader_vers = []
+
+        self._instance_initialized = True
 
     def close(self) -> bool:
         if self.loader_thread and self.loader_thread.isRunning():
@@ -142,6 +163,7 @@ class FabricInstallWindow(QDialog):
 
         layout.addWidget(self.install_button)
 
+    @Slot()
     def loader_finished(self):
         assert self.loader_thread
         self.game_vers = self.loader_thread.game_versions
@@ -166,24 +188,36 @@ class FabricInstallWindow(QDialog):
 
     def load(self):
         log.debug("Adding game and fabric items to combo boxes...")
-        self.game_ver_dd.addItem("")
         game_vers = self.game_vers
-        for v in game_vers:
-            self.game_ver_dd.addItem(v[0], v[1])
-        self.game_ver_dd.setCurrentIndex(0)
+        if config.show_snapshots and config.show_old_releases:
+            for v in game_vers:
+                self.game_ver_dd.addItem(v[0], v[1])
+        else:
+            log.debug("Sorting through versions...")
+            for v, stable in game_vers:
+                if not config.show_snapshots:
+                    if not stable:
+                        log.debug("Skipping %r, unstable release", v)
+                        continue
+                self.game_ver_dd.addItem(v[0], v[1])
         self.game_ver_dd.currentTextChanged.connect(
             self._game_ver_dd_txt_change
         )
         self.game_ver_dd.currentTextChanged.connect(self._set_button_disabled)
-        self.loader_ver_dd.addItem("")
+        self.game_ver_dd.setCurrentIndex(0)
+        if self.game_ver_dd.currentData() is False:
+            for i in range(self.game_ver_dd.count()):
+                if self.game_ver_dd.itemData(i, 256) is True:
+                    self.game_ver_dd.setCurrentIndex(i)
+                    break
         self.loader_ver_dd.addItems(self.loader_vers)
-        self.loader_ver_dd.setCurrentIndex(0)
         self.loader_ver_dd.currentTextChanged.connect(
             self._loader_ver_dd_txt_change
         )
         self.loader_ver_dd.currentTextChanged.connect(
             self._set_button_disabled
         )
+        self.loader_ver_dd.setCurrentIndex(0)
         self.install_button.setText("Install Fabric")
         self.is_loaded = True
         return
@@ -194,6 +228,7 @@ class FabricInstallWindow(QDialog):
             if not self.is_loaded:
                 log.debug("Starting new FabricLoadThread()")
                 self.loader_thread = FabricLoadThread(self)
+                assert self.loader_thread
                 self.loader_thread.loaded.connect(self.loader_finished)
                 self.loader_thread.error.connect(self.loader_error)
                 self.loader_thread.start()

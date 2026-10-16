@@ -3,6 +3,7 @@ import base64
 import binascii
 import logging
 import os
+import sys
 
 from PySide6.QtCore import QFile, QSize, Qt
 from PySide6.QtGui import QIcon, QImage, QPixmap
@@ -84,8 +85,9 @@ def icon_highlight_fix(
         icon.addPixmap(pixmap, QIcon.Mode.Selected)
         icon.addPixmap(pixmap, QIcon.Mode.Active)
     elif filename:
-        icon.addFile(filename, QSize(), QIcon.Mode.Selected)
-        icon.addFile(filename, QSize(), QIcon.Mode.Active)
+        size = sorted(icon.availableSizes(), key=QSize.width, reverse=True)[0]
+        icon.addFile(filename, size, QIcon.Mode.Selected)
+        icon.addFile(filename, size, QIcon.Mode.Active)
     else:
         raise TypeError(
             "Must have argument 'pixmap' or 'filename' (both are NoneType)"
@@ -264,8 +266,10 @@ def profile_icon(name_or_b64: str):
         b64 = name_or_b64[b64_start:]
 
         # the base64 module throws a tantrum when there's "not enough" padding
-        while len(b64) % 3 != 0:
-            b64 = b64 + "="
+
+        if sys.version_info.minor < 15:
+            while len(b64) % 3 != 0:
+                b64 = b64 + "="
 
         try:
             img_bytes = base64.b64decode(b64)

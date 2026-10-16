@@ -1,8 +1,8 @@
-from typing import Final
 import base64
-import re
-import os
 import logging
+import os
+import re
+import sys
 
 from PySide6.QtCore import (
     QBuffer,
@@ -19,51 +19,35 @@ from PySide6.QtGui import QIcon, QImage, QPainter, QPixmap, Qt
 from PySide6.QtWidgets import (
     QBoxLayout,
     QComboBox,
+    QFileDialog,
     QFrame,
     QHBoxLayout,
     QListWidget,
     QListWidgetItem,
     QMessageBox,
     QPushButton,
-    QFileDialog,
     QStyle,
 )
 
 from launcher import lifecycle
 from launcher.front import resources
+from launcher.front.icon_helpers import IconName, get_icon
 from launcher.front.qt.binding_mixin import BindingMixin
 from launcher.functions import truncate
 
 log = logging.getLogger(__name__)
 B64_RE = re.compile(r"(data:image/)(png|jpg|jpeg);(base64),([a-zA-Z0-9+/=]+)")
 
+if sys.version_info.minor < 15:
 
-class MissingType:
-    """
-    Sentinel-ish type used to denote that a custom icon is not found for the
-    current profile.
-    """
+    class MissingType:
+        def __bool__(self):
+            pass
 
-    _instance: MissingType | None = None
-
-    def __new__(cls):
-        if cls._instance:
-            raise SyntaxError(f"Instance exists already.")
-        new = super().__new__(cls)
-        cls._instance = new
-        return new
-
-    def __repr__(self) -> str:
-        return "<Missing>"
-
-    def __str__(self):
-        return "(missing)"
-
-    def __bool__(self):
-        return False
-
-
-MISSING: Final[MissingType] = MissingType()
+    MISSING = MissingType()
+else:
+    # pylint: disable-next=undefined-variable
+    MISSING = sentinel("MISSING")  # type: ignore
 
 DATA_TEXT_ROLE = 0x100
 QICON_ROLE = 0x101
@@ -103,6 +87,7 @@ def _padded_icon(ico: QIcon | QPixmap) -> QIcon:
     painter = QPainter(list_pix)
     wh = int((_list_grid_size - _list_icon_size).height() / 2)
     painter.drawPixmap(wh, wh + 2, old_list_pix)
+    painter.end()
 
     new = QIcon()
     new.addPixmap(pix)
@@ -135,7 +120,7 @@ class IconPicker(BindingMixin, QComboBox):
         # add the picker button to the inside of the listview and then adjust
         # margins accordingly
         self._picker_button = QPushButton(
-            QIcon.fromTheme("insert-image"), "Choose image"
+            get_icon(IconName.OPEN_IMAGE), "Choose image"
         )
         self._picker_button.clicked.connect(self._open_image_picker)
         self._picker_button_view = QHBoxLayout()
@@ -179,7 +164,8 @@ class IconPicker(BindingMixin, QComboBox):
             model_index, QItemSelectionModel.SelectionFlag.ClearAndSelect
         )
 
-    def showPopup(self, /) -> None:
+    def showPopup(self) -> None:
+        # the most disgusting hack known to man (but hey, it works!)
         frame = self.findChild(QFrame)
         if frame and frame != self._frame:
             assert frame
@@ -247,7 +233,6 @@ class IconPicker(BindingMixin, QComboBox):
         self.setItemData(1, ico, QICON_ROLE)
         self.setItemIcon(1, ico)
         self.setCurrentIndex(1)
-        self._view.setCurrentRow(1)
         self.currentIndexChanged.emit(1)
 
     def _index_default_icon(self, icon: str):
@@ -284,21 +269,30 @@ class IconPicker(BindingMixin, QComboBox):
         self._view.setItemAlignment(Qt.AlignmentFlag.AlignCenter)
         self._view.setIconSize(_list_grid_size)
         self._view.setFixedWidth(
-            (self._view.sizeHintForRow(0) * 7)
-            + self.style().pixelMetric(QStyle.PixelMetric.PM_ScrollBarExtent)
+            (self._view.sizeHintForColumn(0) * 7)
+            + self._pm(QStyle.PixelMetric.PM_ScrollBarExtent)
+            + self._pm(QStyle.PixelMetric.PM_ScrollBarExtent)
         )
-        self._view.setFixedHeight(self._view.sizeHintForColumn(0) * 5)
+        self._view.setFixedHeight(self._view.sizeHintForRow(0) * 5)
         self._view.setIconSize(_list_grid_size)
         self._view.setUniformItemSizes(True)
+        if self._frame and (layout := self._frame.findChild(QBoxLayout)):
+            margin = QMargins(
+                self._pm(QStyle.PixelMetric.PM_LayoutLeftMargin),
+                self._pm(QStyle.PixelMetric.PM_LayoutTopMargin),
+                self._pm(QStyle.PixelMetric.PM_LayoutRightMargin),
+                self._pm(QStyle.PixelMetric.PM_LayoutBottomMargin),
+            )
+            layout.setContentsMargins(margin)
+            self._frame.setMaximumHeight(layout.sizeHint().height())
+            self._frame.setMaximumWidth(layout.sizeHint().width())
 
     def set_icon(self, icon_data: str | None):
         if icon_data is None or icon_data in self._default_icon_names:
             if icon_data is None:
-                print("no icon selected")
                 self.setCurrentIndex(0)
             else:
                 self.setCurrentIndex(self._index_default_icon(icon_data))
-                self._view.setCurrentRow(self._index_default_icon(icon_data))
             self._set_custom_icon_visible(False)
             return
         elif (match := B64_RE.match(icon_data)) and match[0] == icon_data:
@@ -308,7 +302,6 @@ class IconPicker(BindingMixin, QComboBox):
             self.setItemData(1, icon_data, DATA_TEXT_ROLE)
             self.setItemData(1, ico, QICON_ROLE)
             self.setCurrentIndex(1)
-            self._view.setCurrentRow(1)
         else:
             log.warning("Invalid icon: %r", truncate(icon_data, 32))
 

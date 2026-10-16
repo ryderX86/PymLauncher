@@ -4,6 +4,8 @@ minecraftlauncher.front.window.game_error
 Module containing a class with a window to show game errors/logs.
 """
 
+__lazy_modules__ = ["launcher.front.resources", "launcher.front.styles"]
+
 from pathlib import Path
 import logging
 import os
@@ -21,6 +23,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
+# lazy
 from launcher.front.resources import symbol
 from launcher.front.styles import get_fonts
 

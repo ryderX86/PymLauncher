@@ -1,6 +1,5 @@
 __all__ = [
     "TooltipHint",
-    "IconPickerButton",
     "Section",
     "AccountSelect",
     "SecondaryLabel",
@@ -15,7 +14,6 @@ __all__ = [
 from .account_select import AccountSelect
 from .config_checkbox import ConfigCheckbox
 from .copy_to_clipboard_button import CopyToClipboardButton
-from .icon_picker_button import IconPickerButton
 from .label_types import (
     Header1,
     Header2,

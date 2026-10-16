@@ -127,7 +127,7 @@ def install(game_ver: str, fabric_ver: str, override: bool = False):
 
     if not os.path.isdir(dir_):
         os.makedirs(dir_, exist_ok=True)
-    if os.path.isdir(path) and not override:
+    if os.path.isfile(path) and not override:
         log.warning(
             "'fabric-loader-%s-%s' exists already!", fabric_ver, game_ver
         )

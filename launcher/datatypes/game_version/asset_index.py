@@ -97,3 +97,6 @@ class AssetIndex:
         for path, asset in index.get("objects", {}).items():
             assets.append(GameAsset.parse(path, asset))
         return cls(assets, virtual)
+
+    def __iter__(self):
+        return self.assets.__iter__()

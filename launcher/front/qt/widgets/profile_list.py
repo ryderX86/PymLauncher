@@ -3,11 +3,11 @@ from PySide6.QtGui import QContextMenuEvent, QMouseEvent
 from PySide6.QtWidgets import (
     QListWidget,
     QListWidgetItem,
-    QPushButton,
     QVBoxLayout,
     QWidget,
 )
 
+from launcher import config
 from launcher.back import profile_manager
 from launcher.datatypes import LaunchProfile
 from launcher.front import resources
@@ -24,25 +24,28 @@ PROFILE = 257
 
 
 class ProfileList(BindingMixin, QWidget):
+
     def __init__(self, parent=None):
         super().__init__(parent=parent)
+        self._view = QListWidget()
         self._build()
+
+    @Slot()
+    def _toggle_layout_lock(self):
+        config.lock_profile_order = not config.lock_profile_order
+        self._view.setDragEnabled(not config.lock_profile_order)
 
     def bind(self):
         profile_manager.add_profile_refresh_handler(self._list_profiles)
         profile_manager.add_profile_switch_handler(self._switch_profile)
         self._list_profiles()
+        self._view.setDragEnabled(not config.lock_profile_order)
 
     def _build(self):
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
         self.setContentsMargins(0, 0, 0, 0)
 
-        self.new_profile = QPushButton("New Profile")
-        self.new_profile.clicked.connect(profile_manager.create_profile)
-        root.addWidget(self.new_profile)
-
-        self._view = QListWidget()
         self._view_filter = MiscEventFilter(QChildEvent)
         self._ctx_menu_filter = MiscEventFilter(QContextMenuEvent, True)
         self._view.installEventFilter(self._view_filter)
@@ -58,7 +61,6 @@ class ProfileList(BindingMixin, QWidget):
         self._view.setSelectionBehavior(
             QListWidget.SelectionBehavior.SelectItems
         )
-        self._view.setDragEnabled(True)
         self._view.setDragDropMode(QListWidget.DragDropMode.InternalMove)
         self._view.setDefaultDropAction(Qt.DropAction.MoveAction)
         self._view.currentItemChanged.connect(self._on_select)
@@ -131,11 +133,18 @@ class ProfileList(BindingMixin, QWidget):
         event.accept()
         show_debug_options = (
             Qt.KeyboardModifier.ShiftModifier in event.modifiers()
+            or config.always_show_debug_options
         )
 
         idx = self._view.indexAt(event.pos())
         profile: LaunchProfile | None = self._view.model().data(idx, PROFILE)
-        ctx = ProfileContextMenu(profile, show_debug_options, self)
+        ctx = ProfileContextMenu(
+            profile,
+            show_debug_options,
+            self,
+            config.lock_profile_order,
+        )
+        ctx.set_lock_layout.connect(self._toggle_layout_lock)
 
         ctx.popup(event.globalPos())
 

@@ -15,7 +15,7 @@ import time
 
 from PySide6.QtCore import QThreadPool
 
-from launcher import paths
+from launcher import config, paths
 from launcher.constants import (
     ARCH,
     JAVA_MANIFEST_URL,
@@ -289,9 +289,11 @@ def get_java_file_dowloads(
         sha1 = finfo["downloads"]["raw"].get("sha1")  # expected sha1
 
         # get download url
-        url = finfo.get("downloads", {}).get("lzma", {}).get("url")
-        use_lzma = True
-        if not url:
+        if config.disable_lzma_downloads and (
+            url := finfo.get("downloads", {}).get("lzma", {}).get("url")
+        ):
+            use_lzma = True
+        else:
             url = finfo.get("downloads", {}).get("raw", {}).get("url")
             if not url:
                 raise JavaIndexError(subpath, jre_manifest)
@@ -300,7 +302,7 @@ def get_java_file_dowloads(
         if not isinstance(url, str):
             raise JavaIndexError(subpath, jre_manifest) from TypeError(url)
 
-        # use the matching hash since we don't load the lzma yet
+        # use the hash from non-lzma since we only compare it after anyways
         dl_list.append(
             RunnableDownloader(
                 url=url,

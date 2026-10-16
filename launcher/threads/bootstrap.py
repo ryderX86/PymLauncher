@@ -3,7 +3,10 @@ import logging
 from PySide6.QtCore import QThread, Signal
 import requests
 
-from launcher.auth.exceptions import BaseAuthenticationException
+from launcher.auth.exceptions import (
+    BaseAuthenticationException,
+    UnauthorizedError,
+)
 from launcher.back import java_manager, profile_manager, version_manager
 from launcher.back.account_manager import account_man
 from launcher.exceptions import EncryptedDataDecodeError
@@ -232,6 +235,8 @@ class AccountManagerBootstrap(BaseBootstrapThread):
                         func = acc.get_profile_info
                     try:
                         func()
+                    except UnauthorizedError as err:
+                        self.error.emit(err, err, True)
                     except requests.HTTPError as err:
                         if offline_man.check_requests_error(err):
                             log.warning(

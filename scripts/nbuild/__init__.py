@@ -14,6 +14,7 @@ class BuildFlags(IntFlag):
     INSTALLER = 0b00010
     RESOURCES = 0b00100
     WEBVIEW = 0b10000
+    NUITKA_DEBUG = 0b100000
     ALL = 0b11111
 
 
@@ -22,6 +23,9 @@ VENV_PATH = CWD / ".venv"
 
 _parser = ArgumentParser("Build-script")
 _parser.add_argument("-d", "--debug", action="store_true", default=False)
+_parser.add_argument(
+    "-nd", "--nuitka-debug", action="store_true", default=False
+)
 _parser.add_argument(
     "-r", "--build-report", action="store_true", default=False
 )
@@ -45,6 +49,7 @@ BUMP: bool = not _args.no_bump
 AZURE_CLIENT_ID: str | None = _args.azure_client_id
 CLIENT_ID_FP = Path(__file__).parent.parent.parent / ".azure-client-id"
 INCLUDE_WEBVIEW: bool = not _args.noinclude_webview
+NUITKA_DEBUG: bool = _args.nuitka_debug
 
 FLAGS = BuildFlags.ALL
 if EXECUTABLE_BUILD or INSTALLER_BUILD or RESOURCES_BUILD:
@@ -59,6 +64,8 @@ if EXECUTABLE_BUILD or INSTALLER_BUILD or RESOURCES_BUILD:
         FLAGS |= BuildFlags.WEBVIEW
 if not BUMP:
     FLAGS |= BuildFlags.NO_BUILD_BUMP
+if NUITKA_DEBUG:
+    FLAGS |= BuildFlags.NUITKA_DEBUG
 for flag in BuildFlags:
     if FLAGS & flag:
         print(f"Flag {flag.name} present")
@@ -138,12 +145,14 @@ NOINCLUDE_DATA = {
     "PySide6/qml/QtQuick/Particles3D/*",
     "PySide6/qml/QtQuick/SpacialAudio/*",
     "PySide6/qml/QtQuick/Xr/*",
+    "PySide6/qml/QtWebView/*",
+    "PySide6/qml/Qt5Compat/*"
+    "PySide6/qml/QtCharts/*"
+    "PySide6/qml/QtCore/*"
+    "PySide6/qml/QtDataVisualization/*"
+    "PySide6/qml/QtGraphs/*"
+    "PySide6/qml/QtLocation/*",
 }
-if (not FLAGS & BuildFlags.WEBVIEW) or platform.system() not in [
-    "Windows",
-    "Darwin",
-]:
-    NOINCLUDE_DATA.add("PySide6/qml/QtWebView/*")
 
 NOINCLUDE_LIBS = {
     "Qt6DataVisualization*",
@@ -178,12 +187,15 @@ NOINCLUDE_LIBS = {
     "Qt*Particle*",
     "*QtWebEngine*",
     "*qtwebengine*",
+    "*webengine*",
 }
 if (not FLAGS & BuildFlags.WEBVIEW) or platform.system() not in [
     "Windows",
     "Darwin",
 ]:
     NOINCLUDE_LIBS.add("Qt6Web*")
+    NOINCLUDE_LIBS.add("QtWeb*")
+    NOINCLUDE_LIBS.add("QWeb*")
 
 INCLUDE_PLUGINS = {
     "sensible",
@@ -199,13 +211,9 @@ if (FLAGS & BuildFlags.WEBVIEW) and platform.system() in [
 BASE_ARGS = [
     "--standalone",
     "--show-anti-bloat-changes",
-    # source changes are console debug args anyways, no reason not to show them
-    "--show-source-changes=*",
     "--python-flag=-m",
     # don't include libs from the user's python install
     "--python-flag=isolated",
-    # remove assert statements and docstrings
-    "--python-flag=-OO",
     "--enable-plugin=pyside6",
     f"--include-qt-plugins={",".join(INCLUDE_PLUGINS)}",
     "--output-dir=./dist",
@@ -213,9 +221,21 @@ BASE_ARGS = [
     # harm in including them here too:
     "--noinclude-dlls=*.cpp.o",
     "--noinclude-dlls=*.qsb",
+    "--warn-implicit-exceptions",
+    "--report=./dist/build-report.xml",
 ]
 
-if MAKE_BUILD_REPORT:
-    BASE_ARGS.append("--report=./dist/build-report.xml")
 if DEBUG:
     BASE_ARGS.append("--verbose-output=./dist/verbose-output.txt")
+    # source changes are console debug args anyways, no reason not to show them
+    BASE_ARGS.append("--show-source-changes=*")
+    BASE_ARGS.append("--warn-unusual-code")
+else:
+    BASE_ARGS.append("--user-plugin=./build_helpers/debug.py")
+if NUITKA_DEBUG:
+    BASE_ARGS.append("--debug")
+    BASE_ARGS.append("--no-debug-immortal-assumptions")
+else:
+    # remove assert statements and docstrings
+    BASE_ARGS.append("--python-flag=-OO")
+    BASE_ARGS.append("--lto=yes")

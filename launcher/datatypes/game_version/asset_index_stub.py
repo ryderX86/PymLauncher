@@ -150,3 +150,8 @@ class AssetIndexStub:
                 text,
             ) from err
         return asset_index_file
+
+    def get(self):
+        if not self.available():
+            raise RuntimeError("Assets index not available")
+        return AssetIndex.parse_dict(self.get_json())

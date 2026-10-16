@@ -3,17 +3,19 @@ import logging
 from PySide6.QtCore import Qt, Signal, SignalInstance
 from PySide6.QtWidgets import QCheckBox, QHBoxLayout, QWidget
 
-from launcher import config
+from launcher import config, lifecycle
+from launcher.front.qt import BindingMixin
 
 from .tooltip_hint import TooltipHint
 
 log = logging.getLogger(__name__)
 
 
-class ConfigCheckbox(QWidget):
+class ConfigCheckbox(BindingMixin, QWidget):
     check_state_changed = Signal(bool)
 
     config_mapping: str
+    auto_set_config_attr: bool
     _checkbox: QCheckBox
     _tooltip: TooltipHint | None
     _lo: QHBoxLayout
@@ -26,6 +28,7 @@ class ConfigCheckbox(QWidget):
         *,
         tooltip_text: str | None = None,
         parent: QWidget | None = None,
+        auto_set_config_attr: bool = False,
     ):
         super().__init__(parent=parent)
         self._lo = QHBoxLayout(self)
@@ -49,13 +52,24 @@ class ConfigCheckbox(QWidget):
 
         self._checkbox.checkStateChanged.connect(self._check_state_changed)
         self.clicked = self._checkbox.clicked
+        self.auto_set_config_attr = auto_set_config_attr
+
+    def bind(self):
+        if self.auto_set_config_attr:
+            self.set_checked(getattr(config, self.config_mapping))
 
     def _check_state_changed(self, check_state: Qt.CheckState):
         match check_state:
             case Qt.CheckState.Checked | Qt.CheckState.PartiallyChecked:
                 self.check_state_changed.emit(True)
+                if self.auto_set_config_attr:
+                    setattr(config, self.config_mapping, True)
+                    lifecycle.config_updated.emit()
             case Qt.CheckState.Unchecked:
                 self.check_state_changed.emit(False)
+                if self.auto_set_config_attr:
+                    setattr(config, self.config_mapping, False)
+                    lifecycle.config_updated.emit()
             case _:
                 log.warning("Unknown check state: %r", check_state)
                 self.check_state_changed.emit(False)

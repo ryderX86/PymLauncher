@@ -63,6 +63,7 @@ def make_request(
     preload_response: bool = True,
     retries: int = 3,
     timeout: int = 30,
+    raise_timed_retries: bool = False,
 ) -> BaseHTTPResponse: ...
 
 
@@ -78,6 +79,7 @@ def make_request(
     preload_response: bool = True,
     retries: int = 3,
     timeout: int = 30,
+    raise_timed_retries: bool = False,
 ) -> BaseHTTPResponse: ...
 
 
@@ -92,6 +94,7 @@ def make_request(
     preload_response: bool = True,
     retries: int = 3,
     timeout: int = 30,
+    raise_timed_retries: bool = False,
 ) -> BaseHTTPResponse: ...
 
 
@@ -105,6 +108,7 @@ def make_request(
     preload_response: bool = True,
     retries: int = 3,
     timeout: int = 30,
+    raise_timed_retries: bool = False,
 ) -> BaseHTTPResponse: ...
 
 
@@ -119,6 +123,7 @@ def make_request(
     preload_response: bool = True,
     retries: int = 3,
     timeout: int = 30,
+    raise_timed_retries: bool = False,
 ) -> BaseHTTPResponse:
     if type_ == "get" and bool(body or form):
         raise ValueError("Cannot add body/form fields to GET requests")
@@ -163,7 +168,11 @@ def make_request(
         if resp.status in range(200, 300):
             return resp
         error = HTTPStatusCodeError(resp.status, resp)
-        if error.retry_after and attempt <= retries:
+        if (
+            error.retry_after
+            and attempt <= retries
+            and not raise_timed_retries
+        ):
             log.warning(
                 "HTTP %d %s returned by %r, retrying in %d seconds",
                 error.code,

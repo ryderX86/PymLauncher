@@ -2,7 +2,7 @@ import hashlib
 import logging
 import os
 
-from launcher import get_qapp, paths
+from launcher import lifecycle, paths
 from launcher.functions import display_file_size
 from launcher.networking import make_request
 from launcher.offline import offline_man
@@ -54,10 +54,6 @@ class JarFile:
 
         downloaded = 0
         sha1 = hashlib.sha1()
-        if callback:
-            qapp = get_qapp()
-        else:
-            qapp = None
         with open(self.path, "wb") as fb:
             for chunk in resp.stream(None):
                 fb.write(chunk)
@@ -65,8 +61,7 @@ class JarFile:
                 if callback:
                     downloaded += len(chunk)
                     callback(downloaded, self.size)
-                    assert qapp is not None
-                    qapp.processEvents()
+                    lifecycle.qapp.processEvents()
 
         sha1_final = sha1.hexdigest()
         if self.sha1 != sha1_final:

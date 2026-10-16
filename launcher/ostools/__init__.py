@@ -1,6 +1,6 @@
 import logging
 
-from launcher.constants import OS, OS_VER
+from launcher import constants
 
 log = logging.getLogger(__name__)
 
@@ -8,10 +8,10 @@ log = logging.getLogger(__name__)
 def set_jump_list(): ...
 
 
-match OS:
+match constants.OS:
     case "windows":
         # jump lists only exist in >=windows 7 (nt 6.1)
-        if float(OS_VER[0:5].rstrip(".")) >= 6.1:
+        if float(constants.OS_VER[0:5].rstrip(".")) >= 6.1:
             del set_jump_list
             from .win32 import set_jump_list
         else:

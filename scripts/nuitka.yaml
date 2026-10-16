@@ -1,6 +1,6 @@
 - module-name: "launcher.constants"
   variables:
-    setup_code: 
+    setup_code:
       - "import tomllib"
       - "import os"
       - "f = open('./pyproject.toml', 'r')"

@@ -6,6 +6,7 @@ from collections import namedtuple
 import sys
 
 from PySide6.QtGui import QColor, QFont, QFontInfo, QPalette
+from PySide6.QtWidgets import QApplication
 
 from launcher.front.rgb import hex_to_rgbi
 
@@ -15,6 +16,13 @@ CGroup = QPalette.ColorGroup
 
 def hex_to_qrgb(hex_: str):
     return QColor(*hex_to_rgbi(hex_))
+
+
+def dark_theme_active() -> bool:
+    return (
+        QApplication.palette().color(QPalette.ColorRole.Window).lightness()
+        < 128
+    )
 
 
 # Colors
@@ -114,27 +122,6 @@ QLabel[section="true"], SectionLabel {{
 }}
 
 /* Interactive */
-QPushButton {{
-    background-color: {BG_INPUT};
-    color: {TEXT_PRIMARY};
-    border: 1px solid {BORDER};
-    border-radius: 6px;
-    padding: 4px 9px;
-    font-weight: 600;
-}}
-QPushButton:hover, QPushButton[keyFocus="true"] {{
-    background-color: {BG_SURFACE_LIGHT};
-    border-color: {BORDER_LIGHT};
-}}
-QPushButton:pressed {{
-    background-color: {BG_DARK};
-    color: {TEXT_SECONDARY};
-}}
-QPushButton:disabled {{
-    background-color: {BG_DARK};
-    color: {TEXT_MUTED};
-}}
-
 QPushButton[large="true"], LargeButton {{
     padding: 7px 18px;
 }}
@@ -216,7 +203,6 @@ QMenu::item:disabled {{
     color: {TEXT_MUTED};
 }}
 
-QMenu::icon:checked {{}}
 
 /* Input */
 QLineEdit, QTextEdit, QPlainTextEdit {{
@@ -412,30 +398,18 @@ QListWidget[icons="true"]::item::icon, QListView[icons="true"]::item::icon {{
 /* Tab */
 QTabWidget::pane {{
     border: 1px solid {BORDER};
-    border-radius: 6px;
-    background: {BG_SURFACE};
-}}
-QTabBar::tab {{
-    background: {BG_DARK};
-    color: {TEXT_SECONDARY};
-    padding: 8px 16px;
-    border: 1px solid {BORDER};
-    border-bottom: none;
-    border-top-left-radius: 6px;
-    border-top-right-radius: 6px;
-}}
-QTabBar::tab:selected {{
-    background: {BG_SURFACE};
-    color: {ACCENT};
+    border-bottom-left-radius: 6px;
+    border-bottom-right-radius: 6px;
+    border-top-left-radius: 0;
+    border-top-right-radius: 0;
+    background: palette(light);
 }}
 
 /* Group */
 QGroupBox {{
-    background: {BG_SURFACE};
     border: 1px solid {BORDER};
     border-radius: 8px;
     margin-top: 12px;
-    padding-top: 20px;
     font-weight: 600;
     color: {TEXT_PRIMARY};
 }}

@@ -3,18 +3,17 @@ Paths for launcher & game data
 """
 
 from socket import gethostname
+import inspect
 import logging
 import os
 import sys
 
+from launcher.functions import is_path_valid, pathsafe_str
 import launcher._launchargs
 import launcher.constants as constants
-import launcher.functions
 
 # pylint: disable-next=protected-access
 launchargs = launcher._launchargs.launchargs
-is_path_valid = launcher.functions.is_path_valid
-pathsafe_str = launcher.functions.pathsafe_str
 
 log = logging.getLogger(__name__)
 
@@ -22,6 +21,12 @@ if constants.DEV:
     LAUNCHERDIR_FP = os.path.join(os.getcwd(), "portable.txt")
 else:
     LAUNCHERDIR_FP = os.path.join(sys.executable, "portable.txt")
+
+
+class AutoMkdirProperty(property):
+    """
+    Quick and dirty `property` subclass for tracking/iterating purposes.
+    """
 
 
 def get_user_data_dir():
@@ -69,12 +74,39 @@ def get_portable_path():
 
 def _check_create_dir(directory: str, recursive: bool = True):
     if not os.path.isdir(directory):
-        if recursive:
-            log.debug("Creating directory: %r (recursive)", directory)
-            os.makedirs(directory, exist_ok=True)
-        else:
-            log.debug("Creating directory: %r", directory)
-            os.mkdir(directory)
+        try:
+            if recursive:
+                log.debug("Creating directory: %r (recursive)", directory)
+                os.makedirs(directory, exist_ok=True)
+            else:
+                log.debug("Creating directory: %r", directory)
+                os.mkdir(directory)
+        except FileExistsError as err:
+            log.error(
+                "FileExistsError on %r, swallowing it.",
+                directory,
+                exc_info=err,
+            )
+            return
+        except PermissionError as err:
+            log.error(
+                "Not enough permissions to create directory at %r",
+                directory,
+                exc_info=err,
+            )
+            raise err
+        except NotADirectoryError as err:
+            log.error(
+                "Path at %r is an invalid directory", directory, exc_info=err
+            )
+            raise
+        except OSError as err:
+            log.error(
+                "Unexpected OSError whilst creating directory at %r:",
+                directory,
+                exc_info=err,
+            )
+            raise
 
 
 class PathFinder:
@@ -137,89 +169,117 @@ class PathFinder:
         self.ready = True
 
     @property
-    def game(self):
+    def game(self) -> str:
         return self._game
 
     @property
-    def data(self):
+    def data(self) -> str:
         return self._data
 
-    @property
-    def textures_cache(self):
+    @AutoMkdirProperty
+    def icon_themes(self) -> str:
+        return os.path.join(self.data, "theme", "icon")
+
+    @AutoMkdirProperty
+    def themes(self) -> str:
+        return os.path.join(self.data, "theme", "style")
+
+    @AutoMkdirProperty
+    def textures_cache(self) -> str:
         return os.path.join(self._data, "textures_cache")
 
-    @property
-    def launcher_logs(self):
+    @AutoMkdirProperty
+    def launcher_logs(self) -> str:
         return os.path.join(self._data, "logs")
 
     @property
-    def config_file(self):
+    def config_file(self) -> str:
         return os.path.join(self._data, "config.json")
 
-    @property
-    def jre_path(self):
+    @AutoMkdirProperty
+    def jre_path(self) -> str:
         return os.path.join(self._game, "jre")
 
-    @property
-    def libraries(self):
+    @AutoMkdirProperty
+    def libraries(self) -> str:
         return os.path.join(self._game, "libraries")
 
-    @property
-    def versions(self):
+    @AutoMkdirProperty
+    def versions(self) -> str:
         return os.path.join(self._game, "versions")
 
     @property
-    def jvm_manifest(self):
+    def jvm_manifest(self) -> str:
         return os.path.join(self._game, "versions", "jre_manifest.json")
 
-    @property
-    def assets(self):
+    @AutoMkdirProperty
+    def assets(self) -> str:
         return os.path.join(self._game, "assets")
 
-    @property
-    def assets_indexes(self):
+    @AutoMkdirProperty
+    def assets_indexes(self) -> str:
         return os.path.join(self._game, "assets", "indexes")
 
-    @property
-    def assets_virtual(self):
+    @AutoMkdirProperty
+    def assets_virtual(self) -> str:
         return os.path.join(self._game, "assets", "virtual", "legacy")
 
-    @property
-    def assets_objects(self):
+    @AutoMkdirProperty
+    def assets_objects(self) -> str:
         return os.path.join(self._game, "assets", "objects")
 
-    @property
-    def assets_log_configs(self):
+    @AutoMkdirProperty
+    def assets_log_configs(self) -> str:
         return os.path.join(self._game, "assets", "log_configs")
 
     @property
-    def profiles_file(self):
+    def profiles_file(self) -> str:
         return os.path.join(self._game, "launcher_profiles.json")
 
     @property
-    def profiles_meta_file(self):
+    def profiles_meta_file(self) -> str:
         return os.path.join(self._game, "launcher_profiles_pyml_meta.json")
 
     @property
-    def accounts_file(self):
+    def accounts_file(self) -> str:
         if self._uses_portable:
             return os.path.join(
                 self._data, f"accounts-{self._hostname}.{self._accsuffix}"
             )
         return os.path.join(self._data, f"accounts.{self._accsuffix}")
 
+    @property
+    def sha1_cache(self):
+        return os.path.join(self._data, "sha1-cache.bin")
+
+    @staticmethod
+    def get_user_dir():
+        """Gets the current OS user's directory"""
+        return os.path.expanduser("~")
+
+    @classmethod
+    def get_pics_dir(cls):
+        """Gets the current OS user's pictures/images directory"""
+        base = cls.get_user_dir()
+        match sys.platform:
+            case "win32" | "darwin" | "linux":
+                if os.path.exists((pics := os.path.join(base, "Pictures"))):
+                    return pics
+                return base
+            case _:
+                return base
+
+    @staticmethod
+    def to_qt_path(path: str):
+        return path.replace("\\", "/")
+
     def generate_folder_structure(self):
-        _check_create_dir(self.game)
-        _check_create_dir(self.jre_path)
         _check_create_dir(self.data)
-        _check_create_dir(self.textures_cache)
-        _check_create_dir(os.path.join(self.textures_cache, "skins"))
-        _check_create_dir(os.path.join(self.textures_cache, "capes"))
-        _check_create_dir(self.launcher_logs)
-        _check_create_dir(self.assets)
-        _check_create_dir(self.assets_indexes)
-        _check_create_dir(self.assets_objects)
-        _check_create_dir(self.assets_virtual)
+        _check_create_dir(self.game)
+        for name, value in inspect.getmembers(type(self)):
+            if not isinstance(value, AutoMkdirProperty):
+                continue
+            _check_create_dir(getattr(self, name))
 
 
 paths = PathFinder()

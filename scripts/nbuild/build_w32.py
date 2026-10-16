@@ -73,6 +73,8 @@ args = [
 ]
 
 for d in NOINCLUDE_DATA:
+    d = d.rstrip("/*")
+    arg = f"--noinclude-data-files={d}*/**/*"
     arg = f"--noinclude-data-files={d}"
     args.append(arg)
 
@@ -119,35 +121,36 @@ if not makensis:  # we still don't have it at this point, can't run
     log.warning("No NSIS installation found, not building an installer.")
     FLAGS = FLAGS & ~BuildFlags.INSTALLER
 
-nsis_args = [
-    makensis,
-    "/V3",
-    "/NOCD",
-    f"/DPROG_NAME={PROJECT_TOML["project"]["name"]}",
-    f"/DPROG_VERSION={PROJECT_TOML["project"]["version"]}",
-    "w32installer.nsi",
-    "/XOutFile ..\\dist\\installer.exe",
-]
+if makensis:
+    nsis_args = [
+        makensis,
+        "/V3",
+        "/NOCD",
+        f"/DPROG_NAME={PROJECT_TOML["project"]["name"]}",
+        f"/DPROG_VERSION={PROJECT_TOML["project"]["version"]}",
+        "w32installer.nsi",
+        "/XOutFile ..\\dist\\installer.exe",
+    ]
 
-nsis_cwd = CWD / "scripts"
+    nsis_cwd = CWD / "scripts"
 
-if FLAGS & BuildFlags.INSTALLER:
-    log.info("Running MakeNSIS")
-    p = subprocess.run(
-        nsis_args,
-        cwd=nsis_cwd,
-        check=False,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-    )
-    if p.returncode != 0:
-        log.error("Failed to run MakeNSIS!")
-        nsis_logger = logging.getLogger("makensis.exe")
-        read_subprocess_info(nsis_logger, False)
-        log.info("Build unsuccessful.")
-        sys.exit(1)
-    else:
-        nsis_logger = logging.getLogger("makensis.exe")
-        read_subprocess_info(p, nsis_logger)
+    if FLAGS & BuildFlags.INSTALLER:
+        log.info("Running MakeNSIS")
+        p = subprocess.run(
+            nsis_args,
+            cwd=nsis_cwd,
+            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        if p.returncode != 0:
+            log.error("Failed to run MakeNSIS!")
+            nsis_logger = logging.getLogger("makensis.exe")
+            read_subprocess_info(nsis_logger, False)
+            log.info("Build unsuccessful.")
+            sys.exit(1)
+        else:
+            nsis_logger = logging.getLogger("makensis.exe")
+            read_subprocess_info(p, nsis_logger)
 
 log.info("Build successful.")

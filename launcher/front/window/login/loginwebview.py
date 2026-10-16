@@ -1,5 +1,6 @@
 from functools import cache
 import logging
+import sys
 
 from PySide6.QtCore import QPluginLoader, Qt, Signal
 from PySide6.QtGui import QDesktopServices
@@ -10,10 +11,10 @@ from launcher import constants
 
 log = logging.getLogger(__name__)
 
-match constants.OS:
-    case "windows":
+match sys.platform:
+    case "win32":
         WEBVIEW_PLUGIN_PATH = "webview/qtwebview_webview2"
-    case "osx":
+    case "darwin":
         WEBVIEW_PLUGIN_PATH = "webview/libqtwebview_darwin"
     case _:
         WEBVIEW_PLUGIN_PATH = ""  # don't use webview on other platforms

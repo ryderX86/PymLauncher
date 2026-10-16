@@ -26,7 +26,7 @@ R_co = TypeVar("R_co", covariant=True)
 def _trigger_callbacks(
     func: Callable[Concatenate["AccountManager", P], R_co],
 ) -> Callable[Concatenate["AccountManager", P], R_co]:
-    def wrapped(self: "AccountManager", *args, **kwargs):
+    def wrapped(self: "AccountManager", *args: P.args, **kwargs: P.kwargs):
         previous_active = self.active
         result = func(self, *args, **kwargs)
         if self.active and self.active != previous_active:
@@ -54,6 +54,7 @@ class AccountManager:
 
     class _Signals(QObject):
         account_changed = Signal(LauncherAccount)
+        logout_requested = Signal()
 
     _instance: "AccountManager | None" = None
 

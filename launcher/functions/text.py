@@ -2,13 +2,15 @@
 Helper functions for text stuff
 """
 
-from string import ascii_letters, digits
+from string import ascii_letters, ascii_uppercase, digits
 import json
 import os
 import platform
 import re
 
 from launcher import constants
+
+FP_REGEX_COMPILED = re.compile(constants.FP_REGEX)
 
 
 def indent(text: str | dict | list, amount: int = 2):
@@ -39,7 +41,7 @@ def truncate(
     placeholder: str = "...",
 ) -> str:
     if len(text) > max_length:
-        text = "".join((text[: max_length + 1], placeholder))
+        text = f"{text[:max_length+1]}{placeholder}"
     return text
 
 
@@ -48,7 +50,7 @@ def is_path_valid(fp: str | os.PathLike):
         fp = str(fp)
     if platform.system() == "Windows":
         fp = fp.replace("/", "\\")
-    m = re.match(constants.FP_REGEX, fp)
+    m = FP_REGEX_COMPILED.match(fp)
     if not m:
         return False
     return m.string == fp
@@ -130,3 +132,24 @@ def display_file_size(base_size: int, long: bool = False):
         return " ".join((size_s, current_display))
     else:
         return "".join((size_s, current_display))
+
+
+def camal_to_snake(text: str):
+    if text[0] in ascii_uppercase:
+        text = text.replace(text[0], text[0].lower(), 1)
+    for char in ascii_uppercase:
+        text = text.replace(char, f"_{char.lower()}")
+    return text
+
+
+def snake_to_camal(text: str, speed_bump: bool = False):
+    if speed_bump:
+        text = text.replace(text[0], text[0].upper(), 1)
+    while "_" in text:
+        usidx = text.index("_")
+        if (usidx + 1) == len(text):
+            break
+        next_char = text[usidx + 1]
+        repl = f"_{next_char}"
+        text = text.replace(repl, next_char.upper())
+    return text

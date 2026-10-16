@@ -29,6 +29,38 @@ MODS_DIR_REGEX = re.compile(
     r"-Dfabric\.(modsFolder|addMods)=((?:\"[^\"]+\"|\S+))"
 )
 
+KNOWN_KEYS = {
+    "name",
+    "type",
+    "created",
+    "used_at",
+    "game_dir",
+    "java_binary",
+    "jvm_args",
+    "version_id",
+    "window_width",
+    "window_height",
+    "icons",
+}
+"""Known JSON keys for saved profiles (PymLauncher profiles only)"""
+
+KNOWN_KEYS_COMPAT = {
+    "created",
+    "gameDir",
+    "icon",
+    "javaArgs",
+    "javaDir",
+    "lastUsed",
+    "lastVersionId",
+    "name",
+    "type",
+    "resolution",
+}
+"""Known JSON keys for saved profiles (Vanilla-compatible only)"""
+
+FALLBACK_DATE = "1970-01-01T00:00:00.000Z"
+"""Fallback for places where some string date is required."""
+
 
 class SplitJVMArgs(NamedTuple):
     args: str | None
@@ -477,7 +509,7 @@ class LaunchProfile:
         props["type"] = "custom"
         props["created"] = datetime.now().isoformat()
         uid = str(uuid.uuid4())
-        new = cls.from_storage(props, uid)
+        new = cls.from_storage_compat(props, uid)
         return new
 
     def _icon_compat(self):
@@ -542,14 +574,8 @@ class LaunchProfile:
                 "lastVersionId": self.version_id,
                 "name": self.name,
                 "type": self.type,
-                "resolution": {
-                    k: v
-                    for k, v in {
-                        "width": self.resolution_width,
-                        "height": self.resolution_height,
-                    }.items()
-                    if v
-                },
+                "window_width": self.resolution_width,
+                "window_height": self.resolution_height,
             }.items()
             if v
         }
@@ -583,27 +609,16 @@ class LaunchProfile:
         return version_manager.manifest_cache["latest"].get(version_type)
 
     @classmethod
-    def from_storage(cls, data: dict[str, Any], uid: str):
-        known_keys = [
-            "created",
-            "gameDir",
-            "icon",
-            "javaArgs",
-            "javaDir",
-            "lastUsed",
-            "lastVersionId",
-            "name",
-            "type",
-            "resolution",
-        ]
-        unknown_keys = [k for k in data.keys() if k not in known_keys]
-        for key in unknown_keys:
+    def from_storage_compat(cls, data: dict[str, Any], uid: str):
+        for key in set(data.keys()).difference(KNOWN_KEYS_COMPAT):
             log.warning(
-                "Unexpected entry '%s' in 'launcher_profiles.json'", key
+                "Unexpected entry %r in 'launcher_profiles.json' profile %r",
+                key,
+                data.get("name", f"<untitled {uid}>"),
             )
 
         t = data.get("type", "custom")
-        if t in ("latest-release", "latest-snapshot"):
+        if t in {"latest-release", "latest-snapshot"}:
             if not data.get("name"):
                 match t:
                     case "latest-release":
@@ -612,6 +627,7 @@ class LaunchProfile:
                         data["name"] = "Latest Snapshot"
 
         return LaunchProfile(
+            uuid=uid,
             name=data.get("name", "Untitled"),
             version_id=data.get("lastVersionId", "latest-release"),
             game_dir=data.get("gameDir"),
@@ -619,11 +635,35 @@ class LaunchProfile:
             jvm_args=data.get("javaArgs"),
             resolution_width=data.get("resolution", {}).get("width"),
             resolution_height=data.get("resolution", {}).get("height"),
-            uuid=uid,
             icon=data.get("icon"),
-            created=data.get("created", "1970-01-01T00:00:00.000Z"),
-            last_used=data.get("lastUsed", "1970-01-01T00:00:00.000Z"),
+            created=data.get("created", FALLBACK_DATE),
+            last_used=data.get("lastUsed", FALLBACK_DATE),
             type=data.get("type", "custom"),
+        )
+
+    @classmethod
+    def from_storage(cls, data: dict[str, Any], uid: str):
+        for key in set(data.keys()).difference(KNOWN_KEYS):
+            log.warning(
+                "Unexpected entry %r in 'launcher_profiles_pyml_meta.json' "
+                "profile %r",
+                key,
+                data.get("name", f"<untitled {uid}>"),
+            )
+
+        return LaunchProfile(
+            uuid=uid,
+            name=data.get("name", "Untitled"),
+            type=data.get("type", "custom"),
+            version_id=data.get("version_id", "latest-release"),
+            game_dir=data.get("game_dir"),
+            java_path=data.get("java_binary"),
+            jvm_args=data.get("jvm_args"),
+            resolution_width=data.get("window_width"),
+            resolution_height=data.get("window_height"),
+            icon=data.get("icon"),
+            created=data.get("created", FALLBACK_DATE),
+            last_used=data.get("used_at", FALLBACK_DATE),
         )
 
     def has_valid_uuid(self):
@@ -659,7 +699,7 @@ class LaunchProfile:
             case "latest-snapshot":
                 return "Latest Snapshot"
 
-    def is_exact_match(self, other: LaunchProfile | dict):
+    def is_exact_match(self, other: LaunchProfile | Any):
         """
         Compares both profiles by the value of `to_dict()`, for difference
         checking.
@@ -668,6 +708,6 @@ class LaunchProfile:
         of `to_dict()`, and not `to_dict_compat()`, else the results will be
         inaccurate.
         """
-        return self.to_dict() == (
-            other.to_dict() if isinstance(other, LaunchProfile) else other
-        )
+        if isinstance(other, LaunchProfile):
+            return self.to_dict() == other.to_dict()
+        return False

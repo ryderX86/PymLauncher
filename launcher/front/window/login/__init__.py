@@ -5,7 +5,7 @@ Device code flow window
 import logging
 
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QDesktopServices
+from PySide6.QtGui import QDesktopServices, QPalette
 from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
@@ -87,8 +87,17 @@ class LoginWindow(QDialog):
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(title)
 
+        # TODO: better method to get a different color dynamically?
+        color = hex(
+            QApplication.palette()
+            .color(QPalette.ColorGroup.Disabled, QPalette.ColorRole.Text)
+            .rgb()
+        )[4:]
+
         self.instruction_label = QLabel(
-            "Click the button below to start the sign-in process.",
+            f'<p style="color: #{color}">'
+            "Click the button below to start the sign-in process."
+            "</p>",
             alignment=Qt.AlignmentFlag.AlignCenter,
             wordWrap=True,
         )

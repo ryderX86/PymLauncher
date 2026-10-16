@@ -24,5 +24,10 @@
   "enforce_json_spec": true,
   "show_snapshots": false,
   "show_old_releases": false,
-  "use_webview_for_login": false
+  "use_webview_for_login": false,
+  "lock_profile_order": false,
+  "theme": "default",
+  "always_show_debug_options": false,
+  "disable_lzma_downloads": false,
+  "icon_theme": ""
 }

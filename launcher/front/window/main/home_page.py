@@ -6,15 +6,14 @@ Home page, play button, profile info, progress bar, all that stuff.
 
 import logging
 import os
+import time
 
 from PySide6.QtCore import QSize, Qt, QUrl, Signal, Slot
 from PySide6.QtGui import QDesktopServices, QIcon, QPalette
 from PySide6.QtWidgets import (
-    QComboBox,
     QFrame,
     QHBoxLayout,
     QLabel,
-    QListView,
     QPlainTextEdit,
     QProgressBar,
     QPushButton,
@@ -22,23 +21,26 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from launcher import config, paths
+from launcher import config, constants, lifecycle, paths
 from launcher.auth import LauncherAccount
 from launcher.back import profile_manager
 from launcher.back.account_manager import account_man
+from launcher.back.game_installer import installer
 from launcher.back.profile_manager import LaunchProfile
 from launcher.exceptions.datatypes import InvalidVersionIdError
-from launcher.front import resources
 from launcher.front.qt.binding_mixin import BindingMixin
 from launcher.front.qt.widgets import Header1, SecondaryLabel
 from launcher.front.styles import get_fonts
+from launcher.front.theming import theme_manager
 from launcher.front.window.text_popup import TextPopup
-from launcher.functions import Suppressable, error_box, is_path_valid
+from launcher.functions import error_box, is_path_valid
 from launcher.offline import offline_man
 from launcher.threads.install_worker import InstallWorker
 from launcher.threads.launch_worker import LaunchWorker
 
 log = logging.getLogger(__name__)
+log_tmp = config.logging_template
+log_tmp_type = config.determine_log_template_format(log_tmp)[0]
 
 
 class HomePage(BindingMixin, QWidget):
@@ -66,7 +68,53 @@ class HomePage(BindingMixin, QWidget):
         pass
 
     def bind(self):
-        self._profile_change(profile_manager.get_current_profile())
+        self._reset_progress_bar_sizes()
+        lifecycle.config_updated.connect(self._reset_progress_bar_sizes)
+
+        installer.starting.connect(self._on_installer_starting)
+        installer.finished.connect(self.on_install_finished)
+        installer.step.connect(self._on_installer_step)
+        installer.downloaded_file.connect(self._on_downloaded_file)
+        installer.update_bytes.connect(self._step_progress_bar)
+
+    @Slot(int)
+    def _step_progress_bar(self, amount: int):
+        self.progress_bar.setValue(self.progress_bar.value() + amount)
+
+    @Slot()
+    def _on_installer_starting(self):
+        global log_tmp, log_tmp_type
+        log_tmp = config.logging_template
+        log_tmp_type = config.determine_log_template_format(log_tmp)[0]
+        self.progress_bar.setValue(0)
+        self.progress_label.setText("")
+        self.progress_bar.setVisible(True)
+        self.progress_label.setVisible(True)
+        if config.show_logs_on_home:
+            self.game_logs.clear()
+
+    @Slot(str, str, int)
+    def _on_installer_step(self, progress_bar_msg: str, _: str, total: int):
+        self.progress_bar.setValue(0)
+        self.progress_bar.setMaximum(total)
+        self.progress_label.setText(progress_bar_msg)
+
+    @Slot(str, int)
+    def _on_downloaded_file(self, _: str, size: int):
+        self.progress_bar.setValue(self.progress_bar.value() + size)
+
+    @Slot()
+    def _reset_progress_bar_sizes(self):
+        self.progress_label.setVisible(True)
+        plh = self.progress_label.sizeHint().height()
+        self.progress_label.setVisible(False)
+        self.progress_bar.setVisible(True)
+        pbh = self.progress_bar.sizeHint().height()
+        self.progress_bar.setVisible(False)
+
+        margins = self.progress_frame.contentsMargins()
+        min_height = plh + pbh + margins.top() + margins.bottom()
+        self.progress_frame.setMinimumHeight(min_height)
 
     def kill_worker(self):
         if self._launcher:
@@ -83,47 +131,23 @@ class HomePage(BindingMixin, QWidget):
         layout.addWidget(title)
 
         # profile info stuff
-        info_frame = QFrame()
-        info_frame.setFrameShape(QFrame.Shape.StyledPanel)
-        info_frame.setFrameShadow(QFrame.Shadow.Plain)
-        info_frame.setLineWidth(1)
+        info_frame = QWidget()
+        info_frame.setContentsMargins(0, 0, 0, 0)
         # info_frame.setStyleSheet(
         #     f"background-color: {styles.BG_SURFACE}; "
         #     f"border: 1px solid {styles.BORDER}; "
         #     "border-radius: 10px; padding 20px;"
         # )
         info_layout = QVBoxLayout(info_frame)
+        info_layout.setContentsMargins(0, 0, 0, 0)
 
         info_sub_frame = QFrame()
-        info_sub_layout = QHBoxLayout(info_sub_frame)
 
-        info_sub_layout.addWidget(QLabel("Profile: "), 0)
-
-        info_sub_layout.setContentsMargins(10, 4, 10, 0)
-
-        self.profile_dropdown = QComboBox()
-        self.profile_dropdown.setStyleSheet(
-            " ".join(
-                [
-                    self.profile_dropdown.styleSheet(),
-                    "::item {min-height: 48px;}",
-                ]
-            )
-        )
-        self.profile_dropdown.view().setVerticalScrollMode(
-            QListView.ScrollMode.ScrollPerPixel
-        )
-        self.profile_dropdown.activated.connect(self._on_dropdown_select)
+        # pyrefly: ignore [bad-argument-type]
         profile_manager.add_profile_switch_handler(self._on_profile_change)
         profile_manager.add_profile_refresh_handler(self._refresh_profiles)
-        self.profile_dropdown.setIconSize(QSize(32, 32))
-        self.profile_dropdown.setProperty("bigIcons", True)
-        self.profile_dropdown.setMaxVisibleItems(6)
-        info_sub_layout.addWidget(self.profile_dropdown, 1)
 
         info_layout.addWidget(info_sub_frame)
-
-        layout.addWidget(info_frame)
 
         # profile options
         profile_action_frame = QFrame()
@@ -184,14 +208,15 @@ class HomePage(BindingMixin, QWidget):
             undoRedoEnabled=False,
             lineWrapMode=QPlainTextEdit.LineWrapMode.WidgetWidth,
             readOnly=True,
-            plainText="*taps mic* This thing on?",
+            placeholderText="*taps mic*",
             centerOnScroll=False,
         )
         self.game_logs.setBackgroundRole(QPalette.ColorRole.Dark)
         self.game_logs.setFont(self.fonts.terminal)
         self.game_logs.setMaximumBlockCount(5000)  # change if needed
 
-        info_layout.addWidget(self.game_logs)
+        layout.addWidget(info_frame, alignment=Qt.AlignmentFlag.AlignTop)
+        layout.addWidget(self.game_logs, 1)
 
         self.stretcher = QWidget()
         stretcher_lo = QVBoxLayout(self.stretcher)
@@ -219,13 +244,14 @@ class HomePage(BindingMixin, QWidget):
         self.progress_bar.setValue(0)
         progress_layout.addWidget(self.progress_bar)
 
-        self.progress_frame.setVisible(False)
         layout.addWidget(self.progress_frame)
+        self.progress_bar.setVisible(False)
+        self.progress_label.setVisible(False)
 
         # Play button
         self.play_button = QPushButton("Loading...")
         self.play_button.setProperty("play", True)
-        self.play_button.setFixedHeight(50)
+        self.play_button.setMinimumHeight(50)
         self.play_button.setMinimumWidth(280)
         self.play_button.clicked.connect(self._on_play)
         self.play_button.setDisabled(True)
@@ -240,42 +266,10 @@ class HomePage(BindingMixin, QWidget):
         )
 
     def _refresh_profiles(self):
-        profs = [*profile_manager.profiles.values()]
         current = profile_manager.get_current_profile()
-        with self._on_profile_change.suppressed():
-            self.profile_dropdown.clear()
-            for prof in profs:
-                if prof.icon:
-                    ico = resources.profile_icon(prof.icon)
-                    self.profile_dropdown.addItem(
-                        ico, prof.name or prof.uuid, prof
-                    )
-                else:
-                    self.profile_dropdown.addItem(
-                        self._no_icon, prof.name or prof.uuid, prof
-                    )
-                if prof == current:
-                    self.profile_dropdown.setCurrentIndex(profs.index(current))
-        self._profile_change(current)
+        self._on_profile_change(current)
 
-    def _on_dropdown_select(self, index: int):
-        prof: LaunchProfile = self.profile_dropdown.itemData(index)
-        with self._on_profile_change.suppressed():
-            current_prof = profile_manager.get_current_profile()
-            if prof != current_prof:
-                profile_manager.set_current_profile(prof)
-        self._profile_change(prof)
-
-    @Suppressable
     def _on_profile_change(self, profile: LaunchProfile):
-        self.profile_dropdown.blockSignals(True)
-        self.profile_dropdown.setCurrentIndex(
-            profile_manager.get_row_from_profile(profile)
-        )
-        self.profile_dropdown.blockSignals(False)
-        self._profile_change(profile)
-
-    def _profile_change(self, profile: LaunchProfile):
         self._reset_play_button()
         try:
             version_installed = profile.check_install()
@@ -286,9 +280,16 @@ class HomePage(BindingMixin, QWidget):
             return
         if version_installed:
             self.progress_label.setText("Ready to launch.")
+            self.status_update.emit(
+                f"Ready to launch {profile.real_version_id}"
+            )
         elif not offline_man.offline:
+            self.status_update.emit(
+                f"Ready to install {profile.real_version_id}"
+            )
             self.progress_label.setText("Ready to install.")
         else:
+            self.status_update.emit("No internet connection")
             if profile.version_id in {"latest-snapshot", "latest-release"}:
                 self.progress_label.setText(
                     f"Version {profile.real_version_id} isn't installed!"
@@ -297,12 +298,14 @@ class HomePage(BindingMixin, QWidget):
                 self.progress_label.setText(
                     f"Version {profile.version_id} isn't installed!"
                 )
-        if profile.version_id in {"latest-snapshot", "latest-release"}:
-            self.version_label.setText(
-                f"Version: {profile.type_text} ({profile.real_version_id})"
-            )
-        else:
-            self.version_label.setText(f"Version: {profile.version_id}")
+        match profile.version_id:
+            case "latest-release":
+                version_label = f"Latest Release ({profile.real_version_id})"
+            case "latest-snapshot":
+                version_label = f"Latest Snapshot ({profile.real_version_id})"
+            case _:
+                version_label = profile.version_id
+        self.version_label.setText(f"Version: {version_label}")
 
     def _on_play(self):
         """Play button function"""
@@ -316,22 +319,29 @@ class HomePage(BindingMixin, QWidget):
         self.play_requested.emit()
 
     def prep_for_launch(
-        self, installer: InstallWorker, launcher: LaunchWorker
+        self, installer_: InstallWorker, launcher: LaunchWorker
     ):
+        # use globals to avoid some(?) attribute lookup, the formatting is slow
+        # enough as-is.
+        global log_tmp, log_tmp_type
+        log_tmp = config.logging_template
+        log_tmp_type = config.determine_log_template_format(log_tmp)[0]
         # ui stuff
         self.progress_bar.setValue(0)
-        self.progress_frame.setVisible(True)
+        self.progress_label.setText("")
+        self.progress_bar.setVisible(True)
+        self.progress_label.setVisible(True)
 
-        installer.progress.connect(self._on_progress)
-        installer.status.connect(self._on_status)
-        installer.done.connect(self._on_install_finished)
+        installer_.progress.connect(self._on_progress)
+        installer_.status.connect(self._on_status)
+        installer_.done.connect(self.on_install_finished)
 
         launcher.progress.connect(self._on_progress)
         launcher.status.connect(self._on_status)
-        launcher.done.connect(self._on_launch_finished)
-        launcher.game_closed.connect(self._on_game_closed)
+        launcher.done.connect(self.on_launch_finished)
+        launcher.game_closed.connect(self.on_game_closed)
         if config.show_logs_on_home:
-            launcher.game_log.connect(self._handle_game_log)
+            launcher.game_log.connect(self.handle_game_log)
         self.game_logs.clear()
 
     @Slot(str, float, float, bool)
@@ -352,8 +362,8 @@ class HomePage(BindingMixin, QWidget):
     def _on_status(self, text: str):
         self.progress_label.setText(text)
 
-    @Slot(str, str)
-    def _on_game_closed(self, exit_code: str, stdout: str):
+    @Slot(str)
+    def on_game_closed(self, exit_code: str):
         if int(exit_code) == 0:
             self.game_closed.emit("0")
         else:
@@ -365,7 +375,7 @@ class HomePage(BindingMixin, QWidget):
         prof.set_last_used()
         self._reset_play_button()
         if int(exit_code) != 0:
-            self.game_crash.emit(exit_code, stdout)
+            self.game_crash.emit(exit_code, self.game_logs.toPlainText())
         self.kill_worker()
 
     def _open_prof_folder(self, folder: str | None = None):
@@ -437,11 +447,12 @@ class HomePage(BindingMixin, QWidget):
             self.play_button.setText("Launch Demo")
 
     @Slot(bool, str)
-    def _on_launch_finished(self, success: bool, message: str):
+    def on_launch_finished(self, success: bool, message: str):
         if success:
             self.play_button.setText("Playing...")
             self.play_button.setEnabled(False)
-            self.progress_frame.setVisible(False)
+            self.progress_label.setVisible(False)
+            self.progress_bar.setVisible(False)
             self.progress_label.setText("")
             self.progress_bar.setValue(0)
             self.game_open.emit()
@@ -455,11 +466,12 @@ class HomePage(BindingMixin, QWidget):
             )
 
     @Slot(bool)
-    def _on_install_finished(self, success: bool):
+    def on_install_finished(self, success: bool):
         if success:
             self.play_button.setText("Launching...")
             self.play_button.setEnabled(False)
-            self.progress_frame.setVisible(False)
+            self.progress_label.setVisible(False)
+            self.progress_bar.setVisible(False)
             self.progress_label.setText("")
             self.progress_bar.setValue(0)
         else:
@@ -493,13 +505,26 @@ class HomePage(BindingMixin, QWidget):
 
     def aborted_launch(self):
         self._reset_play_button()
-        self.progress_frame.setVisible(False)
+        self.progress_label.setVisible(False)
+        self.progress_bar.setVisible(False)
         self.progress_label.setText("")
         self.progress_bar.setValue(0)
 
     def config_changed(self):
         self.game_logs.setHidden(not config.show_logs_on_home)
         self.stretcher.setHidden(config.show_logs_on_home)
+        if theme_manager.current.qss:
+            self.play_button.setStyleSheet(
+                f"{self.play_button.styleSheet()}"
+                'QPushButton[play="true"] {'
+                "height: 50;"
+                "width: 280;"
+                "}"
+            )
+        else:
+            self.play_button.setStyleSheet("")
+            self.play_button.setFixedHeight(50)
+            self.play_button.setMinimumWidth(280)
         if not config.show_logs_on_home:
             if self.game_logs.blockCount() > 1:
                 log.debug(
@@ -508,6 +533,32 @@ class HomePage(BindingMixin, QWidget):
                 )
                 self.game_logs.setPlainText("*taps mic* This thing on?")
 
-    @Slot(str)
-    def _handle_game_log(self, log_text: str):
-        self.game_logs.appendPlainText(log_text)
+    @Slot(str, str, str, str, str)
+    def handle_game_log(
+        self,
+        logger_name: str,
+        timestamp: str,
+        level: str,
+        thread: str,
+        msg: str,
+    ):
+        if config.show_logs_on_home:
+            ts = time.strftime(
+                "%H:%M:%S", time.localtime(int(timestamp) / 1000)
+            )
+            inf = {
+                "logger": logger_name,
+                "timestamp": ts,
+                "level": level,
+                "thread": thread,
+                "message": msg,
+            }
+            match log_tmp_type:
+                case config.GameLogTemplateType.PERCENT:
+                    self.game_logs.appendPlainText(log_tmp % inf)
+                case config.GameLogTemplateType.FORMAT:
+                    self.game_logs.appendPlainText(log_tmp.format_map(inf))
+                case _:  # fallback for invalid/unknown
+                    self.game_logs.appendPlainText(
+                        constants.DEFAULT_LOG_TEMPLATE.format(inf)
+                    )

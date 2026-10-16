@@ -4,35 +4,51 @@ minecraftlauncher.front.window.main.main_window
 Main application window.
 """
 
+from time import sleep
 import logging
 import sys
 
-from PySide6.QtCore import QSize, Signal
+from PySide6.QtCore import Qt, QUrl, Signal, Slot
+from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
-    QFrame,
     QHBoxLayout,
     QLabel,
-    QListWidget,
-    QListWidgetItem,
     QMainWindow,
-    QStackedWidget,
+    QMenu,
+    QSizePolicy,
     QStatusBar,
+    QTabWidget,
+    QToolBar,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
 
-from launcher import PostLaunchBehavior, config, launchargs, set_exiting
+from launcher import (
+    PostLaunchBehavior,
+    config,
+    constants,
+    debug_utils,
+    launchargs,
+    lifecycle,
+    paths,
+    set_exiting,
+)
 from launcher.back import profile_manager
 from launcher.constants import LAUNCHER_VERSION
 from launcher.front import styles
+from launcher.front.icon_helpers import IconName, get_icon
 from launcher.front.qt.widgets import AccountSelect
+from launcher.front.qt.widgets.profile_list import ProfileList
+from launcher.front.window.about import AboutWindow
+from launcher.front.window.modloaders import FabricInstallWindow
+from launcher.front.window.settings import SettingsWindow
+from launcher.front.window.skin_change import SkinChange
 from launcher.functions.error_box import error_box
+from launcher.threads.lro_thread import run_lro
 
-from .account_page import AccountPage
 from .home_page import HomePage
 from .profiles_page import ProfilesPage
-from .settings_page import SettingsPage
-from .utilities_page import UtilitiesPage
 
 log = logging.getLogger(__name__)
 
@@ -42,14 +58,6 @@ class MainWindow(QMainWindow):
 
     login_requested = Signal()
     status_update = Signal(str)
-
-    NAV_ITEMS = [
-        ("Home", "home"),
-        ("Profiles", "profiles"),
-        ("Account", "account"),
-        ("Utilities", "utilities"),
-        ("Settings", "settings"),
-    ]
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -65,7 +73,6 @@ class MainWindow(QMainWindow):
             y = sh // 2 - height // 2
             self.setGeometry(x, y, *config.window_size)
 
-        self._nav_buttons: dict[str, QListWidgetItem] = {}
         self._build_ui()
 
     def check_for_launch_arg(self):
@@ -94,6 +101,7 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, a0):
         set_exiting()
+        lifecycle.shutting_down.emit()
         self._on_window_closed()
         super().closeEvent(a0)
 
@@ -107,8 +115,11 @@ class MainWindow(QMainWindow):
                 self.hide()
             case PostLaunchBehavior.CLOSE:
                 self.close()
+            case _:
+                pass
 
     def _process_game_closed(self, exit_code: str):
+        # pyrefly: ignore [non-exhaustive-match]
         match config.post_launch_option:
             case PostLaunchBehavior.KEEP_OPEN:
                 return
@@ -137,91 +148,122 @@ class MainWindow(QMainWindow):
         top_bar.setBackgroundRole(styles.CRole.Base)
         top_bar.setAutoFillBackground(True)
         top_bar_layout = QHBoxLayout(top_bar)
-        top_bar_layout.setContentsMargins(2, 2, 2, 2)
-        top_bar_layout.addStretch(2)
+        top_bar_layout.setContentsMargins(0, 0, 0, 0)
+
+        # top toolbar (left; before dropdown)
+        self.toolbar = QToolBar()
+        self.toolbar.setToolButtonStyle(
+            Qt.ToolButtonStyle.ToolButtonTextBesideIcon
+        )
+
+        self.toolbar.addAction(
+            get_icon(IconName.ADD),
+            "Add Profile",
+            profile_manager.create_profile,
+        )
+
+        self.toolbar.addAction(
+            get_icon(IconName.SETTINGS),
+            "Settings",
+            self._show_settings_window,
+        )
+
+        utilities = QToolButton(
+            popupMode=QToolButton.ToolButtonPopupMode.InstantPopup,
+            toolButtonStyle=Qt.ToolButtonStyle.ToolButtonTextBesideIcon,
+        )
+        utilities.setText("Utilities")
+        utilities.setIcon(get_icon(IconName.UTILITY))
+        self.toolbar.addWidget(utilities)
+        self.utils_menu = QMenu(utilities)
+
+        self._setup_utilities_menu()
+        utilities.setMenu(self.utils_menu)
+
+        help_button = QToolButton(  # type: ignore
+            popupMode=QToolButton.ToolButtonPopupMode.InstantPopup,
+            toolButtonStyle=Qt.ToolButtonStyle.ToolButtonTextBesideIcon,
+        )
+        help_button.setText("Help")
+        help_button.setIcon(get_icon(IconName.HELP))
+        self.toolbar.addWidget(help_button)
+
+        help_button.addAction(
+            get_icon(IconName.HELP_ABOUT),
+            f"About {constants.LAUNCHER_NAME}",
+            AboutWindow.create_show,
+        )
 
         self.account_dropdown = AccountSelect()
         self.account_dropdown.add_account_requested.connect(
             self.login_requested.emit
         )
-        top_bar_layout.addWidget(self.account_dropdown)
+        w = QWidget()
+        w.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Ignored
+        )
+        self.toolbar.addWidget(w)
+        self.toolbar.addWidget(self.account_dropdown)
 
-        root_layout.addWidget(top_bar)
-
-        # Separator
-        sep = QFrame()
-        sep.setFrameShape(QFrame.Shape.HLine)
-        sep.setFixedHeight(1)
-        sep.setStyleSheet(f"background-color: {styles.BORDER};")
-        root_layout.addWidget(sep)
+        root_layout.addWidget(self.toolbar)
 
         # body
         body = QWidget()
         body_layout = QHBoxLayout(body)
-        body_layout.setContentsMargins(0, 0, 0, 0)
-        body_layout.setSpacing(0)
+        # body_layout.setContentsMargins(0, 0, 0, 0)
+        # body_layout.setSpacing(0)
 
-        # sidebar
-        self.sidebar = QListWidget()
-        self.sidebar.setBackgroundRole(styles.CRole.Mid)
-        self.sidebar.setDragEnabled(False)
-        self.sidebar.setSelectionMode(
-            QListWidget.SelectionMode.SingleSelection
-        )
-        self.sidebar.setFixedWidth(180)
-        # self.sidebar.setProperty("sidebar", True)
-        # self.sidebar.setIconSize(QSize(32, 32))
-        self.sidebar.setUniformItemSizes(True)
-        self.sidebar.setFrameShape(QFrame.Shape.NoFrame)
+        # profile selector
+        self.profile_list = ProfileList()
+        self.profile_list.setContentsMargins(0, 0, 0, 0)
+        self.profile_list.setMaximumWidth(200)
+        self.profile_list.setMinimumWidth(200)
+        body_layout.addWidget(self.profile_list)
 
-        self.sidebar.currentRowChanged.connect(self._nav_button_group)
+        # main area
+        main_area = QVBoxLayout()
+        body_layout.addLayout(main_area)
 
-        for label, key in self.NAV_ITEMS:
-            button = QListWidgetItem("".join([" " * 2, label]))
-            button.setSizeHint(QSize(0, 48))
-            self.sidebar.addItem(button)
-            self._nav_buttons[key] = button
+        # self.tab_selector = QTabBar(
+        #     shape=QTabBar.Shape.RoundedNorth,
+        #     movable=False,
+        #     documentMode=True,
+        #     expanding=False,
+        #     drawBase=True,
+        # )
 
-        body_layout.addWidget(self.sidebar)
+        self.pages = QTabWidget()
+        main_area.addWidget(self.pages, 1)
+        if lifecycle.qapp.style().name().lower() == "windows11":
+            self.pages.setStyleSheet("""
+                QTabWidget::pane:after {
+                    border: 1px solid rgba(255, 255, 255, 0.03);
+                }
+                """)
 
-        vsep = QFrame()
-        vsep.setFrameShape(QFrame.Shape.VLine)
-        vsep.setFixedWidth(1)
-        vsep.setStyleSheet(f"background-color: {styles.BORDER};")
-        body_layout.addWidget(vsep)
+        # self.pages.setFrameShape(QFrame.Shape.StyledPanel)
 
-        self.pages = QStackedWidget()
-        self.home_page = HomePage()
-        self.profiles_page = ProfilesPage()
-        self.settings_page = SettingsPage()
-        self.account_page = AccountPage()
-        self.utilities_page = UtilitiesPage()
+        self.home_page = HomePage(self.pages)
+        self.profiles_page = ProfilesPage(self.pages)
 
-        self.page_list = [
-            self.home_page,
-            # self.profiles_page,
-            self.profiles_page,
-            self.account_page,
-            self.utilities_page,
-            self.settings_page,
-        ]
-
-        self.utilities_page.modloader_installed.connect(
-            self.profiles_page.editor.refresh_version_combo
-        )
+        self.tab_list = {
+            "Home": self.home_page,
+            "Edit Profile": self.profiles_page,
+        }
 
         self.home_page.game_open.connect(self._process_game_open)
         self.home_page.game_closed.connect(self._process_game_closed)
         self.home_page.status_update.connect(self.set_status_tmp)
-        self.account_page.skin_upload.connect(self.account_dropdown.refresh)
-        self.settings_page.settings_changed.connect(
-            self.home_page.config_changed
-        )
 
-        for page in self.page_list:
-            self.pages.addWidget(page)
+        for label, page in self.tab_list.items():
+            self.pages.addTab(page, label)
 
-        body_layout.addWidget(self.pages, 1)
+        #     tab_idx = self.tab_selector.addTab(label)
+        #     self.tab_selector.setTabData(tab_idx, page)
+        # self.tab_selector.currentChanged.connect(self._on_tab_change)
+        #
+        # self.tab_selector.setDocumentMode(True)
+        # main_area.addWidget(self.tab_selector)
 
         root_layout.addWidget(body)
 
@@ -235,13 +277,63 @@ class MainWindow(QMainWindow):
         ver_label.setProperty("secondary", True)
         self.status.addPermanentWidget(ver_label, 0)
 
-        self.sidebar.setCurrentRow(0)
-
-    def _nav_button_group(self, idx: int):
+    @Slot()
+    def _on_tab_change(self, idx: int):
         self.pages.setCurrentIndex(idx)
 
     def set_status(self, message: str):
         self.status.showMessage(message)
 
-    def set_status_tmp(self, message: str):
-        self.status.showMessage(message, 10)
+    @Slot(int)
+    def set_status_tmp(self, message: str, time: int = -1):
+        if 0 < time < 1000:
+            time = min(time * 1000, 1000)
+        if time:
+            self.status.showMessage(message, time)
+        else:
+            self.status.showMessage(message)
+
+    @Slot()
+    def _show_settings_window(self):
+        win = SettingsWindow(self)
+        win.accepted.connect(self.home_page.config_changed)
+        win.exec()
+
+    @Slot()
+    def _show_fabric_window(self):
+        FabricInstallWindow().exec()
+
+    @Slot()
+    def _open_data_folder(self):
+        QDesktopServices.openUrl(QUrl.fromLocalFile(paths.data))
+
+    def _setup_utilities_menu(self):
+        self.utils_menu.addAction(
+            get_icon(IconName.INSTALLER),
+            "Open Fabric Installer",
+            self._show_fabric_window,
+        )
+        self.utils_menu.addAction(
+            get_icon(IconName.DATA_FOLDER),
+            "Open data folder",
+            self._open_data_folder,
+        )
+
+        self.utils_menu.addAction("Change skin", SkinChange.change_skin)
+
+        if constants.DEV:
+            self.utils_menu.addAction(
+                "See accounts.bin", debug_utils.preview_accounts_file
+            )
+            self.utils_menu.addAction(
+                "Show debug info", debug_utils.system_info
+            )
+            self.utils_menu.addAction(
+                "Force account refresh", debug_utils.force_account_refresh
+            )
+            self.utils_menu.addAction(
+                "Test LROThread (3 sec)", self._test_lro_thread
+            )
+
+    def _test_lro_thread(self):
+        return run_lro(sleep, 3)

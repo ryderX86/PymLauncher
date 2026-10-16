@@ -4,7 +4,7 @@ import logging
 import platform
 import subprocess
 
-TEXT_PRIMARY = "#e0e0e0"
+TEXT_PRIMARY = "#FFFFFF"
 
 log = logging.getLogger("ico")
 
@@ -15,9 +15,8 @@ OTHER_LICENSE = WORKDIR / "acknowledgements.txt"
 INSTALLER_LICENSE = WORKDIR / "dist" / "distributed-license.txt"
 
 project_license = PROJ_LICENSE.read_text()
-other_license = OTHER_LICENSE.read_text()
 
-INSTALLER_LICENSE.write_text("\n".join([project_license, other_license]))
+INSTALLER_LICENSE.write_text(project_license)
 
 print("Successfully combined the license files.")
 
@@ -30,7 +29,10 @@ def change_color(raw_xml: str):
         log.warning("change_color(): XML element is not <svg>, returning.")
         print(xml.tag)
         return raw_xml
-    xml.attrib["fill"] = TEXT_PRIMARY
+    p = xml.find("{http://www.w3.org/2000/svg}path")
+    if p is not None:
+        p.attrib["fill"] = TEXT_PRIMARY
+
     return ElementTree.tostring(xml, encoding="unicode")
 
 
@@ -40,42 +42,34 @@ def change_color_dark(raw_xml: str):
         log.warning("change_color(): XML element is not <svg>, returning.")
         print(xml.tag)
         return raw_xml
-    xml.attrib["fill"] = "current_color"
+    p = xml.find("{http://www.w3.org/2000/svg}path")
+    if p is not None:
+        p.attrib["fill"] = "current_color"
     return ElementTree.tostring(xml, encoding="unicode")
 
 
-ICON_DIR = WORKDIR / "icon"
+ICON_DIR_LIGHT = WORKDIR / "icons" / "fallback" / "light"
+ICON_DIR_DARK = WORKDIR / "icons" / "fallback" / "dark"
 
 DEBUG = False
 
-for file in ICON_DIR.rglob("*.svg"):
+for file in ICON_DIR_DARK.rglob("*.svg"):
     if "animate" in str(file):
-        continue
-    if file.stem.endswith("-light"):
-        print("Deleting '%s' (-light...)" % file.name)
-        file.unlink()
-        continue
-    if file.stem.endswith("-dark"):
         continue
     if not file.is_file():
         continue
     old_text = file.read_text()
-    new_text = change_color(file.read_text())
-    if DEBUG:
-        print("Found '%s'" % file)
-        print("  " + old_text.replace("\n", "\n  "))
-        print("  " + new_text.replace("\n", "\n  "))
-        continue
-    dark_file = file.parent / (file.stem + "-dark" + file.suffix)
-    if not dark_file.exists():
-        dark_file.write_text(change_color_dark(old_text))
+    new_text = change_color_dark(file.read_text())
+    light_file = ICON_DIR_LIGHT / file.name
+    if not light_file.exists():
+        light_file.write_text(change_color(old_text))
     if file.read_text() == new_text:
         continue
     file.write_text(new_text)
 
-qrc_name = ICON_DIR.parent / "resources.qrc"
+qrc_name = WORKDIR / "resources.qrc"
 output_res_file = (
-    ICON_DIR.parent.parent / "launcher" / "front" / "_resources_bundled.py"
+    WORKDIR.parent / "launcher" / "front" / "_resources_bundled.py"
 )
 cmd = [
     "cmd.exe",

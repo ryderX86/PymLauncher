@@ -3,8 +3,8 @@ import logging
 import os
 import time
 
-from PySide6.QtCore import QCoreApplication, QSize
-from PySide6.QtGui import QClipboard, QIcon, QImage, QPixmap
+from PySide6.QtCore import QCoreApplication, QSize, QUrl
+from PySide6.QtGui import QClipboard, QDesktopServices, QIcon, QImage, QPixmap
 from PySide6.QtWidgets import QApplication
 
 from .error_box import error_box
@@ -123,3 +123,9 @@ def remove_empty_strings(l):
             continue
         temp.append(x)
     return type(l)(temp)
+
+
+def popup_folder(directory: str):
+    if not is_path_valid(directory):
+        raise ValueError(f"Invalid directory: {directory!r}")
+    QDesktopServices.openUrl(QUrl.fromLocalFile(directory))

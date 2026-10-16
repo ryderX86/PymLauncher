@@ -2,22 +2,21 @@
 Class/instance of a config loader/saver
 """
 
-from enum import EnumType, IntEnum
+from enum import EnumType, IntEnum, StrEnum
 from typing import Any, Callable, get_type_hints
 import json
 import logging
 import os
+import re
 
+from launcher import constants
+from launcher.functions import reswrite
 import launcher._paths
-import launcher.constants
-import launcher.functions
-
-log = logging.getLogger(__name__)
 
 # pylint: disable-next=protected-access
 paths = launcher._paths.paths
-FLAG_ENABLE_WEBVIEW = launcher.constants.FLAG_ENABLE_WEBVIEW
-reswrite = launcher.functions.reswrite
+
+log = logging.getLogger(__name__)
 
 
 class PostLaunchBehavior(IntEnum):
@@ -33,7 +32,54 @@ class JarRedownloadBehavior(IntEnum):
     REDOWNLOAD_ONCE = 2
 
 
+_PERCENT_RE = r"(\B(%\(([a-zA-Z_\-]+)\)s))+"
+_FSTRING_RE = r"(\B(\{([a-zA-Z_\-]+)\}))+"
+VALID_FORMAT_NAMES = {"timestamp", "logger", "thread", "level", "message"}
+
+
 class ConfigHolder:
+    class ConfigHolderAttrManager:
+        parent_anno: None | dict[str, type]
+
+        def __new__(cls, *args, **kwargs):
+            if cls.parent_anno is None:
+                cls.parent_anno = get_type_hints(ConfigHolder)
+            return super().__new__(cls)
+
+        def __init__(
+            self, parent: ConfigHolder, attr_name: str, expected_type: type
+        ):
+            self._parent = parent
+            self._attr = attr_name
+            assert self.parent_anno
+            if expected_type != self.parent_anno[attr_name]:
+                if issubclass(expected_type, self.parent_anno[attr_name]):
+                    pass
+                else:
+                    log.warning(
+                        "ConfigHolderAttrManager: Attribute %r has type "
+                        "%s annotated, got %s.",
+                        attr_name,
+                        expected_type.__name__,
+                        self.parent_anno[attr_name].__name__,
+                    )
+
+        def set(self, value: Any):
+            setattr(self._parent, self._attr, value)
+            return
+
+        def get(self) -> Any | None:
+            getattr(self._parent, self._attr, None)
+
+    class GameLogTemplateType(StrEnum):
+        PERCENT = "%s"
+        FORMAT = "{}"
+        UNKNOWN = "<unknown>"
+
+        @classmethod
+        def _missing_(cls, value: object):
+            return cls.UNKNOWN
+
     # meta
     active: bool = False
 
@@ -79,6 +125,12 @@ class ConfigHolder:
     web browser won't be opened, and a pop-up window with a QWebView will be
     used instead.
     """
+    lock_profile_order: bool
+    theme: str
+    icon_theme: str
+    always_show_debug_options: bool
+    disable_lzma_downloads: bool
+    logging_template: str
 
     def __init__(self):
         # config items; defaults
@@ -98,15 +150,21 @@ class ConfigHolder:
         self.enforce_json_spec = False
         self.show_snapshots = True
         self.show_old_releases = True
-        self.use_webview_for_login = FLAG_ENABLE_WEBVIEW
+        self.use_webview_for_login = constants.FLAG_ENABLE_WEBVIEW
+        self.lock_profile_order = False
+        self.theme = "default"
+        self.always_show_debug_options = False
+        self.disable_lzma_downloads = False
+        self.icon_theme = "\x00"  # see launcher.front.qt.icon_helpers:261
+        self.logging_template = constants.DEFAULT_LOG_TEMPLATE
 
     @classmethod
     def coerce_enum(cls, val: int | str, type_: EnumType):
-        return type_(val)
+        return type_(val)  # type: ignore
 
     def load(self):
         if not os.path.isfile(paths.config_file):
-            log.debug("Config file doesn't exist, creating it.")
+            log.info("Config file doesn't exist, creating it.")
             if not os.path.isdir(os.path.dirname(paths.config_file)):
                 os.makedirs(os.path.dirname(paths.config_file), exist_ok=True)
             self.save()
@@ -121,7 +179,7 @@ class ConfigHolder:
         except json.JSONDecodeError as err:
             log.error("Failed to read config file:", exc_info=err)
             raise RuntimeError(
-                f"Failed to read config file! ({type(err)!r})"
+                f"Failed to read config file! ({type(err).__name__!r})"
             ) from err
 
         _all = dir(self)
@@ -183,6 +241,36 @@ class ConfigHolder:
 
     def save(self):
         reswrite(paths.config_file, json.dumps(self.as_dict(), indent=2))
+
+    def get_mgr(self, attr_name: str, type_: Any):
+        return self.ConfigHolderAttrManager(self, attr_name, type_)
+
+    @classmethod
+    def determine_log_template_format(cls, template: str):
+        percent_matches = re.findall(_PERCENT_RE, template)
+        fstring_mathces = re.findall(_FSTRING_RE, template)
+        invalid_matches = []
+        percent_match_count = 0
+        fstring_match_count = 0
+        for _, _, name in percent_matches:
+            if name not in VALID_FORMAT_NAMES:
+                invalid_matches.append(name)
+            else:
+                percent_match_count += 1
+        for _, _, name in fstring_mathces:
+            if name not in VALID_FORMAT_NAMES:
+                invalid_matches.append(name)
+            else:
+                fstring_match_count += 1
+
+        if percent_match_count > fstring_match_count:
+            type_ = cls.GameLogTemplateType.PERCENT
+        elif percent_match_count < fstring_match_count:
+            type_ = cls.GameLogTemplateType.FORMAT
+        else:
+            type_ = cls.GameLogTemplateType.UNKNOWN
+
+        return (type_, *invalid_matches)
 
 
 config = ConfigHolder()

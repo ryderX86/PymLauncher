@@ -4,17 +4,15 @@ __all__ = [
     "launchargs",
     "set_exiting",
     "get_exit_status",
-    "setup_qapp",
-    "get_qapp",
     "lifecycle",
     "JarRedownloadBehavior",
     "PostLaunchBehavior",
 ]
 
-import sys
-
-from PySide6.QtCore import QObject, Signal
+from PySide6.QtCore import QObject, Signal, Slot
 from PySide6.QtWidgets import QApplication
+
+from .front import _resources_bundled  # pylint: disable=W0611
 
 # re-exports
 from ._launchargs import launchargs  # isort: skip
@@ -44,21 +42,35 @@ def get_exit_status():
     return _exit_status
 
 
-def setup_qapp():
-    global _qapp
-    _qapp = QApplication(sys.argv)
-    return _qapp
-
-
-def get_qapp() -> QApplication:
-    if not _qapp:
-        raise RuntimeError("get_qapp() called before setup_qapp()")
-    return _qapp
-
-
 class _Lifecycle(QObject):
     bootstrap_done = Signal()
     shutting_down = Signal()
+    config_updated = Signal()
+
+    bootstrap_already_run: bool
+    _qapp: QApplication
+
+    def __init__(self):
+        super().__init__()
+        self.bootstrap_already_run = False
+        self.bootstrap_done.connect(self._on_bootstrap)
+
+    @Slot()
+    def _on_bootstrap(self):
+        self.bootstrap_already_run = True
+
+    @property
+    def qapp(self):
+        try:
+            return self._qapp
+        except AttributeError as err:
+            raise RuntimeError(
+                "Tried to retrieve QApplication before it was set"
+            ) from err
+
+    @qapp.setter
+    def qapp(self, app: QApplication):
+        self._qapp = app
 
 
 lifecycle = _Lifecycle()

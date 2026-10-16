@@ -6,21 +6,55 @@ QComboBox drop-down menu for switching between and adding new accounts.
 
 import logging
 
-from PySide6.QtCore import Signal
-from PySide6.QtWidgets import QAbstractItemView, QComboBox
+from PySide6.QtCore import Signal, Slot
+from PySide6.QtGui import QAction, QContextMenuEvent, Qt
+from PySide6.QtWidgets import QAbstractItemView, QComboBox, QMenu, QMessageBox
 
+from launcher import config
 from launcher.back.account_manager import account_man
-from launcher.front.resources import symbol
-from launcher.functions import Suppressable, error_box
+from launcher.front.icon_helpers import IconName, get_icon
+from launcher.front.qt.binding_mixin import BindingMixin
+from launcher.front.window.skin_change import SkinChange
+from launcher.functions import Suppressable, copy_to_clipboard, error_box
 from launcher.offline import offline_man
 
 log = logging.getLogger(__name__)
 
 ADD_ACCOUNT_TEXT = "Add account"
 ADD_ACCOUNT_OFFLINE_ERR_TEXT = "Cannot add account while offline!"
+COPY_USERNAME_TEXT = "Copy Username"
+COPY_UUID_TEXT = "Copy UUID"
+COPY_GAMERTAG_TEXT = "Copy Xbox Gamertag"
+COPY_XUID_TEXT = "Copy XUID"
+CHANGE_SKIN_TEXT = "Change Skin"
+LOGOUT_TEXT = "Log out"
 
 
-class AccountSelect(QComboBox):
+def _copy_username():
+    if not account_man.active:
+        return
+    copy_to_clipboard(account_man.active.username)
+
+
+def _copy_uuid():
+    if not account_man.active:
+        return
+    copy_to_clipboard(account_man.active.uuid)
+
+
+def _copy_gamertag():
+    if not account_man.active:
+        return
+    copy_to_clipboard(account_man.active.gamertag)
+
+
+def _copy_xuid():
+    if not account_man.active:
+        return
+    copy_to_clipboard(account_man.active.xuid)
+
+
+class AccountSelect(BindingMixin, QComboBox):
     add_account_requested = Signal()
 
     def __init__(self, parent=None):
@@ -34,6 +68,98 @@ class AccountSelect(QComboBox):
         self.view().setVerticalScrollMode(
             QAbstractItemView.ScrollMode.ScrollPerPixel
         )
+        self.setContextMenuPolicy(Qt.ContextMenuPolicy.DefaultContextMenu)
+        self._copy_username = QAction(COPY_USERNAME_TEXT)
+        self._copy_username.triggered.connect(_copy_username)
+        self._copy_username.setProperty("debug", True)
+        self._copy_uuid = QAction(COPY_UUID_TEXT)
+        self._copy_uuid.triggered.connect(_copy_uuid)
+        self._copy_uuid.setProperty("debug", True)
+        self._copy_gamertag = QAction(COPY_GAMERTAG_TEXT)
+        self._copy_gamertag.triggered.connect(_copy_gamertag)
+        self._copy_gamertag.setProperty("debug", True)
+        self._copy_xuid = QAction(COPY_XUID_TEXT)
+        self._copy_xuid.triggered.connect(_copy_xuid)
+        self._copy_xuid.setProperty("debug", True)
+        self.addActions(
+            (
+                self._copy_username,
+                self._copy_uuid,
+                self._copy_gamertag,
+                self._copy_xuid,
+            )
+        )
+        self._change_skin = QAction(CHANGE_SKIN_TEXT)
+        self._change_skin.triggered.connect(self._change_skin_pressed)
+        self.addAction(self._change_skin)
+        self.addAction(
+            get_icon(IconName.ACCOUNT_REMOVE), "Log out", self._logout_pressed
+        )
+        offline_man.offline_mode_set.connect(self._change_skin.setDisabled)
+
+    def contextMenuEvent(self, e: QContextMenuEvent, /) -> None:
+        e.accept()
+        menu = QMenu()
+        for action in self.actions():
+            if (
+                action.property("debug") is True
+                and Qt.KeyboardModifier.ShiftModifier not in e.modifiers()
+                and not config.always_show_debug_options
+            ):
+                continue
+            menu.addAction(action)
+        menu.exec(self.mapToGlobal(e.pos()))
+
+    def _change_skin_pressed(self):
+        if offline_man.offline:
+            return
+        if not account_man.active or not (
+            account_man.active and account_man.active.has_profile
+        ):
+            return
+        log.debug("Showing skin change dialog")
+        dialog = SkinChange(account_man.active)
+        dialog.exec()
+        dialog.deleteLater()
+
+    def _logout_pressed(self):
+        tlw = self.topLevelWidget()
+        assert account_man.active
+        pressed_button = QMessageBox.warning(
+            tlw,
+            "Log out",
+            f"Are you sure you want to log out of {account_man.active.username}?",
+            buttons=QMessageBox.StandardButton.Yes
+            | QMessageBox.StandardButton.Cancel,
+            defaultButton=QMessageBox.StandardButton.Cancel,
+        )
+        if pressed_button == QMessageBox.StandardButton.Yes:
+            account_man.signals.logout_requested.emit()
+        else:
+            return
+
+    def bind(self):
+        account_man.signals.account_changed.connect(self._set_profile_actions)
+        self._set_profile_actions()
+
+    @Slot()
+    def _set_profile_actions(self):
+        account_has_profile = (
+            account_man.active
+            and account_man.active.token
+            and account_man.active.token.owns_game
+        ) or False
+        self._copy_username.setEnabled(account_has_profile)
+        self._copy_uuid.setEnabled(account_has_profile)
+        self._change_skin.setEnabled(account_has_profile)
+        if account_has_profile:
+            self._copy_username.setText(COPY_USERNAME_TEXT)
+            self._copy_uuid.setText(COPY_UUID_TEXT)
+            self._change_skin.setText(CHANGE_SKIN_TEXT)
+        else:
+            self._copy_username.setText("No username")
+            self._copy_uuid.setText("No UUID")
+            self._change_skin.setText("Cannot change skin")
 
     def refresh(self):
         """Reload the account list"""
@@ -55,7 +181,7 @@ class AccountSelect(QComboBox):
                     self.setCurrentIndex(i)
 
             self.insertSeparator(self.count())
-            self.addItem(symbol("profile-add"), ADD_ACCOUNT_TEXT)
+            self.addItem(get_icon(IconName.ACCOUNT_ADD), ADD_ACCOUNT_TEXT)
 
     def revert_selection(self):
         """Revert to previous account"""

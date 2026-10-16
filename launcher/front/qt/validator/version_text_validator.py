@@ -2,7 +2,6 @@ from typing import assert_never
 
 from PySide6.QtGui import QValidator
 
-from launcher import config
 from launcher.back import version_manager
 from launcher.constants import (
     LATEST_SNAPSHOT_TEXT,
@@ -12,15 +11,15 @@ from launcher.constants import (
     LATEST_VERSIONS_SET,
 )
 
-from .store_results import QValidatorWithStoredResults, store_results
 
+class VersionTextValidator(QValidator):
+    _last_good_val: str
 
-class VersionTextValidator(QValidatorWithStoredResults):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.ver_list = []
         self.ver_ids = []
-        self._last_good_val: str | None = None
+        self._last_good_val = ""
 
     def load(self):
         self.ver_list = version_manager.get_version_list()
@@ -32,6 +31,8 @@ class VersionTextValidator(QValidatorWithStoredResults):
             version_manager.get_latest_snapshot()
         )
 
+        self._last_good_val = self._latest_release_text
+
     @property
     def latest_release_ui(self):
         return self._latest_release_text
@@ -42,27 +43,17 @@ class VersionTextValidator(QValidatorWithStoredResults):
 
     def iter_versions_combobox(self):
         yield (self._latest_release_text, LATEST_VERSION_TEXT)
-        if config.show_snapshots:
-            yield (self._latest_snapshot_text, LATEST_SNAPSHOT_TEXT)
         for ver in self.ver_list:
-            if config.show_snapshots and config.show_old_releases:
-                yield (ver.id, ver.id)
-            elif ver.type == "release":
-                yield (ver.id, ver.id)
-            elif ver.type == "snapshot" and config.show_snapshots:
-                yield (ver.id, ver.id)
-            elif (
-                ver.type in {"old_alpha", "old_beta"}
-                and config.show_old_releases
-            ):
-                yield (ver.id, ver.id)
+            yield (ver.id, ver.id)
 
-    @store_results
+    def reset_last_val(self, val: str):
+        self._last_good_val = self._do_fixup(val)
+
     def validate(self, a0: str, a1: int) -> tuple[QValidator.State, str, int]:
         if not self.ver_ids:
             return self.State.Intermediate, a0, a1
         if not a0:
-            return self.State.Intermediate, self.ver_ids[0], 0
+            return self.State.Intermediate, a0, -1
         if a0 in {self._latest_release_text, self._latest_snapshot_text}:
             self._last_good_val = a0
             return self.State.Acceptable, a0, a1
@@ -83,10 +74,18 @@ class VersionTextValidator(QValidatorWithStoredResults):
                 return self.State.Intermediate, a0, a1
         return self.State.Invalid, LATEST_VERSION_TEXT, 0
 
-    def fixup(self, arg__1: str):
-        if arg__1 not in self.ver_ids or LATEST_VERSIONS_SET:
+    def _do_fixup(self, arg__1: str):
+        if not arg__1:
+            return self._last_good_val
+        if arg__1 in LATEST_VERSIONS_SET:
+            return arg__1
+        if arg__1 not in self.ver_ids:
             for v in self.ver_ids:
                 if v.startswith(arg__1):
                     return v
-            return LATEST_VERSION_TEXT
+            return self._last_good_val
         return arg__1
+
+    def fixup(self, arg__1: str):
+        self._last_good_val = self._do_fixup(arg__1)
+        return self._last_good_val

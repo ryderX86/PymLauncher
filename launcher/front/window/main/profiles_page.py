@@ -11,7 +11,7 @@ TODOs:
 - Are colored save/delete buttons really necessary here?
 """
 
-from pathlib import Path
+import os
 import logging
 
 from PySide6.QtCore import QSize, Qt, Signal
@@ -21,9 +21,7 @@ from PySide6.QtGui import (
 )
 from PySide6.QtWidgets import (
     QFileDialog,
-    QFrame,
     QHBoxLayout,
-    QVBoxLayout,
     QWidget,
 )
 
@@ -32,9 +30,8 @@ from launcher.back import profile_manager
 from launcher.back.profile_manager import (
     LaunchProfile,
 )
-from launcher.front import resources, styles
+from launcher.front import resources
 from launcher.front.qt.widgets.profile_editor import ProfileEditor
-from launcher.front.qt.widgets.profile_list import ProfileList
 from launcher.front.window import (
     ButtonConfig,
     WarningDialog,
@@ -89,27 +86,6 @@ class ProfilesPage(QWidget):
         layout.setSpacing(0)
 
         #
-        # Left-side layout
-        #
-        left = QWidget()
-        left.setFixedWidth(250)
-        left_layout = QVBoxLayout(left)
-        # TODO: find out why 19 specifically, what's adding 1 px of margin??
-        left_layout.setContentsMargins(19, 19, 19, 19)
-        left.setBackgroundRole(styles.CRole.Mid)
-        left.setAutoFillBackground(True)
-
-        self._profile_list = ProfileList()
-        left_layout.addWidget(self._profile_list)
-        layout.addWidget(left)
-
-        # separator
-        sep = QFrame()
-        sep.setFrameShape(QFrame.Shape.VLine)
-        sep.setFixedWidth(1)
-        layout.addWidget(sep)
-
-        #
         # Right-side/editor
         #
         self.editor = ProfileEditor(self)
@@ -147,8 +123,7 @@ class ProfilesPage(QWidget):
         )
         if not str_path:
             return
-        path = Path(str_path)
-        if not path.parent.exists():
+        if not os.path.isdir(os.path.split(str_path)[0]):
             return
         log.debug("Saving profile icon to '%s'", str_path)
         ico = resources.profile_icon(prof.icon)

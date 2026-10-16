@@ -1,4 +1,4 @@
-from .asset_index import AssetIndex
+from .asset_index import AssetIndex, GameAsset
 from .asset_index_stub import AssetIndexStub
 from .game_version import GameVersion
 from .game_version_stub import GameVersionStub, GameVersionType

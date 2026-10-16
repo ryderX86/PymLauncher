@@ -25,6 +25,7 @@ class _LoggingFormatter(logging.Formatter):
     if constants.DEV:
 
         def format(self, record: logging.LogRecord):
+            record.name = record.name.split(".")[-1]
             line = super().format(record)
             match record.levelno:
                 case logging.DEBUG:
@@ -55,7 +56,7 @@ def setup():
     if use_debug_logging:
         logging.basicConfig(level=logging.DEBUG)
         FORMATTER = _LoggingFormatter(
-            "{thread:5} {asctime:12} {levelname:>7}  {name}[{lineno}]: {message}",
+            "{thread:5} {asctime:12} {levelname:>7} {name} {filename}[{lineno}]: {message}",
             style="{",
         )
     else:
@@ -84,19 +85,20 @@ def setup():
             logging.critical("Uncaught %r:", type_.__name__, exc_info=err)
             return sys.__excepthook__(type_, err, traceback)
 
-        sys.excepthook = excepthook
+        sys.excepthook = excepthook  # type: ignore
 
     # set urllib3 to critical logs only so it doesn't spam us
     logging.getLogger("urllib3").setLevel(logging.CRITICAL)
 
     # Qt logging:
     qt_logger = logging.getLogger("Qt")
-    qt_logger.setLevel(logging.DEBUG if use_debug_logging else logging.INFO)
+    qt_logger.setLevel(logging.DEBUG)
 
     @qInstallMessageHandler
     def log_qt_msg(type_: QtMsgType, context: QMessageLogContext, msg: str):
         match type_:
             case QtMsgType.QtDebugMsg:
+                print(msg)
                 qt_logger.debug(msg)
             case QtMsgType.QtWarningMsg:
                 qt_logger.warning(msg)

@@ -163,7 +163,7 @@ STEVE_SKIN_URL = (
     "http://textures.minecraft.net/texture/31f477eb1a7be"
     "ee631c2ca64d06f8f68fa93a3386d04452ab27f43acdf1b60cb"
 )
-SKIN_URL_BASE = "http://textures.minecraft.net/texture/"
+SKIN_URL_BASE = "http://textures.minecraft.net/texture"
 
 # timing
 DONE_VISUAL_DELAY = 1500  # milliseconds
@@ -196,7 +196,7 @@ FLAG_ENABLE_EXPORTING = DEV  # not ready for prod
 FLAG_ENABLE_JUMP_LISTS: bool = (
     OS == "windows" and float(OS_VER[:5].rstrip(".")) >= 6.1
 )
-FLAG_ENABLE_WEBVIEW: bool = OS in {"windows", "osx"}
+FLAG_ENABLE_WEBVIEW: bool = sys.platform in {"win32", "darwin"}
 
 # other
 
@@ -207,14 +207,14 @@ DEFAULT_MEMORY_MAX = "4G"
 
 JVM_TEMP_DIR: str
 """The temporary directory used by the JVM"""
-match PLATFORM:
+match sys.platform:
     case "win32" | "cygwin":
         JVM_TEMP_DIR = os.getenv("TMP", os.getenv("TEMP", ""))
     case _:
         JVM_TEMP_DIR = os.path.normpath("/tmp")
 
-match platform.system():
-    case "Windows":
+match sys.platform:
+    case "win32":
         FP_REGEX = (
             r"(([A-Za-z]:\\)|(%[a-zA-Z0-9]+%\\?))(((?!(\.\.)|(CON)|(PRN)|(AUX)"
             r"|(NUL)|(COM[0-9¹²³])|(LPT[0-9¹²³])|([^\\]+\.[\\\.])|([<>:\"/?*\x"
@@ -222,3 +222,5 @@ match platform.system():
         )
     case _:
         FP_REGEX = r"((~/|/)((?![^/]+\.)[^\x00\n\r\/]+/?)+)|~"
+
+DEFAULT_LOG_TEMPLATE = "[{timestamp}] [{thread}/{level}]: {message}"

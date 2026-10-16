@@ -12,6 +12,8 @@ from PySide6.QtGui import QIcon, QImage, QPainter, QPixmap
 
 from launcher import constants, paths
 from launcher.auth.minecraft_token import MinecraftToken
+from launcher.constants import SKIN_URL_BASE
+from launcher.datatypes.default_skins import DefaultSkin, DefaultSkinSHA
 from launcher.exceptions.network import (
     HTTPStatusCodeError,
     WrappedUL3Exception,
@@ -20,13 +22,18 @@ from launcher.front import resources
 from launcher.networking import make_request
 from launcher.offline import offline_man
 
-from .exceptions import BaseProfileError, NoConnectionError, UnauthorizedError
+from .exceptions import (
+    BaseProfileError,
+    NoConnectionError,
+    ProfileNotFoundError,
+    UnauthorizedError,
+)
 
 log = logging.getLogger(__name__)
 
 KNOWN_DICT_KEYS = ["id", "name", "skins", "capes", "last_updated"]
 
-_STEVE_UUID = str(uuid.UUID(int=0))
+TRIAL_UUID = "00000000-0000-0000-0000-000000000000"
 
 _cached_skins: dict[str, QIcon] = {}
 _cached_capes: dict[str, QPixmap] = {}
@@ -54,7 +61,7 @@ class SkinModel(StrEnum):
     """Alias for `SLIM`"""
 
 
-@lru_cache(maxsize=48)
+@lru_cache(maxsize=32)
 def check_redownload_skin(
     p: str, url: str, sha: str | None = None, name: str | None = None
 ):
@@ -78,9 +85,29 @@ def check_redownload_skin(
     return
 
 
+@lru_cache(maxsize=32)
+def check_redownload_cape(
+    p: str, url: str, sha: str | None = None, name: str | None = None
+):
+    if not sha:
+        sha = url.split("/")[-1]
+    name = name or "".join([sha[:10], "..."])
+    if os.path.isfile(p):
+        if os.lstat(p).st_atime >= (time.time() - (1000 * 60 * 60 * 24)):
+            return
+        else:
+            log.debug("Old cape texture at %r; re-downloading it.", p)
+    if name:
+        log.debug("Downloading player texture for %r", name)
+    resp = make_request("get", url)
+    with open(p, "wb") as b:
+        b.write(resp.data)
+    return
+
+
 class MinecraftProfile:
     default_skin_inf = {
-        "id": _STEVE_UUID,
+        "id": TRIAL_UUID,
         "state": "ACTIVE",
         "url": constants.STEVE_SKIN_URL,
         "textureKey": constants.STEVE_SKIN_URL.rsplit("/", maxsplit=1)[-1],
@@ -161,10 +188,9 @@ class MinecraftProfile:
             current: dict | None = None
             for skin in self.skins:
                 state = skin["state"]
-                if state != TextureState.ACTIVE:
-                    continue
-                current = skin
-                break
+                if state == TextureState.ACTIVE:
+                    current = skin
+                    break
             if current:
                 self.current_skin = current
             del current
@@ -173,10 +199,9 @@ class MinecraftProfile:
         if self.capes:
             current: dict | None = None
             for cape in self.capes:
-                if cape["state"] != TextureState.ACTIVE:
-                    continue
-                current = cape
-                break
+                if cape["state"] == TextureState.ACTIVE:
+                    current = cape
+                    break
             if current:
                 self.current_cape = current
             del current
@@ -184,7 +209,7 @@ class MinecraftProfile:
     @staticmethod
     def steve_skin_bytes():
         skin_path = os.path.join(
-            os.path.join(paths.textures_cache, "skins"), f"{_STEVE_UUID}.png"
+            os.path.join(paths.textures_cache, "skins"), f"{TRIAL_UUID}.png"
         )
         check_redownload_skin(skin_path, constants.STEVE_SKIN_URL)
         with open(skin_path, "rb") as file:
@@ -194,23 +219,19 @@ class MinecraftProfile:
     @staticmethod
     def steve_skin_path():
         skin_path = os.path.join(
-            os.path.join(paths.textures_cache, "skins"), f"{_STEVE_UUID}.png"
+            os.path.join(paths.textures_cache, "skins"), f"{TRIAL_UUID}.png"
         )
         check_redownload_skin(skin_path, constants.STEVE_SKIN_URL)
         return skin_path
 
-    @staticmethod
-    def steve_skin_icon():
-        uid = _STEVE_UUID + "_thumb"
-        if uid in _cached_skins:
-            return _cached_skins[uid]
-        img_bytes = MinecraftProfile.steve_skin_bytes()
-        img = QImage()
-        img.loadFromData(img_bytes)
-        img.setText("id", uid)
-        ico = resources.icon_from_qimg(img.copy(8, 8, 8, 8), True)
-        _cached_skins[uid] = ico
-        return _cached_skins[uid]
+    @classmethod
+    def default_skin_icon(cls):
+        if "UNKNOWN" in _cached_skins:
+            return _cached_skins["UNKNOWN"]
+        img = QPixmap(":/skin-placeholders/unknown.png").toImage()
+        ico = resources.icon_from_qimg(img, True)
+        _cached_skins["UNKNOWN"] = ico
+        return _cached_skins["UNKNOWN"]
 
     @staticmethod
     def _get_profile_json(mc_token: MinecraftToken):
@@ -263,7 +284,17 @@ class MinecraftProfile:
 
     @classmethod
     def from_token(cls, mc_token: MinecraftToken):
-        return cls(cls._get_profile_json(mc_token))
+        try:
+            return cls(cls._get_profile_json(mc_token))
+        except ProfileNotFoundError as err:
+            log.warning(
+                "No account profile, setting to demo profile", exc_info=err
+            )
+            return cls(
+                {"id": TRIAL_UUID, "name": "Demo Player"},
+                mc_token,
+                demo_profile=True,
+            )
 
     @property
     def should_refresh(self):
@@ -292,6 +323,7 @@ class MinecraftProfile:
             self._token and self._token.owns_game
         ):
             log.debug("Skipping profile refresh on demo account")
+            self.last_updated = time.time()
             return self
         elif self._is_demo_profile:
             log.warning(
@@ -361,10 +393,16 @@ class MinecraftProfile:
         return self.current_skin["variant"]
 
     def current_skin_icon(self):
+        if self._is_demo_profile or not self.current_skin:
+            return self.get_default_skin_icon()
         uid = self.current_skin["textureKey"] + "_thumb"
         if uid in _cached_skins:
             return _cached_skins[uid]
-        img_bytes = self.current_skin_bytes()
+        try:
+            img_bytes = self.current_skin_bytes()
+        except Exception as err:
+            log.error("Failed to fetch current skin:", exc_info=err)
+            return self.get_default_skin_icon()
         img = QImage()
         img.loadFromData(img_bytes)
 
@@ -410,7 +448,7 @@ class MinecraftProfile:
             p = os.path.join(
                 os.path.join(paths.textures_cache, "capes"), f"{sha}.png"
             )
-            check_redownload_skin(p, url, sha, name=cape["alias"])
+            check_redownload_cape(p, url, sha, name=cape["alias"])
             new_cape_obj = {**cape, "path": p}
             capes_out.append(new_cape_obj)
         return capes_out
@@ -442,6 +480,66 @@ class MinecraftProfile:
             p = os.path.join(
                 os.path.join(paths.textures_cache, "capes"), f"{sha}.png"
             )
-            check_redownload_skin(p, url, sha)
+            check_redownload_cape(p, url, sha)
             return p
         return None
+
+    def get_default_skin_path(self):
+        skin = self.get_default_skin_name()
+        sha256 = DefaultSkinSHA[skin.name]
+        path = os.path.join(paths.textures_cache, "skins", f"{sha256}.png")
+        check_redownload_skin(path, f"{SKIN_URL_BASE}/{sha256}", skin)
+        return path
+
+    def get_default_skin_bytes(self):
+        with open(self.get_default_skin_path(), "rb") as file:
+            return file.read()
+
+    def get_default_skin_name(self, legacy: bool = False) -> DefaultSkin:
+        if self.uuid == TRIAL_UUID:
+            return DefaultSkin.STEVE
+
+        uid = uuid.UUID(self.uuid)
+
+        most = (uid.int >> 64) & 0xFFFFFFFFFFFFFFFF
+        least = uid.int & 0xFFFFFFFFFFFFFFFF
+
+        hilo = most ^ least
+
+        upper_32 = (hilo >> 32) & 0xFFFFFFFF
+        lower_32 = hilo & 0xFFFFFFFF
+        hash_code = upper_32 ^ lower_32
+
+        if hash_code & 0x80000000:
+            hash_code -= 0x100000000
+
+        if legacy:
+            return (
+                DefaultSkin.ALEX if (hash_code & 1) == 1 else DefaultSkin.STEVE
+            )
+        index = hash_code % 9
+        skins = (
+            DefaultSkin.STEVE,
+            DefaultSkin.SUNNY,
+            DefaultSkin.ALEX,
+            DefaultSkin.NOOR,
+            DefaultSkin.ARI,
+            DefaultSkin.ZURI,
+            DefaultSkin.MAKENA,
+            DefaultSkin.KAI,
+            DefaultSkin.EFE,
+        )
+        return skins[index]
+
+    def get_default_skin_icon(self, legacy: bool = False):
+        name = self.get_default_skin_name(legacy=legacy)
+
+        if name.value in _cached_skins:
+            return _cached_skins[name.value]
+
+        img = QPixmap(
+            f":/skin-placeholders/default_{name.value}.png"
+        ).toImage()
+        ico = resources.icon_from_qimg(img, True)
+        _cached_skins[name.value] = ico
+        return _cached_skins[name.value]

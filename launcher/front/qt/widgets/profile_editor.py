@@ -1,27 +1,25 @@
-# pylint:disable=unused-import,unused-variable
-from collections.abc import Callable
-from dataclasses import dataclass, field
-from types import MethodType
-from typing import Any, ClassVar, Final, Iterable, Literal
+from typing import Iterable
 import logging
 import os
-import time
 
 from PySide6.QtCore import (
     QCoreApplication,
-    QRegularExpression,
+    QDeadlineTimer,
     QSignalBlocker,
-    QSize,
+    QSortFilterProxyModel,
     Qt,
-    QTimer,
-    Signal,
-    SignalInstance,
     Slot,
 )
-from PySide6.QtGui import QRegularExpressionValidator, QShowEvent, QValidator
+from PySide6.QtGui import (
+    QIcon,
+    QRegularExpressionValidator,
+    QStandardItem,
+    QStandardItemModel,
+)
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
+    QCompleter,
     QFileDialog,
     QFormLayout,
     QHBoxLayout,
@@ -33,93 +31,29 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from launcher import constants, paths
+from launcher import config, constants, paths
 from launcher.back import profile_manager, version_manager
-from launcher.datatypes import LaunchProfile
-from launcher.front import resources
+from launcher.datatypes import GameVersionType, LaunchProfile
+from launcher.front.icon_helpers import IconName, get_icon
 from launcher.front.qt import BindingMixin
 from launcher.front.qt.validator import (
     ProfileRAMValidator,
     ProfileResolutionTextValidator,
     VersionTextValidator,
 )
-from launcher.front.qt.widgets import Header2, IconPickerButton, TooltipHint
+from launcher.front.qt.widget_mapping_adapter import WidgetMappingAdapter
+from launcher.front.qt.widgets import Header2
 from launcher.functions import Suppressable, is_path_valid
+from launcher.offline import offline_man
 
 from .config_checkbox import ConfigCheckbox
+from .icon_picker import IconPicker
 
 log = logging.getLogger(__name__)
 
 SPACING = 8
-
-
-def _def_normalize(a: Any):
-    return a
-
-
-def _def_valid():
-    return True
-
-
-@dataclass(slots=True, kw_only=True, eq=False)
-class WidgetMappingAdapter:
-    # dataclass values
-    read: Callable[[], str | int | bool]
-    """Function that we use to read what's inside the widget"""
-    write: (
-        Callable[[str | None], None]
-        | Callable[[int | None], None]
-        | Callable[[bool | None], None]
-        | Callable[[str], None]
-        | Callable[[int], None]
-        | Callable[[bool], None]
-    )
-    """Function we call to write to the widget's value"""
-    normalize: Callable[[Any], Any] = field(default=_def_normalize)
-    """Normalize the value for saving/comparison"""
-    attr_name: str
-    """The profile's attribute name"""
-    signal: SignalInstance
-    """The "value edited" signal"""
-    widget: QWidget | None = field(default=None)
-
-    # private/instance attributes
-    _startup_val: str | int | bool = field(init=False, hash=True, compare=True)
-
-    def __post_init__(self):
-        self._startup_val = self.normalize(self.read())
-
-    def reset_known(self, prof: LaunchProfile):
-        self._startup_val = self.normalize(getattr(prof, self.attr_name))
-
-    def reset(self):
-        self.write(self._startup_val)  # type: ignore
-
-    def changed(self) -> bool:
-        return self.normalize(self.read()) != self._startup_val
-
-    @property
-    def data_valid(self) -> bool:
-        match self.widget:
-            case QLineEdit():
-                return self.widget.hasAcceptableInput()
-            case QComboBox() if self.widget.lineEdit():
-                return (
-                    self.widget.lineEdit().hasAcceptableInput()  # type: ignore
-                )
-            case _:
-                return True
-
-    def set_invalid_display(self, invalid: bool):
-        if not self.widget:
-            log.warning(
-                "%s: No widget to set invalid property for",
-                type(self).__name__,
-            )
-            return
-        self.widget.setProperty("invalid", invalid)
-        self.widget.style().unpolish(self.widget)
-        self.widget.style().polish(self.widget)
+VERSION_ID_ROLE = 0x100
+VERSION_TYPE_ROLE = 0x101
 
 
 def _get_browse_window(
@@ -179,7 +113,7 @@ def get_browse_row(
     row.addWidget(w)
     row.setSpacing(SPACING)
 
-    browse_button = QPushButton(resources.symbol("folder-symlink"), "Browse")
+    browse_button = QPushButton(get_icon(IconName.OPEN_FOLDER), "Browse")
     browse_button.clicked.connect(
         lambda: _get_browse_window(
             win_title, open_default_dir, w, exts_str, gets_file
@@ -188,6 +122,23 @@ def get_browse_row(
     browse_button.setProperty("large", True)
     row.addWidget(browse_button)
     return row
+
+
+class VersionProxyModel(BindingMixin, QSortFilterProxyModel):
+    def filterAcceptsRow(self, row: int, parent) -> bool:
+        if config.show_snapshots and config.show_old_releases:
+            return True
+        index = self.sourceModel().index(row, 0, parent)
+        version_type = self.sourceModel().data(index, VERSION_TYPE_ROLE)
+        match version_type, config.show_snapshots, config.show_old_releases:
+            case GameVersionType.RELEASE, _, _:
+                return True
+            case GameVersionType.SNAPSHOT, False, _:
+                return False
+            case GameVersionType.ALPHA | GameVersionType.BETA, _, False:
+                return False
+            case _, _, _:
+                return True
 
 
 class ProfileEditor(BindingMixin, QWidget):
@@ -216,6 +167,7 @@ class ProfileEditor(BindingMixin, QWidget):
         self.path_validator = QRegularExpressionValidator(
             constants.FP_REGEX, self
         )
+        self._refresh_timer = QDeadlineTimer(0)
 
         # required to be last
         self._build_ui()
@@ -224,7 +176,7 @@ class ProfileEditor(BindingMixin, QWidget):
         """
         Load necessary info/current profile after bootstrap is complete.
 
-        Final-stage UI loading function for all main widgets, right before it's
+        Final-stage UI loading function for all main widgets, right before its
         showtime.
         """
 
@@ -243,16 +195,6 @@ class ProfileEditor(BindingMixin, QWidget):
                 self.resolution_validator.set_resolutions(self.screen())
             )
             self.resolution_selector.setCurrentText("Automatic")
-            self._latest_release_text = (
-                constants.LATEST_VERSION_TEXT_UI.format(
-                    version_manager.get_latest_release()
-                )
-            )
-            self._latest_snapshot_text = (
-                constants.LATEST_SNAPSHOT_TEXT_UI.format(
-                    version_manager.get_latest_snapshot()
-                )
-            )
             self.game_dir_input.setPlaceholderText(paths.game)
             self._version_validator.load()
             self.refresh_version_combo()
@@ -268,14 +210,13 @@ class ProfileEditor(BindingMixin, QWidget):
         root.addWidget(heading, 0)
 
         # icon picker
-        self.icon_picker = IconPickerButton()
+        self.icon_picker = IconPicker()
         self._widget_checks.add(
             WidgetMappingAdapter(
-                read=self.icon_picker.text,
-                write=self.icon_picker.setText,
+                read=self.icon_picker.for_profile_saving,
+                write=self.icon_picker.set_icon,
                 attr_name="icon",
-                signal=self.icon_picker.icon_changed,
-                normalize=lambda d: d or None,
+                signal=self.icon_picker.currentIndexChanged,
             )
         )
         root.addWidget(
@@ -305,6 +246,7 @@ class ProfileEditor(BindingMixin, QWidget):
         self.form_layout.addRow("Name:", self.name_input_area)
 
         # version selector
+        self.version_list = QStandardItemModel()
         version_select_row = QHBoxLayout()
         version_select_row.setSpacing(SPACING)
         self.version_combo_box = QComboBox(editable=True)
@@ -312,38 +254,48 @@ class ProfileEditor(BindingMixin, QWidget):
         self.version_combo_box.setValidator(self._version_validator)
         self._widget_checks.add(
             WidgetMappingAdapter(
-                read=self.version_combo_box.currentData,
+                read=self.get_selected_version_id,
                 write=self.set_version_text,
-                signal=self.version_combo_box.currentIndexChanged,
+                signal=self.version_combo_box.currentTextChanged,
                 attr_name="version_id",
+                normalize=self.normalize_version_id,
             )
         )
         version_select_row.addWidget(self.version_combo_box, 1)
         self.version_refresh = QPushButton()
         self.version_refresh.setProperty("large", True)
-        self.version_refresh.setIcon(resources.symbol("refresh"))
+        self.version_refresh.setIcon(get_icon(IconName.REFRESH))
         self.version_refresh.clicked.connect(self._versions_refresh_button)
         self.version_refresh.setMaximumWidth(32)
         version_select_row.addWidget(self.version_refresh, 0)
         self.form_layout.addRow("Version:", version_select_row)
+        self.proxy = VersionProxyModel()
+        self.proxy.setSourceModel(self.version_list)
+        self.version_combo_box.setModel(self.proxy)
+        completer = QCompleter(self.version_list, self.version_combo_box)
+        self.version_combo_box.setCompleter(completer)
 
         # show version-types
         show_versions_row = QHBoxLayout()
         show_versions_row.setSpacing(SPACING)
         self.show_snapshots_toggle = ConfigCheckbox(
-            "Show snapshots", "show_snapshots"
+            "Show snapshots", "show_snapshots", auto_set_config_attr=True
         )
-        self.show_snapshots_toggle.clicked.connect(self.refresh_version_combo)
+        self.show_snapshots_toggle.clicked.connect(
+            self.proxy.beginFilterChange
+        )
+        self.show_snapshots_toggle.clicked.connect(self.proxy.endFilterChange)
         show_versions_row.addWidget(self.show_snapshots_toggle)
         self.show_old_toggle = ConfigCheckbox(
-            "Show old releases", "show_old_releases"
+            "Show old releases", "show_old_releases", auto_set_config_attr=True
         )
-        self.show_old_toggle.clicked.connect(self.refresh_version_combo)
+        self.show_old_toggle.clicked.connect(self.proxy.beginFilterChange)
+        self.show_old_toggle.clicked.connect(self.proxy.endFilterChange)
         show_versions_row.addWidget(self.show_old_toggle)
         self.form_layout.addRow("", show_versions_row)
 
         # game dir
-        self.game_dir_input = QLineEdit()
+        self.game_dir_input = QLineEdit(clearButtonEnabled=True)
         self.game_dir_input.setValidator(self.path_validator)
         self._widget_checks.add(
             WidgetMappingAdapter(
@@ -365,7 +317,8 @@ class ProfileEditor(BindingMixin, QWidget):
 
         # jvm binary
         self.jvm_binary_input = QLineEdit(
-            placeholderText="Use default Java installation"
+            placeholderText="Use default Java installation",
+            clearButtonEnabled=True,
         )
         self.jvm_binary_input.setValidator(self.path_validator)
         self._widget_checks.add(
@@ -484,7 +437,8 @@ class ProfileEditor(BindingMixin, QWidget):
         self.mods_folder_row.addWidget(self.use_mods_folder_input)
 
         self.mods_folder_input = QLineEdit(
-            placeholderText=os.path.join(paths.game, "mods")
+            placeholderText=os.path.join(paths.game, "mods"),
+            clearButtonEnabled=True,
         )
         self.mods_folder_input.setDisabled(True)
         self.mods_folder_input.setValidator(self.path_validator)
@@ -531,20 +485,38 @@ class ProfileEditor(BindingMixin, QWidget):
 
         return
 
-    def set_version_text(self, actual_data: str):
-        idx = self.version_combo_box.findData(
-            actual_data, flags=Qt.MatchFlag.MatchExactly
+    def get_selected_version_id(self):
+        text = self.version_combo_box.currentText()
+        self._version_validator.validate(
+            text, self.version_combo_box.currentIndex()
         )
-        if idx >= 0:
-            self.version_combo_box.setCurrentIndex(idx)
-        elif actual_data == "latest-snapshot":
-            self.version_combo_box.setCurrentText(
-                self._version_validator.latest_snapshot_ui
-            )
-        else:
-            self.version_combo_box.setCurrentText(actual_data)
+        fixed = self._version_validator.fixup(text)
+        return fixed
 
-    def _load_profile(self, *args):
+    def normalize_version_id(self, text: str | None = None):
+        if not text:
+            text = self.version_combo_box.currentText()
+        new = self._version_validator.fixup(text)
+        return new
+
+    def set_version_text(self, actual_data: str):
+        items = self.version_list.findItems(
+            actual_data, Qt.MatchFlag.MatchFixedString
+        )
+        if not items:
+            items = self.version_list.findItems(
+                self._version_validator.fixup(actual_data),
+                Qt.MatchFlag.MatchFixedString,
+            )
+            if not items:
+                self.version_combo_box.setCurrentIndex(0)
+                return
+        item = items[0]
+        idx = self.proxy.mapFromSource(item.index()).row()
+        self.version_combo_box.setCurrentIndex(idx)
+        self._version_validator.reset_last_val(item.text())
+
+    def _load_profile(self, *_):
         _ = QSignalBlocker(self)  # block signals until GC'd
         with self.data_changed.suppressed():
             self._current_profile = profile_manager.get_current_profile()
@@ -654,37 +626,54 @@ class ProfileEditor(BindingMixin, QWidget):
     def _get_jvm_args(self, new_text: str = ""): ...
 
     @Slot()
-    def __vrb_timeout(self):
-        self._force_refresh_versions_list = False
-
-    @Slot()
     def _versions_refresh_button(self):
+        if offline_man.offline:
+            # ignore the force refresh if we're offline, there's zero point.
+            return
         log.debug("User requested versions list refresh")
-        if self._force_refresh_versions_list:
+        if not self._refresh_timer.hasExpired():
             log.debug("Force downloading new versions manifest")
             version_manager.fetch_version_manifest(True)
             version_manager.get_version_list(True)
         self.refresh_version_combo()
         self._force_refresh_versions_list = True
-        QTimer.singleShot(200, self.__vrb_timeout)
+        self._refresh_timer = QDeadlineTimer(200)
 
     @Slot(Qt.CheckState)
     @Slot()
     def refresh_version_combo(self, *_):
-        current = self.version_combo_box.currentText()
+        current = self.version_combo_box.currentData()
         found_text = False
         with self.data_changed.suppressed():
+            self._version_validator.load()
             self.version_combo_box.clear()
-            for text, data in self._version_validator.iter_versions_combobox():
-                self.version_combo_box.addItem(text, data)
-                if text == current:
-                    self.version_combo_box.setCurrentIndex(
-                        self.version_combo_box.findText(
-                            current, Qt.MatchFlag.MatchExactly
-                        )
+            for idx, stub in enumerate(
+                [
+                    version_manager.get_latest_release_stub(),
+                    version_manager.get_latest_snapshot_stub(),
+                    *version_manager.get_version_list(),
+                ]
+            ):
+                if idx == 0:
+                    item = QStandardItem(
+                        self._version_validator.latest_release_ui
                     )
+                elif idx == 1:
+                    item = QStandardItem(
+                        self._version_validator.latest_snapshot_ui
+                    )
+                else:
+                    item = QStandardItem(stub.id)
+                item.setData(stub.id, VERSION_ID_ROLE)
+                item.setData(stub.type, VERSION_TYPE_ROLE)
+                self.version_list.appendRow(item)
+                if stub.id == current:
                     found_text = True
-            if not found_text:
+                    self.version_combo_box.setCurrentIndex(
+                        self.proxy.mapFromSource(item.index()).row()
+                    )
+            if not found_text and self._bound:
+                log.warning("Couldn't find current version text")
                 self.version_combo_box.setCurrentIndex(-1)
                 self.version_combo_box.setCurrentText(current)
 

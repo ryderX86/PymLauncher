@@ -2,10 +2,11 @@
 Functions for handling offline mode stuff
 """
 
-__all__ = ["offline_man"]
+__all__ = ["offline_man", "connectivity_poller"]
 from collections.abc import Callable
 import logging
 
+from PySide6.QtCore import QObject, Signal
 from urllib3.exceptions import NameResolutionError, NewConnectionError
 import requests
 
@@ -14,11 +15,14 @@ from launcher.exceptions.network import ConnectError
 log = logging.getLogger(__name__)
 
 
-class _OfflineModeManager:
+class _OfflineModeManager(QObject):
     _offline: bool
     _offline_hooks: list[Callable[[bool], None]]
 
+    offline_mode_set = Signal(bool)
+
     def __init__(self):
+        super().__init__()
         self._offline = False
         self._offline_hooks = []
 
@@ -44,23 +48,11 @@ class _OfflineModeManager:
         if is_offline:
             _start_status_checker_thread(self._back_online)
 
-    def add_hook(self, func: Callable[[bool], None], idx: int | None = None):
-        if func in self._offline_hooks:
-            raise ValueError(
-                f"Function {func.__name__!r}() already registered as a hook"
-            )
-        if idx is None:
-            self._offline_hooks.append(func)
-        else:
-            self._offline_hooks.insert(idx, func)
+    def add_hook(self, func: Callable[[bool], None]):
+        self.offline_mode_set.connect(func)
 
     def remove_hook(self, func: Callable[[bool], None]):
-        if func not in self._offline_hooks:
-            raise AttributeError(
-                f"Function {func.__name__!r}() not yet registered as a hook"
-            )
-
-        self._offline_hooks.remove(func)
+        self.offline_mode_set.disconnect(func)
 
     def check_requests_error(self, err: BaseException):
         """

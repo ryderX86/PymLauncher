@@ -36,7 +36,7 @@ class BindingMixin:
         )
 
     def __init_subclass__(cls) -> None:
-        cls.__init__ = _decorate_init(cls.__init__)
+        cls.__init__ = _decorate_init(cls.__init__)  # type: ignore
 
     def _checkbind(self):
         if lifecycle.bootstrap_already_run:
@@ -49,4 +49,8 @@ class BindingMixin:
             self._bound = True
 
     def bind(self):
+        """
+        Function to run directly after everything the application could possibly
+        need is loaded
+        """
         return

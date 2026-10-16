@@ -1,5 +1,6 @@
 from copy import deepcopy
 from datetime import datetime
+from functools import cached_property
 from typing import Iterable
 import json
 import logging
@@ -300,9 +301,12 @@ class GameVersion:
                 ) from err
         return AssetIndex.parse_dict(index_raw)
 
-    @property
+    @cached_property
     def libraries(self):
         return list(l for l in self._libraries if l.allowed())
+
+    def iter_libraries(self):
+        yield from self.libraries
 
     def library_downloads(self, callback=None) -> set[RunnableDownloader]:
         output = set()

@@ -1,6 +1,7 @@
 from collections.abc import Callable
 import logging
 import os
+import sys
 
 from launcher import paths
 from launcher.back.download_helpers import RunnableDownloader
@@ -16,6 +17,7 @@ class JavaVersion:
         "version_id",
         "files",
         "directories",
+        "executable_path",
     )
 
     def __init__(
@@ -24,27 +26,53 @@ class JavaVersion:
         version_id: str,
         files: list[JavaFile],
         directories: list[str],
+        bin_path: str,
     ):
         self.name = name
         self.version_id = version_id
         self.files = files
         self.directories = directories
+        self.executable_path = os.path.join(
+            paths.jre_path, self.name, *bin_path.split("/")
+        )
+        if not self.executable_path:
+            log.warning("Couldn't determine executable path, guessing it.")
 
     @classmethod
     def parse(cls, version: str, version_id: str, files: dict[str, dict]):
         if "files" in files and "type" not in files["files"]:
             files = files["files"]
-        file_list: list[JavaFile] = [
-            JavaFile.parse(version, name, file)
-            for name, file in files.items()
-            if file.get("type") == "file"
-        ]
+        file_list: list[JavaFile] = []
+        bin_path = ""
+        for name, file in files.items():
+            if file.get("type") == "file":
+                file_list.append(JavaFile.parse(version, name, file))
+            else:
+                continue
+            if not bin_path:
+                # hoping nuitka filters these depending on the platform
+                if sys.platform == "win32" and name.lower().endswith(
+                    "minecraftjava.exe"
+                ):
+                    bin_path = name
+                if sys.platform == "win32" and name.lower().endswith(
+                    "javaw.exe"
+                ):
+                    bin_path = name
+                if sys.platform != "win32" and name.lower().endswith("javaw"):
+                    bin_path = name
+        if not bin_path:
+            log.warning("Couldn't determine javaw.exe path, guessing it.")
+            if sys.platform == "win32":
+                bin_path = "bin/javaw.exe"
+            else:
+                bin_path = "bin/javaw"
         directories = [
             os.path.join(paths.jre_path, name, *name.split("/"))
             for name, file in files.items()
             if file.get("type") == "directory"
         ]
-        return cls(version, version_id, file_list, directories)
+        return cls(version, version_id, file_list, directories, bin_path)
 
     @property
     def executables(self) -> set[JavaFile]:
@@ -88,7 +116,8 @@ class JavaVersion:
                 )
             )
         log.debug(
-            "Java %s: Files using LZMA: %d; Files without compression: %d",
+            "Java %s: Files with LZMA downloads available: %d; "
+            "Files without compression available: %d",
             self.version_id,
             lzma_count,
             raw_count,

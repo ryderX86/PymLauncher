@@ -1,4 +1,5 @@
-from PySide6.QtGui import QAction
+from PySide6.QtCore import Signal
+from PySide6.QtGui import QAction, QIcon
 from PySide6.QtWidgets import QApplication, QMenu, QMessageBox
 
 from launcher import config, constants
@@ -9,30 +10,46 @@ from launcher.ostools import set_jump_list
 
 
 class ProfileContextMenu(QMenu):
+    set_lock_layout = Signal()
+
     _profile: LaunchProfile | None
     _debug: bool
+    _parent_layout_locked: bool | None
 
     def __init__(
-        self, profile: LaunchProfile | None, debug: bool = False, parent=None
+        self,
+        profile: LaunchProfile | None,
+        debug: bool = False,
+        parent=None,
+        parent_layout_locked: bool | None = None,
     ):
         super().__init__(parent=parent)
         self._profile = profile
         self._debug = debug
+        self._parent_layout_locked = parent_layout_locked
         self._build_actions()
 
     def _build_debug_actions(self):
         copy_id = QAction(self)
         copy_id.setText("Copy Profile ID")
-        copy_id.setIcon(resources.symbol("clipboard"))
         copy_id.triggered.connect(self._copy_id)
         self.addAction(copy_id)
 
+    def _get_lock_action(self):
+        if self._parent_layout_locked is not None:
+            lock_option = QAction(self)
+            lock_option.setText("Lock profile order")
+            lock_option.setCheckable(True)
+            lock_option.setChecked(self._parent_layout_locked)
+            lock_option.triggered.connect(self.set_lock_layout.emit)
+            self.addAction(lock_option)
+
     def _build_actions_no_prof(self):
         new = QAction(self)
-        new.setIcon(resources.symbol("journal-plus"))
         new.setText("Create New Profile")
         new.triggered.connect(profile_manager.create_profile)
         self.addAction(new)
+        self._get_lock_action()
 
     def _build_actions(self):
         if not self._profile:
@@ -45,17 +62,13 @@ class ProfileContextMenu(QMenu):
                 checkable=True,
                 checked=self._profile.uuid in config.jump_list_items,
                 text="Show in jump-list",
-                icon=(
-                    resources.symbol("checkbox-checked")
-                    if self._profile.uuid in config.jump_list_items
-                    else resources.symbol("square")
-                ),
             )
             add_to_jump.toggled.connect(self._add_to_jump_list)
             self.addAction(add_to_jump)
 
+        self._get_lock_action()
+
         clone = QAction(self)
-        clone.setIcon(resources.symbol("copy"))
         clone.setText(f'Duplicate "{self._profile.name}"')
         clone.triggered.connect(self._clone_profile)
         self.addAction(clone)
@@ -68,7 +81,6 @@ class ProfileContextMenu(QMenu):
         delete.setData("delete")
         delete.setProperty("danger", True)
         delete.setText(f'Delete "{self._profile.name}"')
-        delete.setIcon(resources.symbol("trash"))
         if self._profile.is_default_profile:
             delete.setDisabled(True)
         else:
