@@ -246,6 +246,12 @@ class SkinChange(QDialog):
         self.cape_list.setVerticalScrollBarPolicy(
             Qt.ScrollBarPolicy.ScrollBarAlwaysOff
         )
+        self.cape_list.setHorizontalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAsNeeded
+        )
+        self.cape_list.setSelectionMode(
+            QListWidget.SelectionMode.SingleSelection
+        )
 
         if self.cape_list.count() > 1:
             mid.addWidget(cape_label)

@@ -1,9 +1,9 @@
 from json import JSONDecodeError
-import os
 from types import NoneType
 from typing import NoReturn
 import atexit
 import logging
+import os
 import sys
 import warnings
 

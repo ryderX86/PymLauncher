@@ -1,5 +1,7 @@
+import sys
+
 from PySide6.QtCore import QMutex, QPoint, QRect, QSize
-from PySide6.QtGui import QIcon, Qt
+from PySide6.QtGui import QIcon, QImage, QPixmap, Qt
 from PySide6.QtWidgets import (
     QApplication,
     QComboBox,
@@ -17,6 +19,34 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+import win32gui
+
+
+def dll_ico_count(dll: str):
+    return win32gui.ExtractIconEx("shell32.dll", -1, 0)
+
+
+def shell32_qicon(dll: str, idx: int):
+    largeh, smallh = win32gui.ExtractIconEx(dll, idx, 1)
+
+    if not largeh and not smallh:
+        return QIcon()
+
+    try:
+        ico = QIcon()
+        if largeh:
+            qimgl = QImage.fromHICON(int(largeh[0]))
+            ico.addPixmap(QPixmap.fromImage(qimgl))
+        if smallh:
+            qimgs = QImage.fromHICON(int(smallh[0]))
+            ico.addPixmap(QPixmap.fromImage(qimgs))
+        return ico
+    finally:
+        for h in largeh:
+            win32gui.DestroyIcon(h)
+        for h in smallh:
+            win32gui.DestroyIcon(h)
+
 
 qapp = QApplication()
 
@@ -399,7 +429,7 @@ class MainWindow(QMainWindow):
         self.lo = QVBoxLayout()
         self.w.setLayout(self.lo)
         self._buttons: dict[
-            str | QStyle.StandardPixmap | QIcon.ThemeIcon, QPushButton
+            str | QStyle.StandardPixmap | QIcon.ThemeIcon | int, QPushButton
         ] = {}
 
         self._theme_box = QComboBox()
@@ -461,7 +491,7 @@ class MainWindow(QMainWindow):
         self.pixmap_flow = FlowLayout()
         for member in sorted(
             (member for member in qapp.style().StandardPixmap),
-            key=lambda m: m.name,
+            key=lambda m: m.value,
         ):
             button = QPushButton(
                 qapp.style().standardIcon(member), member.name
@@ -471,6 +501,29 @@ class MainWindow(QMainWindow):
             self._buttons[member] = button
             self.pixmap_flow.addWidget(button)
         self.scroll_lo.addLayout(self.pixmap_flow, 0)
+
+        if sys.platform == "win32":
+            self.shell32_flow = FlowLayout()
+            self.scroll_lo.addWidget(QLabel("Shell32:"), 0)
+            for i in range(0, dll_ico_count("shell32.dll") + 1):
+                ico = shell32_qicon("shell32.dll", i)
+                if ico.isNull():
+                    continue
+                button = QPushButton(ico, str(i))
+                self._buttons[f"DLLshell32{i}"] = button
+                self.shell32_flow.addWidget(button)
+            self.scroll_lo.addLayout(self.shell32_flow, 0)
+
+            self.imgres_flow = FlowLayout()
+            self.scroll_lo.addWidget(QLabel("imageres:"), 0)
+            for i in range(0, dll_ico_count("imageres.dll") + 1):
+                ico = shell32_qicon("imageres.dll", i)
+                if ico.isNull():
+                    continue
+                button = QPushButton(ico, str(i))
+                self._buttons[f"DLLimageres{i}"] = button
+                self.imgres_flow.addWidget(button)
+            self.scroll_lo.addLayout(self.imgres_flow, 0)
 
         self.scroll_area.setWidget(self.scroll_widget)
         self.lo.addWidget(self.scroll_area)
@@ -491,13 +544,12 @@ class MainWindow(QMainWindow):
         for icon_name_type, button in self._buttons.items():
             button.setIconSize(QSize(size, size))
             style_opt = QStyleOption().initFrom(button)
-            match icon_name_type:
-                case QStyle.StandardPixmap():
-                    button.setIcon(
-                        qapp.style().standardIcon(
-                            icon_name_type, style_opt, button
-                        )
+            if isinstance(icon_name_type, QStyle.StandardPixmap):
+                button.setIcon(
+                    qapp.style().standardIcon(
+                        icon_name_type, style_opt, button
                     )
+                )
 
     def _filter(self, text: str):
         t = text.lower()

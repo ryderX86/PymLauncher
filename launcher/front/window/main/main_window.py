@@ -9,17 +9,14 @@ import logging
 import sys
 
 from PySide6.QtCore import Qt, QUrl, Signal, Slot
-from PySide6.QtGui import QDesktopServices
+from PySide6.QtGui import QDesktopServices, QShowEvent
 from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QMainWindow,
-    QMenu,
     QSizePolicy,
     QStatusBar,
     QTabWidget,
-    QToolBar,
-    QToolButton,
     QVBoxLayout,
     QWidget,
 )
@@ -140,44 +137,24 @@ class MainWindow(QMainWindow):
         root_layout.setContentsMargins(0, 0, 0, 0)
         root_layout.setSpacing(0)
 
-        self.toolbar = QToolBar()
-        self.toolbar.setToolButtonStyle(
-            Qt.ToolButtonStyle.ToolButtonTextBesideIcon
-        )
+        self.menuBar().setNativeMenuBar(True)
 
-        self.toolbar.addAction(
-            get_icon(IconName.ADD),
+        self.menuBar().addAction(
             "Add Profile",
             profile_manager.create_profile,
         )
 
-        self.toolbar.addAction(
-            get_icon(IconName.SETTINGS),
+        self.menuBar().addAction(
             "Settings",
             self._show_settings_window,
         )
 
-        utilities = QToolButton(
-            popupMode=QToolButton.ToolButtonPopupMode.InstantPopup,
-            toolButtonStyle=Qt.ToolButtonStyle.ToolButtonTextBesideIcon,
-        )
-        utilities.setText("Utilities")
-        utilities.setIcon(get_icon(IconName.UTILITY))
-        self.toolbar.addWidget(utilities)
-        self.utils_menu = QMenu(utilities)
-
+        self.utils_menu = self.menuBar().addMenu("Utilities")
         self._setup_utilities_menu()
-        utilities.setMenu(self.utils_menu)
 
-        help_button = QToolButton(  # type: ignore
-            popupMode=QToolButton.ToolButtonPopupMode.InstantPopup,
-            toolButtonStyle=Qt.ToolButtonStyle.ToolButtonTextBesideIcon,
-        )
-        help_button.setText("Help")
-        help_button.setIcon(get_icon(IconName.HELP))
-        self.toolbar.addWidget(help_button)
+        help_menu = self.menuBar().addMenu("Help")
 
-        help_button.addAction(
+        help_menu.addAction(
             get_icon(IconName.HELP_ABOUT),
             f"About {constants.LAUNCHER_NAME}",
             AboutWindow.create_show,
@@ -187,15 +164,13 @@ class MainWindow(QMainWindow):
         self.account_dropdown.add_account_requested.connect(
             self.login_requested.emit
         )
-        w = QWidget()
-        w.setSizePolicy(
-            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Ignored
+        self.account_dropdown.setSizePolicy(
+            QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Maximum
         )
-        self.toolbar.addWidget(w)
-        self.toolbar.addWidget(self.account_dropdown)
-
-        root_layout.addWidget(self.toolbar)
-        self.toolbar.setAutoFillBackground(True)
+        self.menuBar().setCornerWidget(
+            self.account_dropdown, Qt.Corner.TopRightCorner
+        )
+        self.menuBar().setAutoFillBackground(True)
 
         # body
         body = QWidget()
@@ -266,6 +241,7 @@ class MainWindow(QMainWindow):
         ver_label.setContentsMargins(0, 0, 6, 0)
         ver_label.setProperty("secondary", True)
         self.status.addPermanentWidget(ver_label, 0)
+        lifecycle.config_updated.connect(self._on_config_update)
 
     @Slot()
     def _on_tab_change(self, idx: int):
@@ -327,3 +303,19 @@ class MainWindow(QMainWindow):
 
     def _test_lro_thread(self):
         return run_lro("Testing LROs", sleep, 3)
+
+    def showEvent(self, event: QShowEvent) -> None:
+        self._on_config_update()
+        return super().showEvent(event)
+
+    @Slot()
+    def _on_config_update(self):
+        self.menuBar().setCornerWidget(QWidget(), Qt.Corner.TopRightCorner)
+        lifecycle.qapp.processEvents()
+        h = self.menuBar().height()
+        self.account_dropdown.setFixedHeight(
+            max(h, self.account_dropdown.sizeHint().height())
+        )
+        self.menuBar().setCornerWidget(
+            self.account_dropdown, Qt.Corner.TopRightCorner
+        )
