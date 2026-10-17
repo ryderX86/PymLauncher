@@ -9,13 +9,13 @@ import logging
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QDialog,
+    QDialogButtonBox,
     QFrame,
     QHBoxLayout,
     QLabel,
     QPlainTextEdit,
     QPushButton,
     QVBoxLayout,
-    QDialogButtonBox,
 )
 
 from launcher.front.qt.widgets import CopyToClipboardButton

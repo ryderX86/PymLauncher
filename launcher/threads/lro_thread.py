@@ -64,10 +64,12 @@ class LROThread(QThread):
                 self._dialog.setLabelText(msg)
             self._dialog.setCancelButton(None)
             self._dialog_old_flags = self._dialog.windowFlags()
+            self._dialog_old_modality = self._dialog.windowModality()
             self._dialog.setWindowFlags(
-                self._dialog_old_flags & ~Qt.WindowType.Dialog
-                | Qt.WindowType.SplashScreen
+                (self._dialog_old_flags | Qt.WindowType.SplashScreen)
+                & ~Qt.WindowType.Dialog
             )
+            self._dialog.setWindowModality(Qt.WindowModality.ApplicationModal)
             if max_expected_time is not None:
                 self._dialog.setMinimumDuration(int(max_expected_time * 1000))
         super().__init__(parent)
@@ -119,6 +121,8 @@ class LROThread(QThread):
         loop.exec(QEventLoop.ProcessEventsFlag.ExcludeUserInputEvents)
         if self._dialog:
             self._dialog.close()
+            self._dialog.setWindowFlags(self._dialog_old_flags)
+            self._dialog.setWindowModality(self._dialog_old_modality)
         if self._exception:
             raise self._exception
         if signature(self._func).return_annotation is not _empty:

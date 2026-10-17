@@ -11,7 +11,7 @@ from PySide6.QtCore import QThread, QThreadPool, Slot, qVersion
 
 from launcher import constants, lifecycle, paths
 from launcher.back.account_manager import account_man
-from launcher.front.window import TextPopup
+from launcher.front.window.text_popup import TextPopup
 from launcher.functions.text import indent
 from launcher.offline import offline_man
 

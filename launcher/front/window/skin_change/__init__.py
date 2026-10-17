@@ -58,12 +58,12 @@ from launcher.constants import (
     OS_PATH_DELIM,
     SKIN_CHANGE_URL,
 )
-from launcher.datatypes.default_skins import DefaultSkin, DefaultSkinSHA
 from launcher.exceptions.network import HTTPStatusCodeError
 from launcher.front.icon_helpers import IconName, get_icon
 from launcher.functions.error_box import error_box
 from launcher.networking import make_request
 from launcher.offline import offline_man
+from launcher.threads.lro_thread import run_potential_lro
 
 log = logging.getLogger(__name__)
 
@@ -138,7 +138,9 @@ class SkinChange(QDialog):
                 self.current_cape_cloud = account.profile.current_cape["id"]
         if account.profile_needs_update():
             log.debug("Account has old profile info, updating")
-            account.get_profile_info()
+            run_potential_lro(
+                0.25, "Fetching current profile", account.get_profile_info
+            )
 
         self._build_ui()
         self.current_cloud_hash = hashlib.sha256(

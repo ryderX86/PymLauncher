@@ -1,2 +1,1 @@
-from .warning import WarningDialog, WarningType, ButtonConfig
-from .text_popup import TextPopup
+from .warning import ButtonConfig, WarningDialog, WarningType

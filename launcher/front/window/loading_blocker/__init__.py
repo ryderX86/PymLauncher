@@ -6,12 +6,10 @@ from PySide6.QtWidgets import (
     QApplication,
     QProgressBar,
     QProgressDialog,
-    QMainWindow,
 )
 
 from launcher import constants, lifecycle
 from launcher.front.qt.binding_mixin import BindingMixin
-from launcher.front.window import WindowMixins
 
 match constants.OS:
     case "windows":
@@ -22,7 +20,7 @@ match constants.OS:
 log = logging.getLogger(__name__)
 
 
-class LoadingBlockerWindow(BindingMixin, WindowMixins, QProgressDialog):
+class LoadingBlockerWindow(BindingMixin, QProgressDialog):
     class LoadingBlockerContextManager:
         def __init__(
             self,
