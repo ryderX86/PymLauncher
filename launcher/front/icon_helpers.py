@@ -3,6 +3,7 @@
 from collections.abc import Iterable
 from enum import IntEnum, StrEnum, auto
 from functools import cached_property
+import os
 from typing import NamedTuple
 import configparser
 import logging
@@ -190,6 +191,17 @@ class IconThemeManager:
     FALLBACK_PATH_LIGHT = QIcon.fallbackSearchPaths()
     FALLBACK_PATH_LIGHT.append(":/icons/fallback/light")
     _search_paths: list[str] = QIcon.themeSearchPaths()
+    if sys.platform == "linux":
+        _search_paths.extend(
+            {
+                os.path.expanduser("~/.local/share/icons"),
+                os.path.expanduser("~/.icons"),
+                "/usr/share/icons",
+                "/usr/share/pixmaps",
+            }
+        )
+        FALLBACK_PATH_DARK.append("/usr/share/icons/hicolor/")
+        FALLBACK_PATH_LIGHT.append("/usr/share/icons/hicolor/")
     _themes: dict[str, IconTheme]
     _paired_themes: dict[str, ThemePair]
     _system_themes: dict[str, IconTheme]
@@ -308,7 +320,7 @@ class IconThemeManager:
                         continue
                 elif (
                     index := QResource(qdir.filePath("index.theme"))
-                ).isFile():
+                ).isFile() and index.isValid():
                     data = index.uncompressedData().data()
                 else:
                     continue
@@ -517,7 +529,7 @@ class IconName(StrEnum):
 
 _ICONMAPPINGS: dict[IconName, Icon] = {
     IconName.SETTINGS: Icon(
-        "settings",
+        "preferences-system",
         "settings",
         "\ue713",
         "settings",

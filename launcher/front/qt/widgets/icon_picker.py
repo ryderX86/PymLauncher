@@ -142,6 +142,15 @@ class IconPicker(BindingMixin, QComboBox):
         self._view.addItem(none)
         self._view.addItem(custom)
         self._default_icon_names = []
+        self._default_icons = resources.get_all_default_icons()
+        for name, icon in self._default_icons.items():
+            ico = _padded_icon(icon)
+            item = QListWidgetItem()
+            item.setIcon(ico)
+            item.setData(DATA_TEXT_ROLE, name)
+            item.setData(QICON_ROLE, icon)
+            self._view.addItem(item)
+            self._default_icon_names.append(name)
         self._frame = None
         self.currentIndexChanged.connect(self._on_item_change)
         self.setMaximumWidth(int(_list_grid_size.width() * 1.55))
@@ -249,15 +258,6 @@ class IconPicker(BindingMixin, QComboBox):
         return self._view
 
     def bind(self):
-        self._default_icons = resources.get_all_default_icons()
-        for name, icon in self._default_icons.items():
-            ico = _padded_icon(icon)
-            item = QListWidgetItem()
-            item.setIcon(ico)
-            item.setData(DATA_TEXT_ROLE, name)
-            item.setData(QICON_ROLE, icon)
-            self._view.addItem(item)
-            self._default_icon_names.append(name)
         self._view.setViewMode(QListWidget.ViewMode.IconMode)
         self._view.setDragEnabled(False)
         self._reset_size()

@@ -92,7 +92,15 @@ class OSRule:
             return True
         match constants.OS:
             case "windows" | "linux":
-                ver = parse(constants.OS_VER)
+                try:
+                    ver = parse(constants.OS_VER)
+                except Exception:
+                    log.error(
+                        "Failed to parse OS version: %r; skipping rules.",
+                        constants.OS_VER,
+                    )
+                    log.debug("Version range: %r", self.os["versionRange"])
+                    return True
                 try:
                     min_ver: Version = parse(
                         self.os["versionRange"].get("min", "0.0.0.0")

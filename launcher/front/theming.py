@@ -3,6 +3,7 @@ import glob
 import json
 import logging
 import os
+import sys
 
 from PySide6.QtGui import QPalette
 from PySide6.QtWidgets import QApplication, QStyleFactory
@@ -23,7 +24,7 @@ _THEME_UI_NAMES = {
 }
 
 
-def get_widgets_themes_and_qstyles():
+def get_widgets_themes_and_qstyles() -> Generator[tuple[str, str]]:
     themes_in = QStyleFactory.keys()
     for theme in themes_in:
         if theme in _THEME_UI_NAMES:
@@ -34,7 +35,7 @@ def get_widgets_themes_and_qstyles():
 
 def get_builtin_theme_objects_iter() -> Generator[BuiltinTheme]:
     for display, name in get_widgets_themes_and_qstyles():
-        yield BuiltinTheme(display, name)
+        yield BuiltinTheme(display, name, name)
 
 
 def get_builtin_theme_objects():
@@ -91,7 +92,11 @@ class _ThemeManager:
         self._themes = {}
 
     def load(self):
-        for i, theme in enumerate(get_builtin_theme_objects_iter()):
+        themes: list[BuiltinTheme] = [*get_builtin_theme_objects_iter()]
+        if sys.platform == "linux":
+            # workaround for windows classic showing up first for some reason??
+            themes.sort(key=lambda t: 1 if t.id.lower().startswith("w") else 0)
+        for i, theme in enumerate(themes):
             self._themes[theme.id] = theme
             if i == 0:
                 theme.name = f"{theme.name} (default)"

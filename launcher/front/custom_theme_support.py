@@ -163,6 +163,7 @@ class BuiltinTheme(BaseTheme):
     def regenerate_style(self):
         del self._widgets
         if sys.platform == "win32" and self._widgets_name == "windows11":
+            # pylint: disable=used-before-assignment
             # pylint: disable-next=possibly-used-before-assignment
             assert Win11StyleOverrides  # type: ignore
             self._widgets = Win11StyleOverrides(
@@ -173,7 +174,7 @@ class BuiltinTheme(BaseTheme):
 
     if sys.platform == "win32":
 
-        def __init__(self, name: str, widgets: str):
+        def __init__(self, name: str, widgets: str, *_):
             super().__init__(name, widgets, widgets)
             if widgets == "windows11":
                 assert Win11StyleOverrides  # type: ignore

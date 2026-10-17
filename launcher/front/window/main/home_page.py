@@ -481,10 +481,16 @@ class HomePage(BindingMixin, QWidget):
         profile = profile_manager.get_current_profile()
         try:
             sel_version_installed = profile.check_install()
-        except InvalidVersionIdError:
+        except InvalidVersionIdError as err:
             self.play_button.setText("Invalid game version ID")
             self.play_button.setDisabled(True)
             sel_version_installed = False
+            log.warning(
+                "InvalidVersionIdError on profile %r (ID: %s)",
+                profile.name,
+                profile.uuid,
+            )
+            log.debug("Traceback:", exc_info=err)
             return
         if offline_man.offline:
             if sel_version_installed:

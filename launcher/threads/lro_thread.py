@@ -1,7 +1,6 @@
 from collections.abc import Callable
-from inspect import get_annotations
-from types import NoneType
-from typing import ParamSpec, TypeVar
+from inspect import _empty, signature
+from typing import ParamSpec, TypeVar, get_type_hints
 import logging
 
 from PySide6.QtCore import (
@@ -122,9 +121,25 @@ class LROThread(QThread):
             self._dialog.close()
         if self._exception:
             raise self._exception
-        assert isinstance(
-            self._result, get_annotations(self._func).get("return", NoneType)
-        )
+        if signature(self._func).return_annotation is not _empty:
+            if not isinstance(
+                self._result,
+                (
+                    rt := get_type_hints(self._func).get(
+                        "return", signature(self._func).return_annotation
+                    )
+                ),
+            ):
+                print(get_type_hints(self._func))
+                raise TypeError(
+                    f"Function {self._func.__name__} returned invalid type: "
+                    f"{type(self._result).__name__} (expected any of {rt!r})"
+                )
+        elif not globals().get("__compiled__", False):
+            log.warning(
+                "No return annotation on %s(), result may be the wrong type",
+                self._func.__qualname__,
+            )
         return self._result  # type: ignore
 
 

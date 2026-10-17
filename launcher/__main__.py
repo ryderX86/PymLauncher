@@ -1,4 +1,5 @@
 from json import JSONDecodeError
+import os
 from types import NoneType
 from typing import NoReturn
 import atexit
@@ -46,7 +47,7 @@ from .front.window.warning import ButtonConfig, WarningDialog, WarningType
 from .functions import detect_set_clipboard, uisleep
 from .functions.error_box import error_box
 from .offline import connectivity_poller, offline_man
-from .ostools.win32 import setup_app_id
+from .ostools import setup_app_id
 from .threads.bootstrap import (
     AccountManagerBootstrap,
     BaseBootstrapThread,
@@ -62,6 +63,14 @@ log = logging.getLogger("launcher")
 # we use this to detect crashes somewhat, allowing us to not write garbage data
 # or bad configs, etc.
 clean_exit = False
+
+system_plugin_paths = []
+
+if sys.platform == "linux":
+    system_plugin_paths.extend(
+        filter(os.path.isdir, ["/usr/lib/qt6/plugins", "/usr/lib/plugins"])
+    )
+    os.environ["QT_PLUGIN_PATH"] = os.pathsep.join(system_plugin_paths)
 
 
 class LauncherApp:
@@ -86,6 +95,10 @@ class LauncherApp:
     event_loop_running: bool
 
     def __init__(self):
+        if system_plugin_paths:
+            log.debug("Added the following plugin paths to Qt:")
+            for p in system_plugin_paths:
+                log.debug("- %s", p)
         # set default values first so we can check them
         self.event_loop_running = False
         self.login_dialog = None

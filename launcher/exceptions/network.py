@@ -79,6 +79,22 @@ class HTTPStatusCodeError(BaseNetworkingError):
                     resp.release_conn()
         else:
             self.body = resp.data.decode("utf-8")
+        super().__init__(
+            f"HTTP {code} {responses.get(code, "<unknown description>")}",
+            f"Response: {resp.data}",
+        )
+
+    def __str__(self):
+        return (
+            f"HTTP {self.code} - "
+            f"{responses.get(self.code, "[Unknown description]")}:\n"
+            "Response headers:\n"
+            f"{"\n".join(
+                f"    - '{key}': {val!r}" for key, val in self.headers.items()
+            )}"
+            f"Response body:\n"
+            f"    {self.body!s}"
+        )
 
     @property
     def got_nondefault_retry_after(self):

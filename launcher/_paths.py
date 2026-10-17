@@ -189,6 +189,14 @@ class PathFinder:
         return os.path.join(self._data, "textures_cache")
 
     @AutoMkdirProperty
+    def skins_cache(self) -> str:
+        return os.path.join(self.textures_cache, "skins")
+
+    @AutoMkdirProperty
+    def capes(self) -> str:
+        return os.path.join(self.textures_cache, "capes")
+
+    @AutoMkdirProperty
     def launcher_logs(self) -> str:
         return os.path.join(self._data, "logs")
 

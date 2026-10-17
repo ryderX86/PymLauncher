@@ -98,7 +98,7 @@ class GameInstaller(QObject):
             limit = constants.CPU_THREADS
         for i in range(limit):
             t = DownloaderThread(parent=self)
-            t.setObjectName(f"DownloaderThread{i}")
+            t.setObjectName(f"{type(self).__name__}.thread.{i}")
             if queue:
                 t.set_queue(queue)
             self._threads.append(t)

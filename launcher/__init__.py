@@ -54,6 +54,7 @@ class _Lifecycle(QObject):
         super().__init__()
         self.bootstrap_already_run = False
         self.bootstrap_done.connect(self._on_bootstrap)
+        self._threads = set()
 
     @Slot()
     def _on_bootstrap(self):

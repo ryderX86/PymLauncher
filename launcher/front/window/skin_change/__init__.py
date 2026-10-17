@@ -193,8 +193,13 @@ class SkinChange(QDialog):
         cape_list_none.setSizeHint(QSize(54, 80))
         self.cape_list.addItem(cape_list_none)
         self.cape_list.setMovement(QListWidget.Movement.Static)
-        self.cape_list.setMinimumHeight(self.cape_list.sizeHintForRow(0))
-        self.cape_list.setMaximumHeight(self.cape_list.sizeHintForRow(0))
+        height = (
+            self.cape_list.sizeHintForRow(0)
+            + self.cape_list.horizontalScrollBar().sizeHint().height()
+            + self.cape_list.contentsMargins().top()
+            + self.cape_list.contentsMargins().bottom()
+        )
+        self.cape_list.setFixedHeight(height)
         if self.account.profile:
             not_found_cape = True
             if self.account.profile.capes:
@@ -635,6 +640,8 @@ class SkinChange(QDialog):
             paths.get_pics_dir(),
             filter="PNG Image (*.png);;",
         )
+        if not name:
+            return
         if not os.path.exists((parent := os.path.split(name)[0])):
             try:
                 os.makedirs(parent, exist_ok=True)

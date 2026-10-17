@@ -1,9 +1,9 @@
+from json import JSONDecodeError
 import logging
 import time
 
-from requests.exceptions import RequestException
-
 from launcher import constants
+from launcher.exceptions.network import HTTPStatusCodeError
 from launcher.networking import make_request
 
 from .base_login_thread import BaseLoginThread
@@ -56,44 +56,46 @@ class DeviceCodePoller(BaseLoginThread):
                     },
                     timeout=30,
                 )
-            except RequestException as exc:
-                self.status.emit(f"Connection error: {exc}")
-                continue
+            except HTTPStatusCodeError as err:
+                resp = err.response
+                if err.code == 400:
+                    try:
+                        body = err.response.json()
+                    except JSONDecodeError as err2:
+                        log.error("Failed parsing JSON from response:", exc_info=err)
+                        self.status.emit("Failed to decode server response")
+                        raise err2
+                    match body.get("error"):
+                        case "authorization_pending":
+                            self.status.emit("Waiting for authorization...")
+                            continue
+                        case "authorization_declined":
+                            self.status.emit("Login denied")
+                            return
+                        case "expired_token":
+                            self.status.emit("Device code expired. Please try again.")
+                            return
+                        case "slow_down":
+                            log.warning(
+                                "Microsoft told us to slow down!"
+                                "Interval +=5"
+                            )
+                            continue
+                        case _:
+                            self.error.emit(
+                                "Unexpected error: "
+                                f"{err.response.data.decode("utf-8")}"
+                            )
+                            return
+                else:
+                    self.status.emit(f"Connection error: {err}")
+                    continue
 
             data = resp.json()
 
             if "access_token" in data:
                 self.token_received.emit(data)
                 return
-
-            error = data.get("error", "")
-            match error:
-                case "authorization_pending":
-                    self.status.emit("Waiting for authorization...")
-                case "authorization_declined":
-                    self.status.emit("Authorization declined.")
-                    log.debug("Login denied by user on MSA page.")
-                    self._cancelled = True
-                    return
-                case "expired_token":
-                    self.error.emit("Device code expired. Please try again.")
-                    log.debug("Login token expired")
-                    self._cancelled = True
-                    return
-                case "slow_down":
-                    self.interval += 5
-                    log.warning("MS said to slow down! Interval += 5")
-                case _:
-                    self.error.emit(
-                        "Unexpected error: {error}\n%s" f"{data.get(
-                            "error_description",
-                            "(no description provided)"
-                        )}"
-                    )
-                    log.error("Login error occured: %s", str(error))
-                    if data.get("error_description"):
-                        log.error("Details: %s", data["error_description"])
-                    return
 
         if not self._cancelled:
             self.error.emit("Login window timed out.")

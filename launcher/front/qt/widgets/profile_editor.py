@@ -11,7 +11,6 @@ from PySide6.QtCore import (
     Slot,
 )
 from PySide6.QtGui import (
-    QIcon,
     QRegularExpressionValidator,
     QStandardItem,
     QStandardItemModel,
@@ -45,6 +44,7 @@ from launcher.front.qt.widget_mapping_adapter import WidgetMappingAdapter
 from launcher.front.qt.widgets import Header2
 from launcher.functions import Suppressable, is_path_valid
 from launcher.offline import offline_man
+from launcher.threads.lro_thread import run_potential_lro
 
 from .config_checkbox import ConfigCheckbox
 from .icon_picker import IconPicker
@@ -258,7 +258,7 @@ class ProfileEditor(BindingMixin, QWidget):
                 write=self.set_version_text,
                 signal=self.version_combo_box.currentTextChanged,
                 attr_name="version_id",
-                normalize=self.normalize_version_id,
+                # normalize=self.normalize_version_id,
             )
         )
         version_select_row.addWidget(self.version_combo_box, 1)
@@ -486,12 +486,7 @@ class ProfileEditor(BindingMixin, QWidget):
         return
 
     def get_selected_version_id(self):
-        text = self.version_combo_box.currentText()
-        self._version_validator.validate(
-            text, self.version_combo_box.currentIndex()
-        )
-        fixed = self._version_validator.fixup(text)
-        return fixed
+        return self.version_combo_box.currentData()
 
     def normalize_version_id(self, text: str | None = None):
         if not text:
@@ -532,7 +527,7 @@ class ProfileEditor(BindingMixin, QWidget):
 
             # show/hide/set the checkbox for the mods folder
             mods_row_enabled = version_manager.check_fabric_mod_arg_support(
-                self._current_profile.version_id
+                self._current_profile.real_version_id
             )
             self.form_layout.setRowVisible(
                 self.mods_folder_row,
@@ -633,7 +628,12 @@ class ProfileEditor(BindingMixin, QWidget):
         log.debug("User requested versions list refresh")
         if not self._refresh_timer.hasExpired():
             log.debug("Force downloading new versions manifest")
-            version_manager.fetch_version_manifest(True)
+            run_potential_lro(
+                0.2,
+                "Updating versions manifest...",
+                version_manager.fetch_version_manifest,
+                True,
+            )
             version_manager.get_version_list(True)
         self.refresh_version_combo()
         self._force_refresh_versions_list = True
@@ -658,14 +658,18 @@ class ProfileEditor(BindingMixin, QWidget):
                     item = QStandardItem(
                         self._version_validator.latest_release_ui
                     )
+                    item.setData("latest-release", VERSION_ID_ROLE)
+                    item.setData(GameVersionType.RELEASE, VERSION_TYPE_ROLE)
                 elif idx == 1:
                     item = QStandardItem(
                         self._version_validator.latest_snapshot_ui
                     )
+                    item.setData("latest-snapshot", VERSION_ID_ROLE)
+                    item.setData(GameVersionType.SNAPSHOT, VERSION_TYPE_ROLE)
                 else:
                     item = QStandardItem(stub.id)
-                item.setData(stub.id, VERSION_ID_ROLE)
-                item.setData(stub.type, VERSION_TYPE_ROLE)
+                    item.setData(stub.id, VERSION_ID_ROLE)
+                    item.setData(stub.type, VERSION_TYPE_ROLE)
                 self.version_list.appendRow(item)
                 if stub.id == current:
                     found_text = True

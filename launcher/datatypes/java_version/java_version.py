@@ -61,8 +61,10 @@ class JavaVersion:
                     bin_path = name
                 if sys.platform != "win32" and name.lower().endswith("javaw"):
                     bin_path = name
+                elif sys.platform != "win32" and name.lower().endswith("java"):
+                    bin_path = name
         if not bin_path:
-            log.warning("Couldn't determine javaw.exe path, guessing it.")
+            log.warning("Couldn't determine javaw path, guessing it.")
             if sys.platform == "win32":
                 bin_path = "bin/javaw.exe"
             else:

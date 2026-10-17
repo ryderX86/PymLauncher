@@ -75,10 +75,15 @@ class VersionTextValidator(QValidator):
         return self.State.Invalid, LATEST_VERSION_TEXT, 0
 
     def _do_fixup(self, arg__1: str):
+        match arg__1:
+            case "" | None:
+                return self._last_good_val
+            case "latest-release":
+                return self.latest_release_ui
+            case "latest-snapshot":
+                return self.latest_snapshot_ui
         if not arg__1:
             return self._last_good_val
-        if arg__1 in LATEST_VERSIONS_SET:
-            return arg__1
         if arg__1 not in self.ver_ids:
             for v in self.ver_ids:
                 if v.startswith(arg__1):

@@ -36,7 +36,6 @@ from launcher import (
 )
 from launcher.back import profile_manager
 from launcher.constants import LAUNCHER_VERSION
-from launcher.front import styles
 from launcher.front.icon_helpers import IconName, get_icon
 from launcher.front.qt.widgets import AccountSelect
 from launcher.front.qt.widgets.profile_list import ProfileList
@@ -141,16 +140,6 @@ class MainWindow(QMainWindow):
         root_layout.setContentsMargins(0, 0, 0, 0)
         root_layout.setSpacing(0)
 
-        # top bar (account dropdown)
-        top_bar = QWidget()
-        # top_bar.setFixedHeight(48)
-        # top_bar.setStyleSheet(f"background-color: {styles.BG_DARK};")
-        top_bar.setBackgroundRole(styles.CRole.Base)
-        top_bar.setAutoFillBackground(True)
-        top_bar_layout = QHBoxLayout(top_bar)
-        top_bar_layout.setContentsMargins(0, 0, 0, 0)
-
-        # top toolbar (left; before dropdown)
         self.toolbar = QToolBar()
         self.toolbar.setToolButtonStyle(
             Qt.ToolButtonStyle.ToolButtonTextBesideIcon
@@ -206,6 +195,7 @@ class MainWindow(QMainWindow):
         self.toolbar.addWidget(self.account_dropdown)
 
         root_layout.addWidget(self.toolbar)
+        self.toolbar.setAutoFillBackground(True)
 
         # body
         body = QWidget()
@@ -336,4 +326,4 @@ class MainWindow(QMainWindow):
             )
 
     def _test_lro_thread(self):
-        return run_lro(sleep, 3)
+        return run_lro("Testing LROs", sleep, 3)

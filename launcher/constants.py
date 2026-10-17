@@ -100,7 +100,7 @@ match PLATFORM:
         OS = "osx"
     case "linux":
         OS = "linux"
-        OS_VER = platform.release()
+        OS_VER = platform.freedesktop_os_release()["ID"]
     case _:
         OS = "unknown"
 

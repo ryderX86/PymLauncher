@@ -213,6 +213,9 @@ class DownloadQueue:
     def end_append(self):
         self._mutex.lock()
         self._still_adding = False
+        if not self._downloads:
+            log.debug("No downloads left after append, releasing all threads")
+            self._wait_condition.wakeAll()
         self._mutex.unlock()
 
     def append(self, dl: Download):
