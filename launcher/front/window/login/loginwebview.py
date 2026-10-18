@@ -22,11 +22,28 @@ match sys.platform:
 
 @cache
 def is_webview_available():
-    if not constants.FLAG_ENABLE_WEBVIEW:
+    """
+    QWebView is dynamically loaded, so we can just preload it before and Qt
+    should in theory use that loaded plugin, while we also determine if it
+    actually exists on the computer or not.
+
+    Used to keep from even trying on Linux *(or anything not Win32 and macOS)*,
+    since we'd have to bundle Chromium, and that's too much bloat just for
+    Minecraft; also used just in case something like Microsoft's WebView2 won't
+    work (since the plugin will fail to load).
+
+    Returns `True` if the plugin was loaded successfully (and therefore, we can
+    use a QWebView window successfully), or `False` if it might crash the
+    QApplication (in which case, we will NOT load a QWebView, instead use
+    QDesktopServices to open the browser).
+    """
+    if not constants.FLAG_ENABLE_WEBVIEW:  # in this case we don't even try
         return False
     webview = QPluginLoader(WEBVIEW_PLUGIN_PATH)
     loaded = webview.load()
-    if not loaded:
+    # we only need a warning if it doesn't load on a platform we expect it to
+    # load successfully
+    if sys.platform in {"win32", "darwin"} and not loaded:
         log.warning(
             "Failed to load QWebView from %r (QPluginLoader(%r)): %s",
             webview.fileName(),
