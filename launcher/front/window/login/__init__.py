@@ -5,7 +5,7 @@ Device code flow window
 import logging
 
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QDesktopServices, QPalette
+from PySide6.QtGui import QColor, QDesktopServices, QFont, QPalette
 from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
@@ -33,7 +33,6 @@ from launcher.constants import (
 )
 from launcher.front.qt.widgets import Header1
 from launcher.front.resources import link_to_qrcode
-from launcher.front.styles import ACCENT, TEXT_SECONDARY
 from launcher.functions import (
     error_box,
 )
@@ -86,16 +85,14 @@ class LoginWindow(QDialog):
         title = Header1("Sign in with Microsoft")
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(title)
-
-        # TODO: better method to get a different color dynamically?
-        color = hex(
-            QApplication.palette()
-            .color(QPalette.ColorGroup.Disabled, QPalette.ColorRole.Text)
-            .rgb()
-        )[4:]
+        p = QApplication.palette()
+        accent_color_hex = p.accent().color().name(QColor.NameFormat.HexRgb)
+        muted_text_color = p.color(
+            QPalette.ColorGroup.Disabled, QPalette.ColorRole.WindowText
+        ).name(QColor.NameFormat.HexRgb)
 
         self.instruction_label = QLabel(
-            f'<p style="color: #{color}">'
+            f'<p style="color: {muted_text_color}">'
             "Click the button below to start the sign-in process."
             "</p>",
             alignment=Qt.AlignmentFlag.AlignCenter,
@@ -115,10 +112,15 @@ class LoginWindow(QDialog):
         layout.addWidget(qr_cont_w)
 
         self.code_label = QLabel("", alignment=Qt.AlignmentFlag.AlignCenter)
-        self.code_label.setStyleSheet(
-            "font-size: 28px; font-weight: 700; "
-            f"color: {ACCENT}; letter-spacing: 4px; padding: 12px;"
+        code_label_font = QFont(QApplication.font())
+        code_label_font.setPointSize(21)
+        code_label_font.setWeight(QFont.Weight.Bold)
+        code_label_font.setLetterSpacing(
+            QFont.SpacingType.AbsoluteSpacing, 4.0
         )
+        self.code_label.setContentsMargins(12, 12, 12, 12)
+        self.code_label.setStyleSheet(f"color: {accent_color_hex};")
+        self.code_label.setFont(code_label_font)
         self.code_label.setTextInteractionFlags(
             Qt.TextInteractionFlag.TextSelectableByMouse
         )
@@ -127,16 +129,14 @@ class LoginWindow(QDialog):
         self.status_label = QLabel(
             "", wordWrap=True, alignment=Qt.AlignmentFlag.AlignCenter
         )
-        self.status_label.setStyleSheet(
-            f"color: {TEXT_SECONDARY}; font-size: 12px;"
-        )
+        self.status_label.setStyleSheet(f"color: {muted_text_color};")
         layout.addWidget(self.status_label)
 
         # so complicated for what
         open_browser_w = QWidget()
         open_browser_l = QHBoxLayout(open_browser_w)
         open_browser_l.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.use_device_code = QCheckBox("Device code login")
+        self.use_device_code = QCheckBox("Log in with a different device")
         self.use_device_code.checkStateChanged.connect(
             self._set_use_device_code
         )
