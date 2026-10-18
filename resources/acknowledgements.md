@@ -7,8 +7,9 @@ created in Blockbench.
 
 Launch Profile icons and PymLauncher icon created by ryderX86.
 
-Theme format inspired by/compatible with PrismLauncher (https://github.com/PrismLauncher/PrismLauncher)
-
+Theme format inspired by/compatible with PrismLauncher
+(https://github.com/PrismLauncher/PrismLauncher)
+<sup>(this project is not endorsed by PrismLauncher or any of its contributors)</sup>
 
 ## Licenses
 Third-party packages used and their respective licenses:
