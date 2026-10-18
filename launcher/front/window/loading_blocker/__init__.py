@@ -8,11 +8,11 @@ from PySide6.QtWidgets import (
     QProgressDialog,
 )
 
-from launcher import constants, lifecycle
+from launcher import lifecycle
 from launcher.front.qt.binding_mixin import BindingMixin
 
-match constants.OS:
-    case "windows":
+match sys.platform:
+    case "win32":
         _FLAGS = Qt.WindowType.SplashScreen
     case _:
         _FLAGS = Qt.WindowType.SplashScreen | Qt.WindowType.FramelessWindowHint

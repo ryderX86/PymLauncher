@@ -2,6 +2,7 @@ from collections.abc import Callable
 from inspect import _empty, signature
 from typing import ParamSpec, TypeVar, get_type_hints
 import logging
+import sys
 
 from PySide6.QtCore import (
     QEvent,
@@ -12,23 +13,33 @@ from PySide6.QtCore import (
     Signal,
     Slot,
 )
-from PySide6.QtGui import QCloseEvent
-from PySide6.QtWidgets import QProgressDialog
+from PySide6.QtGui import (
+    QCloseEvent,
+    QInputEvent,
+    QKeyEvent,
+)
+from PySide6.QtWidgets import QApplication, QMainWindow, QProgressDialog
 
+from launcher import lifecycle
 from launcher.front.window.loading_blocker import LoadingBlockerWindow
 
 log = logging.getLogger(__name__)
 
 
-class CloseEventBlocker(QObject):
+class LROInputEventFilter(QObject):
     def __init__(self, watched: QObject):
         self._watched = watched
         super().__init__()
-        self._watched.installEventFilter(self)
 
     def eventFilter(self, watched: QObject, event: QEvent) -> bool:
-        if watched == self._watched and isinstance(event, QCloseEvent):
-            return True
+        match watched, event:
+            case (_, QCloseEvent() | QInputEvent() | QKeyEvent()):
+                return True
+            case _, QEvent() if event.type() == QEvent.Type.ActivationChange:
+                return True
+        match event.type():
+            case QEvent.Type.WindowActivate:
+                return True
         return super().eventFilter(watched, event)
 
 
@@ -60,18 +71,22 @@ class LROThread(QThread):
         else:
             self._dialog = dialog_instance_or_type
         if self._dialog is not None:
+            for w in QApplication.topLevelWidgets():
+                if isinstance(w, QMainWindow):
+                    self._dialog.setParent(w)
             if msg:
                 self._dialog.setLabelText(msg)
             self._dialog.setCancelButton(None)
             self._dialog_old_flags = self._dialog.windowFlags()
             self._dialog_old_modality = self._dialog.windowModality()
             self._dialog.setWindowFlags(
-                (self._dialog_old_flags | Qt.WindowType.SplashScreen)
-                & ~Qt.WindowType.Dialog
+                self._dialog.windowFlags() | Qt.WindowType.SplashScreen
             )
             self._dialog.setWindowModality(Qt.WindowModality.ApplicationModal)
             if max_expected_time is not None:
                 self._dialog.setMinimumDuration(int(max_expected_time * 1000))
+            else:
+                self._dialog.setMinimumDuration(0)
         super().__init__(parent)
 
     @Slot(Exception)
@@ -117,12 +132,19 @@ class LROThread(QThread):
         )
         super().start(QThread.Priority.NormalPriority)
         if self._dialog:
+            if sys.platform not in {"win32"}:
+                ef = LROInputEventFilter(lifecycle.qapp)
+                lifecycle.qapp.installEventFilter(ef)
             self._dialog.open()
-        loop.exec(QEventLoop.ProcessEventsFlag.ExcludeUserInputEvents)
-        if self._dialog:
+            loop.exec()
             self._dialog.close()
             self._dialog.setWindowFlags(self._dialog_old_flags)
             self._dialog.setWindowModality(self._dialog_old_modality)
+            if sys.platform not in {"win32"}:
+                QApplication.processEvents()
+                lifecycle.qapp.removeEventFilter(ef)  # type: ignore
+        else:
+            loop.exec()
         if self._exception:
             raise self._exception
         if signature(self._func).return_annotation is not _empty:
