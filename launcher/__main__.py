@@ -1,3 +1,4 @@
+from datetime import datetime
 from json import JSONDecodeError
 from types import NoneType
 from typing import NoReturn
@@ -154,8 +155,6 @@ class LauncherApp:
         self.main_window.home_page.play_requested.connect(self.play)
 
         account_man.signals.account_changed.connect(self._on_account_changed)
-
-        self.main_window.home_page.game_crash.connect(self.show_crash_dialog)
 
     @Slot()
     def _on_config_update(self):
@@ -434,10 +433,30 @@ class LauncherApp:
             self.exit()
         return
 
-    @Slot(str, str)
-    def show_crash_dialog(self, exit_code: str, stderr: str):
+    @Slot(str)
+    def on_game_closed(self, exit_code: str):
+        ec = int(exit_code)
+        if ec == 0:
+            return
+
+        # crash occured:
+        dt = datetime.now()
+        log.debug("Game crashed at %s", dt.strftime("%d/%m/%Y, %H:%M:%S"))
         log.debug("Showing crash dialog to user")
-        dialog = ErrorDisplay(self.main_window, exit_code, stderr)
+        basepath = profile_manager.get_current_profile().game_dir or paths.game
+        seconds = {dt.second, dt.second - 1, dt.second - 2}
+        fp = None
+        for s in seconds:
+            test_path = os.path.join(
+                basepath,
+                "crash-reports",
+                f"crash-{dt.strftime("%Y-%m-%d_%H.%M.")}{s:02d}-client.txt",
+            )
+            log.debug("checking for %r", test_path)
+            if os.path.exists(test_path):
+                fp = test_path
+                break
+        dialog = ErrorDisplay(self.main_window, exit_code, None, fp)
         dialog.open()
         return
 
@@ -514,7 +533,7 @@ class LauncherApp:
             Qt.ConnectionType.UniqueConnection,
         )
         self.launch_worker.game_closed.connect(
-            self.main_window.home_page.on_game_closed,
+            self.on_game_closed,
             Qt.ConnectionType.UniqueConnection,
         )
         self.launch_worker.game_log.connect(

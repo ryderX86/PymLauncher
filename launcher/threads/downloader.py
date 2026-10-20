@@ -57,6 +57,7 @@ class GameJarDownloaderThread(QThread):
     def __init__(self, jar: JarFile):
         super().__init__()
         self.jar = jar
+        self.was_skipped = None
 
     def run(self):
         try:

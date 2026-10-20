@@ -352,6 +352,9 @@ class SettingsWindow(BindingMixin, QDialog):
                 attr_name="logging_template",
                 signal=self.home_log_fmt.textEdited,
                 widget=self.home_log_fmt,
+                normalize=lambda t: (
+                    t if t != constants.DEFAULT_LOG_TEMPLATE else None
+                ),
             )
         )
 

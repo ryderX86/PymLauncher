@@ -35,11 +35,9 @@ from launcher.front.theming import theme_manager
 from launcher.front.window.text_popup import TextPopup
 from launcher.functions import error_box, is_path_valid
 from launcher.offline import offline_man
-from launcher.threads.install_worker import InstallWorker
-from launcher.threads.launch_worker import LaunchWorker
 
 log = logging.getLogger(__name__)
-log_tmp = config.logging_template
+log_tmp = config.logging_template or constants.DEFAULT_LOG_TEMPLATE
 log_tmp_type = config.determine_log_template_format(log_tmp)[0]
 
 
@@ -59,7 +57,6 @@ class HomePage(BindingMixin, QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.fonts = get_fonts()
-        self._launcher: LaunchWorker | None = None
         self._no_icon = QIcon().pixmap(QSize(32, 32))
         self._build_ui()
         self.profile_needs_install: bool = True
@@ -83,8 +80,10 @@ class HomePage(BindingMixin, QWidget):
 
     @Slot()
     def _on_installer_starting(self):
+        # use globals to avoid some(?) attribute lookup, since formatting is
+        # going to be slow enough as-is.
         global log_tmp, log_tmp_type
-        log_tmp = config.logging_template
+        log_tmp = config.logging_template or constants.DEFAULT_LOG_TEMPLATE
         log_tmp_type = config.determine_log_template_format(log_tmp)[0]
         self.progress_bar.setValue(0)
         self.progress_label.setText("")
@@ -114,12 +113,7 @@ class HomePage(BindingMixin, QWidget):
 
         margins = self.progress_frame.contentsMargins()
         min_height = plh + pbh + margins.top() + margins.bottom()
-        self.progress_frame.setMinimumHeight(min_height)
-
-    def kill_worker(self):
-        if self._launcher:
-            log.debug("self._worker.deleteLater()")
-            self._launcher.deleteLater()
+        self.progress_frame.setFixedHeight(min_height)
 
     def _build_ui(self):
         layout = QVBoxLayout(self)
@@ -318,32 +312,6 @@ class HomePage(BindingMixin, QWidget):
             self.play_button.setText("Installing...")
         self.play_requested.emit()
 
-    def prep_for_launch(
-        self, installer_: InstallWorker, launcher: LaunchWorker
-    ):
-        # use globals to avoid some(?) attribute lookup, the formatting is slow
-        # enough as-is.
-        global log_tmp, log_tmp_type
-        log_tmp = config.logging_template
-        log_tmp_type = config.determine_log_template_format(log_tmp)[0]
-        # ui stuff
-        self.progress_bar.setValue(0)
-        self.progress_label.setText("")
-        self.progress_bar.setVisible(True)
-        self.progress_label.setVisible(True)
-
-        installer_.progress.connect(self._on_progress)
-        installer_.status.connect(self._on_status)
-        installer_.done.connect(self.on_install_finished)
-
-        launcher.progress.connect(self._on_progress)
-        launcher.status.connect(self._on_status)
-        launcher.done.connect(self.on_launch_finished)
-        launcher.game_closed.connect(self.on_game_closed)
-        if config.show_logs_on_home:
-            launcher.game_log.connect(self.handle_game_log)
-        self.game_logs.clear()
-
     @Slot(str, float, float, bool)
     def _on_progress(
         self, label: str, current: float, total: float, use_mb: bool
@@ -376,7 +344,6 @@ class HomePage(BindingMixin, QWidget):
         self._reset_play_button()
         if int(exit_code) != 0:
             self.game_crash.emit(exit_code, self.game_logs.toPlainText())
-        self.kill_worker()
 
     def _open_prof_folder(self, folder: str | None = None):
         p: str | os.PathLike

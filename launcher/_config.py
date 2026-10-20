@@ -3,7 +3,7 @@ Class/instance of a config loader/saver
 """
 
 from enum import EnumType, IntEnum, StrEnum
-from typing import Any, Callable, get_type_hints
+from typing import Any, Callable, Union, get_args, get_type_hints
 import json
 import logging
 import os
@@ -130,7 +130,7 @@ class ConfigHolder:
     icon_theme: str
     always_show_debug_options: bool
     disable_lzma_downloads: bool
-    logging_template: str
+    logging_template: str | None
 
     def __init__(self):
         # config items; defaults
@@ -156,7 +156,7 @@ class ConfigHolder:
         self.always_show_debug_options = False
         self.disable_lzma_downloads = False
         self.icon_theme = "\x00"  # see launcher.front.qt.icon_helpers:261
-        self.logging_template = constants.DEFAULT_LOG_TEMPLATE
+        self.logging_template = None
 
     @classmethod
     def coerce_enum(cls, val: int | str, type_: EnumType):
@@ -184,6 +184,7 @@ class ConfigHolder:
 
         _all = dir(self)
         issues: int = 0
+        self_hints = get_type_hints(type(self))
         for key, val in obj.items():
             if key not in _all:
                 log.warning(
@@ -191,25 +192,29 @@ class ConfigHolder:
                 )
                 issues += 1
                 continue
-            elif isinstance(
-                get_type_hints(type(self))[key], EnumType
-            ):  # enum hack
-                if val in get_type_hints(type(self))[key]:
+            elif isinstance(self_hints[key], EnumType):  # enum hack
+                if val in self_hints[key]:
                     setattr(
                         self,
                         key,
-                        self.coerce_enum(val, get_type_hints(type(self))[key]),
+                        self.coerce_enum(val, self_hints[key]),
                     )
                     continue
                 else:
                     log.warning(
                         "Unexpected value for %r: %r",
-                        get_type_hints(type(self))[key],
+                        self_hints[key],
                         val,
                     )
                     continue
             elif isinstance(getattr(self, key), set) and isinstance(val, list):
                 val = set(val)  # set() hack
+            elif (
+                isinstance(self_hints[key], Union)
+                and (not get_args(a) for a in get_args(self_hints[key]))
+                and type(val) in get_args(self_hints[key])
+            ):
+                pass
             elif not isinstance(val, type(getattr(self, key))):
                 log.warning(
                     "Skipping config entry %r due to mismatching type: "

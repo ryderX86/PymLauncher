@@ -29,8 +29,6 @@ class CopyToClipboardButton(QPushButton):
         if is_icon_button:
             self._default_icon = get_icon(IconName.COPY)
             self.setIcon(self._default_icon)
-            self.setFixedHeight(40)
-            self.setFixedWidth(40)
         else:
             self.setText("Copy to clipboard")
 
