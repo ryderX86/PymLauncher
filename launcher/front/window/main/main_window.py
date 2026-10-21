@@ -8,7 +8,7 @@ from time import sleep
 import logging
 import sys
 
-from PySide6.QtCore import Qt, QUrl, Signal, Slot
+from PySide6.QtCore import Qt, QTimer, QUrl, Signal, Slot
 from PySide6.QtGui import QDesktopServices, QShowEvent
 from PySide6.QtWidgets import (
     QHBoxLayout,
@@ -243,7 +243,7 @@ class MainWindow(QMainWindow):
     def _show_settings_window(self):
         win = SettingsWindow(self)
         win.accepted.connect(self.home_page.config_changed)
-        win.exec()
+        QTimer.singleShot(0, win.exec)  # visual hack
 
     @Slot()
     def _show_fabric_window(self):
