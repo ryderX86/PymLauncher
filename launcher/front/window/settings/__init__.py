@@ -330,7 +330,8 @@ class SettingsWindow(BindingMixin, QDialog):
         )
 
         self.home_log_fmt = QLineEdit(
-            placeholderText=constants.DEFAULT_LOG_TEMPLATE
+            placeholderText=constants.DEFAULT_LOG_TEMPLATE,
+            clearButtonEnabled=True,
         )
         hplf_final = TooltipHint.widget_tooltip(
             "Accepted formats:<ul>"
