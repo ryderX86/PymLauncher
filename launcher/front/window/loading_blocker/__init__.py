@@ -93,7 +93,6 @@ class LoadingBlockerWindow(BindingMixin, QProgressDialog):
             # enddebug
 
     def __init__(self, parent=None, flags=_FLAGS):
-        log.debug("Making loading blocker window")
         super().__init__(parent, flags)
 
         # legacy QDialog-subclass code:

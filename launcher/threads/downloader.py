@@ -18,6 +18,7 @@ from launcher import config, lifecycle
 from launcher.back.download_helpers import iter_lzma_stream
 from launcher.datatypes.game_version.jar_file import JarFile
 from launcher.exceptions.back import LZMAEarlyQuitError
+from launcher.exceptions.network import HTTPStatusCodeError
 from launcher.networking import make_request
 from launcher.offline import offline_man
 
@@ -26,8 +27,8 @@ log = logging.getLogger(__name__)
 
 class HashType(StrEnum):
     # insecure-ish
-    SHA1 = "SHA-1"
     MD5 = "MD5"
+    SHA1 = "SHA-1"
     # secure
     SHA224 = "SHA224"
     SHA256 = "SHA256"
@@ -312,6 +313,15 @@ class DownloaderThread(QThread):
 
         try:
             resp = make_request("get", inf.url, preload_response=False)
+        except HTTPStatusCodeError as err:
+            if err.code == 404 and os.path.exists(inf.file_path):
+                log.info(
+                    "404 at %r, but file exists, have to assume it works.",
+                    inf.url,
+                )
+                return
+            log.error(err)
+            raise err
         except Exception as err:
             offline_man.check_requests_error(err)
             raise err

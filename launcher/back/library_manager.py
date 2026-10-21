@@ -372,7 +372,7 @@ def build_classpath(
                 entries.append(jar_path)
                 continue
             else:
-                log.warning(
+                log.debug(
                     "Skipping duplicate library: '%s'",
                     lib.name,
                 )

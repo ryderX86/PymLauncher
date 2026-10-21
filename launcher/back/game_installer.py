@@ -12,7 +12,7 @@ from PySide6.QtCore import (
 )
 from shiboken6 import delete
 
-from launcher import config, constants, paths
+from launcher import config, constants, lifecycle, paths
 from launcher.back import java_manager, profile_manager, version_manager
 from launcher.threads.downloader import (
     Download,
@@ -50,6 +50,7 @@ class GameInstaller(QObject):
     _error_occured: bool
     _already_handled_error: bool
     _mutex: QMutex
+    _interrupted: bool
 
     def __init__(self):
         super().__init__()
@@ -59,6 +60,7 @@ class GameInstaller(QObject):
         self._error_occured = False
         self._already_handled_error = False
         self._mutex = QMutex()
+        self._interrupted = False
 
     def _clear_threads(self):
         for t in self._threads:
@@ -130,6 +132,22 @@ class GameInstaller(QObject):
                 Qt.ConnectionType.UniqueConnection,
             )
         self._loop.exec(QEventLoop.ProcessEventsFlag.AllEvents)
+        for t in self._threads:  # hack for qthread deletion crashes
+            if not t.wait(5):
+                log.warning(
+                    "Thread %r still running, terminating...", t.objectName()
+                )
+                t.terminate()
+
+    @Slot()
+    def _interrupt(self):
+        self._interrupted = True
+        for t in self._threads:
+            if t.isRunning():
+                log.debug("Stopping thread %r", t.objectName())
+                t.requestInterruption()
+                while not t.wait(150):
+                    log.debug("Thread still running!")
 
     def _start_threads(self):
         for t in self._threads:
@@ -191,29 +209,30 @@ class GameInstaller(QObject):
                         virtual=asset.virtual_path,
                     )
                 )
-        # add the log4j configuration as well, nowhere else really good to
-        # throw it in and it is stored under assets:
-        if lc := self.version.logging:
-            queue.append(
-                Download(
-                    lc.url,
-                    lc.path,
-                    lc.sha1,
-                    HashType.SHA1,
+        if not self._error_occured:
+            # add the log4j configuration as well, nowhere else really good to
+            # throw it in and it is stored under assets:
+            if lc := self.version.logging:
+                queue.append(
+                    Download(
+                        lc.url,
+                        lc.path,
+                        lc.sha1,
+                        HashType.SHA1,
+                    )
                 )
-            )
         queue.end_append()
         self._wait_for_threads()
         self.set_queue_for_all(None)
-        log.debug(
-            "Finished downloading assets. "
-            "Downloaded or overwritten %d/%d assets.",
-            self._new_overridden_count,
-            self._skipped_count,
-        )
+        if not (self._interrupted or self._error_occured):
+            log.debug(
+                "Finished downloading %d/%d assets.",
+                self._new_overridden_count,
+                self._skipped_count + self._new_overridden_count,
+            )
         return
 
-    def download_jvm(self):
+    def download_jre(self):
         if not self.java_index:
             return
         queue = DownloadQueue()
@@ -262,13 +281,13 @@ class GameInstaller(QObject):
         queue.end_append()
         self._wait_for_threads()
         self.set_queue_for_all(None)
-        log.debug(
-            "Finished downloading Java %s. "
-            "Downloaded or overwritten %d/%d files.",
-            self.java_index.version_id,
-            self._new_overridden_count,
-            count,
-        )
+        if not (self._interrupted or self._error_occured):
+            log.debug(
+                "Finished downloading Java %s. %d/%d new files.",
+                self.java_index.version_id,
+                self._new_overridden_count,
+                count,
+            )
         return
 
     def download_jar(self):
@@ -281,14 +300,23 @@ class GameInstaller(QObject):
         )
         self.set_display_bytes.emit(True)
         dler = GameJarDownloaderThread(self.version.jar_file)
+        dler.setObjectName(f"{type(self).__name__}.GameJarDownloaderThread")
+        lifecycle.shutting_down.connect(dler.requestInterruption)
+        dler.setParent(self)
         dler.progress.connect(self.update_bytes.emit)
         dler.exception.connect(self._handle_exception)
         dler.exception.connect(dler.requestInterruption)
         dler.finished.connect(self._loop.quit)
         dler.start()
         self._loop.exec(QEventLoop.ProcessEventsFlag.AllEvents)
+        if not dler.wait(50):
+            log.warning("Thread %r still running!", dler.objectName())
+            dler.terminate()
+        if self._interrupted:
+            return
         if dler.was_skipped:
             log.debug("Skipped client JAR download, exists already")
+        delete(dler)
         return
 
     def download_libraries(self):
@@ -305,12 +333,14 @@ class GameInstaller(QObject):
         natives_path = os.path.join(
             paths.game, "bin", self.version.inherits_from or self.version.id
         )
+        count = 0
         for lib in self.version.iter_libraries():
             if self._error_occured:
                 break
             if not lib.url:
                 log.debug("Skipping library %r since it has no URL.", lib.name)
                 continue
+            count += 1
             if lib.is_native and not lib.sha1:
                 queue.append(
                     NativeDownload(
@@ -347,25 +377,38 @@ class GameInstaller(QObject):
                 queue.append(Download(lib.url, lib.path))
         queue.end_append()
         self._wait_for_threads()
+        if not (self._interrupted or self._error_occured):
+            log.debug(
+                "Finished downloading %d/%d libraries.",
+                self._new_overridden_count,
+                count,
+            )
 
     def install(self):
+        lifecycle.shutting_down.connect(self._interrupt)
         st = time.perf_counter()
         self.starting.emit()
         log.debug("Prepping variables")
         self.prep_vars()
         self.prep_threads()
 
+        install_functions = []
+
         if not self.profile.java_path:
-            self.download_jvm()
+            install_functions.append(self.download_jre)
+        install_functions.append(self.download_libraries)
+        install_functions.append(self.download_assets)
+        install_functions.append(self.download_jar)
 
-        if not self._error_occured:
-            self.download_libraries()
-
-        if not self._error_occured:
-            self.download_assets()
-
-        if not self._error_occured:
-            self.download_jar()
+        for func in install_functions:
+            if self._error_occured:
+                log.info("Error occured, cleaning threads and stopping.")
+                self._clear_threads()
+                self.finished.emit(False)
+                return
+            elif self._interrupted:
+                return
+            func()
 
         self._clear_threads()
         ft = time.perf_counter()
@@ -374,6 +417,7 @@ class GameInstaller(QObject):
             self.finished.emit(False)
             return
         self.finished.emit(True)
+        lifecycle.shutting_down.disconnect(self._interrupt)
 
 
 installer = GameInstaller()

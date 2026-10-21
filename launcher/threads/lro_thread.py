@@ -118,7 +118,6 @@ class LROThread(QThread):
         self._func_kwargs = kwargs
         if QThread.currentThread() != self.affinity:
             raise RuntimeError("Bad thread affinity")
-        log.debug("Starting LRO thread")
         loop = QEventLoop()
         self.exception.connect(
             self._on_exception, Qt.ConnectionType.BlockingQueuedConnection
@@ -161,11 +160,6 @@ class LROThread(QThread):
                     f"Function {self._func.__name__} returned invalid type: "
                     f"{type(self._result).__name__} (expected any of {rt!r})"
                 )
-        elif not globals().get("__compiled__", False):
-            log.warning(
-                "No return annotation on %s(), result may be the wrong type",
-                self._func.__qualname__,
-            )
         return self._result  # type: ignore
 
 

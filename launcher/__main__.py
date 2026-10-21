@@ -534,6 +534,9 @@ class LauncherApp:
         )
         self.launch_worker.game_closed.connect(
             self.on_game_closed,
+        )
+        self.launch_worker.game_closed.connect(
+            self.main_window.home_page.on_game_closed,
             Qt.ConnectionType.UniqueConnection,
         )
         self.launch_worker.game_log.connect(
