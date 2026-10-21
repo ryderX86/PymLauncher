@@ -20,10 +20,6 @@ _URL_RE = r"(url\()((theme:)|(\./))([^)\r\n;]+)(\))"
 _URL_RE_COMPILED: re.Pattern | None = None
 
 
-class CustomThemeManager:
-    def __init__(self): ...
-
-
 def blend_colors(base: QColor, overlay: QColor, fade_amount: float, add: bool):
     if add:
         base_red = base.red()

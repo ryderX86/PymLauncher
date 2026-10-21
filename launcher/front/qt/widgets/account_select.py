@@ -12,8 +12,8 @@ from PySide6.QtWidgets import QAbstractItemView, QComboBox, QMenu, QMessageBox
 
 from launcher import config
 from launcher.back.account_manager import account_man
-from launcher.front.icon_helpers import IconName, get_icon
 from launcher.front.qt.binding_mixin import BindingMixin
+from launcher.front.theming import IconName, get_icon
 from launcher.front.window.skin_change import SkinChange
 from launcher.functions import Suppressable, copy_to_clipboard, error_box
 from launcher.offline import offline_man

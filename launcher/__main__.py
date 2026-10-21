@@ -12,9 +12,6 @@ from PySide6.QtCore import QEventLoop, QFile, Qt, Slot
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QApplication
 
-from launcher.front.icon_helpers import ico_mgr
-from launcher.threads.lro_thread import LROThread
-
 from . import (
     config,
     constants,
@@ -39,7 +36,7 @@ from .exceptions import EncryptedDataDecodeError
 from .exceptions.encryption import EncryptionUnavailableWarning
 from .front.event_filters import FocusEventFilter
 from .front.styles import FontList, get_fonts
-from .front.theming import theme_manager
+from .front.theming import icon_theme_manager, theme_manager
 from .front.window.game_error import ErrorDisplay
 from .front.window.loading_blocker import LoadingBlockerWindow
 from .front.window.login import LoginWindow
@@ -58,6 +55,7 @@ from .threads.bootstrap import (
 )
 from .threads.install_worker import InstallWorker
 from .threads.launch_worker import LaunchWorker
+from .threads.lro_thread import LROThread
 
 log = logging.getLogger("launcher")
 
@@ -119,9 +117,9 @@ class LauncherApp:
         # lifecycle.qapp.setPalette(gen_palette())
         lifecycle.qapp.setApplicationVersion(constants.LAUNCHER_VERSION)
         lifecycle.qapp.setApplicationDisplayName(constants.LAUNCHER_NAME)
-        ico_mgr.add_search_path(paths.icon_themes)
-        ico_mgr.load_themes()
-        ico_mgr.set_theme(config.icon_theme)
+        icon_theme_manager.add_search_path(paths.icon_themes)
+        icon_theme_manager.load_themes()
+        icon_theme_manager.set_theme(config.icon_theme)
         theme_manager.load()
         theme_manager.set_theme(config.theme)
         if QFile(":/icon.ico").exists():
@@ -164,7 +162,7 @@ class LauncherApp:
         new_name = config.theme
         if current_name != new_name:
             theme_manager.set_theme(new_name)
-        ico_mgr.set_theme(config.icon_theme)
+        icon_theme_manager.set_theme(config.icon_theme)
 
     @Slot()
     def _set_clean_exit(self):

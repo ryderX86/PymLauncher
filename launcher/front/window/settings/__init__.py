@@ -20,15 +20,15 @@ from PySide6.QtWidgets import (
 )
 
 from launcher import JarRedownloadBehavior, config, constants, lifecycle, paths
-from launcher.front.icon_helpers import (
-    IconName,
-    get_icon,
-    ico_mgr,
-)
 from launcher.front.qt.binding_mixin import BindingMixin
 from launcher.front.qt.widget_mapping_adapter import WidgetMappingAdapter
 from launcher.front.qt.widgets import TooltipHint
 from launcher.front.theming import theme_manager
+from launcher.front.theming.icon_helpers import (
+    IconName,
+    get_icon,
+    icon_theme_manager,
+)
 from launcher.functions import Suppressable, popup_folder
 
 
@@ -461,7 +461,7 @@ class SettingsWindow(BindingMixin, QDialog):
         theme.addLayout(
             make_setting("Icons:", self.icon_theme_selector, open_icons_folder)
         )
-        for name, id_ in ico_mgr.selector_themes:
+        for name, id_ in icon_theme_manager.selector_themes:
             self.icon_theme_selector.addItem(name, id_)
         self._mappers.add(
             WidgetMappingAdapter(

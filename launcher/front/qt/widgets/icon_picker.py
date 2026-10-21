@@ -31,8 +31,8 @@ from PySide6.QtWidgets import (
 
 from launcher import lifecycle
 from launcher.front import resources
-from launcher.front.icon_helpers import IconName, get_icon
 from launcher.front.qt.binding_mixin import BindingMixin
+from launcher.front.theming import IconName, get_icon
 from launcher.functions import truncate
 
 log = logging.getLogger(__name__)

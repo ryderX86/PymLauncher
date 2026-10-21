@@ -6,7 +6,7 @@ from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import QApplication, QPushButton, QToolTip, QWidget
 
 from launcher import constants
-from launcher.front.icon_helpers import IconName, get_icon
+from launcher.front.theming import IconName, get_icon
 from launcher.functions import truncate
 
 log = logging.getLogger(__name__)

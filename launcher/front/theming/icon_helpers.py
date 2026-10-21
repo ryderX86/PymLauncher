@@ -3,10 +3,10 @@
 from collections.abc import Iterable
 from enum import IntEnum, StrEnum, auto
 from functools import cached_property
-import os
 from typing import NamedTuple
 import configparser
 import logging
+import os
 import sys
 
 from PySide6.QtCore import (
@@ -44,7 +44,6 @@ class IconThemeType(IntEnum):
     QT = 0
     PRISM = 1
     WIN32 = 2
-    FREEDESKTOP = 3
 
 
 def _refresh_all_icons():  # TODO: handle other widgets
@@ -80,7 +79,7 @@ class IconTheme:
         self._pair = pairing
         self.uses_dark_icons = color_scheme
         match self.type:
-            case IconThemeType.FREEDESKTOP | IconThemeType.PRISM:
+            case IconThemeType.PRISM:
                 if not index_dir:
                     raise RuntimeError(
                         "Cannot create Pym/Prism theme without including the index file"
@@ -115,7 +114,7 @@ class IconTheme:
     def exists(self):
         # use QFile since the built-in QResource themes also use this class
         match self.type:
-            case IconThemeType.FREEDESKTOP | IconThemeType.PRISM:
+            case IconThemeType.PRISM:
                 assert self.index_file is not None
                 return QFile(self.index_file).exists()
             case IconThemeType.WIN32:
@@ -347,38 +346,12 @@ class IconThemeManager:
                 theme_id = parser.get(
                     "Icon Theme", "Name", fallback=directory.split("/")[-1]
                 )
-
-                if (
-                    parser.get("Icon Theme", "Type", fallback="").lower()
-                    == "pym"
-                ):
-                    display_name = parser.get(
-                        "Icon Theme", "DisplayName", fallback=theme_id
-                    )
-                    theme_type = IconThemeType.FREEDESKTOP
-                    pairing = parser.get("Icon Theme", "PairId", fallback=None)
-                    raw_color_scheme = parser.get(
-                        "Icon Theme", "ColorScheme", fallback=""
-                    )
-                    match raw_color_scheme.lower():
-                        case "light":
-                            is_dark = False
-                        case "dark":
-                            is_dark = True
-                        case "":
-                            is_dark = None
-                        case _:
-                            _log.warning(
-                                "Invalid icon scheme: %r", raw_color_scheme
-                            )
-                            is_dark = None
-                else:
-                    display_name = parser.get(
-                        "Icon Theme", "Name", fallback=theme_id
-                    )
-                    theme_type = IconThemeType.PRISM
-                    pairing = None
-                    is_dark = None
+                display_name = parser.get(
+                    "Icon Theme", "Name", fallback=theme_id
+                )
+                theme_type = IconThemeType.PRISM
+                pairing = None
+                is_dark = None
 
                 inherits_from = parser.get(
                     "Icon Theme", "Inherits", fallback=None
@@ -477,7 +450,7 @@ class IconThemeManager:
         return default_qt.id
 
 
-ico_mgr = IconThemeManager()
+icon_theme_manager = IconThemeManager()
 
 
 class IconName(StrEnum):
@@ -829,8 +802,8 @@ class AdaptiveIconEngine(QIconEngine):
         self._get_qicon()
 
     def _get_qicon(self):
-        icon_theme = ico_mgr.current
-        fallback = ico_mgr.fallback
+        icon_theme = icon_theme_manager.current
+        fallback = icon_theme_manager.fallback
         if (
             icon_theme == self._last_known_theme
             and fallback == self._last_known_fallback

@@ -1,3 +1,17 @@
+__all__ = [
+    "theme_manager",
+    "BaseTheme",
+    "BuiltinTheme",
+    "CustomTheme",
+    "Icon",
+    "IconName",
+    "IconTheme",
+    "IconThemeType",
+    "icon_theme_manager",
+    "get_icon",
+    "AdaptiveIconEngine",
+]
+
 from collections.abc import Generator
 import glob
 import json
@@ -9,11 +23,18 @@ from PySide6.QtGui import QPalette
 from PySide6.QtWidgets import QApplication, QStyleFactory
 
 from launcher import lifecycle, paths
-from launcher.front.icon_helpers import ico_mgr
 from launcher.front.styles import dark_theme_active
 
-# noinspection unused-imports
-from .custom_theme_support import BaseTheme, BuiltinTheme, CustomTheme
+from .custom_theme import BaseTheme, BuiltinTheme, CustomTheme
+from .icon_helpers import (
+    AdaptiveIconEngine,
+    Icon,
+    IconName,
+    IconTheme,
+    IconThemeType,
+    get_icon,
+    icon_theme_manager,
+)
 
 log = logging.getLogger(__name__)
 
@@ -126,7 +147,7 @@ class _ThemeManager:
         new_is_dark_theme = dark_theme_active()
 
         if previous_was_dark_theme != new_is_dark_theme:
-            ico_mgr.refresh_color_scheme()
+            icon_theme_manager.refresh_color_scheme()
 
     def theme_list_tuple_iter(self):
         for theme in self._themes.values():

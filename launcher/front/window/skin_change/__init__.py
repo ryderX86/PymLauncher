@@ -59,7 +59,7 @@ from launcher.constants import (
     SKIN_CHANGE_URL,
 )
 from launcher.exceptions.network import HTTPStatusCodeError
-from launcher.front.icon_helpers import IconName, get_icon
+from launcher.front.theming import IconName, get_icon
 from launcher.functions.error_box import error_box
 from launcher.networking import make_request
 from launcher.offline import offline_man

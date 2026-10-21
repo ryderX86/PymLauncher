@@ -33,9 +33,9 @@ from launcher import (
 )
 from launcher.back import profile_manager
 from launcher.constants import LAUNCHER_VERSION
-from launcher.front.icon_helpers import IconName, get_icon
 from launcher.front.qt.widgets import AccountSelect
 from launcher.front.qt.widgets.profile_list import ProfileList
+from launcher.front.theming import IconName, get_icon
 from launcher.front.window.about import AboutWindow
 from launcher.front.window.modloaders import FabricInstallWindow
 from launcher.front.window.settings import SettingsWindow

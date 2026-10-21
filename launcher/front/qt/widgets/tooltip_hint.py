@@ -5,8 +5,8 @@ from PySide6.QtGui import QIcon, QPainter, QPaintEvent
 from PySide6.QtWidgets import QHBoxLayout, QStyle, QWidget
 
 from launcher import config
-from launcher.front.icon_helpers import AdaptiveIconEngine, IconName
 from launcher.front.qt.binding_mixin import BindingMixin
+from launcher.front.theming import AdaptiveIconEngine, IconName
 
 
 class TooltipHint(BindingMixin, QWidget):

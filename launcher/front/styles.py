@@ -1,5 +1,8 @@
 """
-QSS stylesheet
+(Deprecated)
+QSS stylesheet and other things
+
+Mostly dead code, everything here should be relocated
 """
 
 from collections import namedtuple

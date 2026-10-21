@@ -33,7 +33,6 @@ from PySide6.QtWidgets import (
 from launcher import config, constants, paths
 from launcher.back import profile_manager, version_manager
 from launcher.datatypes import GameVersionType, LaunchProfile
-from launcher.front.icon_helpers import IconName, get_icon
 from launcher.front.qt import BindingMixin
 from launcher.front.qt.validator import (
     ProfileRAMValidator,
@@ -42,6 +41,7 @@ from launcher.front.qt.validator import (
 )
 from launcher.front.qt.widget_mapping_adapter import WidgetMappingAdapter
 from launcher.front.qt.widgets import Header2
+from launcher.front.theming import IconName, get_icon
 from launcher.functions import Suppressable, is_path_valid
 from launcher.offline import offline_man
 from launcher.threads.lro_thread import run_potential_lro
