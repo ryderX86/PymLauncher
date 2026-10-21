@@ -29,7 +29,6 @@ from PySide6.QtWidgets import QAbstractButton, QApplication, QStyle
 from launcher.front.styles import dark_theme_active
 
 _log = logging.getLogger(__name__)
-db = QFontDatabase()
 
 
 class Icon(NamedTuple):
@@ -118,7 +117,7 @@ class IconTheme:
                 assert self.index_file is not None
                 return QFile(self.index_file).exists()
             case IconThemeType.WIN32:
-                return db.hasFamily(self.id)
+                return QFontDatabase.hasFamily(self.id)
             case IconThemeType.QT:
                 # really no way to check, have to assume it's fine and
                 # fall back to default if it's not
@@ -140,7 +139,7 @@ class IconTheme:
 
     @classmethod
     def load_system_icon_font(cls, display_name, name: str):
-        if not db.hasFamily(name):
+        if not QFontDatabase.hasFamily(name):
             cls.log.debug("Couldn't find font family for %r", name)
             return
         return IconTheme(
