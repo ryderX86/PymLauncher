@@ -271,7 +271,8 @@ class IconPicker(BindingMixin, QComboBox):
         self._view.setFixedWidth(
             (self._view.sizeHintForColumn(0) * 7)
             + self._pm(QStyle.PixelMetric.PM_ScrollBarExtent)
-            + self._pm(QStyle.PixelMetric.PM_ScrollBarExtent)
+            + self._pm(QStyle.PixelMetric.PM_LayoutLeftMargin)
+            + self._pm(QStyle.PixelMetric.PM_LayoutRightMargin)
         )
         self._view.setFixedHeight(self._view.sizeHintForRow(0) * 5)
         self._view.setIconSize(_list_grid_size)
@@ -286,6 +287,7 @@ class IconPicker(BindingMixin, QComboBox):
             layout.setContentsMargins(margin)
             self._frame.setMaximumHeight(layout.sizeHint().height())
             self._frame.setMaximumWidth(layout.sizeHint().width())
+        self._view.doItemsLayout()
 
     def set_icon(self, icon_data: str | None):
         if icon_data is None or icon_data in self._default_icon_names:
