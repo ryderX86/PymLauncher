@@ -185,10 +185,6 @@ class ThemePair(NamedTuple):
 
 
 class IconThemeManager:
-    FALLBACK_PATH_DARK = QIcon.fallbackSearchPaths()
-    FALLBACK_PATH_DARK.append(":/icons/fallback/dark")
-    FALLBACK_PATH_LIGHT = QIcon.fallbackSearchPaths()
-    FALLBACK_PATH_LIGHT.append(":/icons/fallback/light")
     _search_paths: list[str] = QIcon.themeSearchPaths()
     if sys.platform == "linux":
         _search_paths.extend(
@@ -199,8 +195,6 @@ class IconThemeManager:
                 "/usr/share/pixmaps",
             }
         )
-        FALLBACK_PATH_DARK.append("/usr/share/icons/hicolor/")
-        FALLBACK_PATH_LIGHT.append("/usr/share/icons/hicolor/")
     _themes: dict[str, IconTheme]
     _paired_themes: dict[str, ThemePair]
     _system_themes: dict[str, IconTheme]
@@ -279,10 +273,6 @@ class IconThemeManager:
             QIcon.setFallbackThemeName(self._fallback.id)
         else:
             QIcon.setFallbackThemeName("")
-        if dark_theme_active():
-            QIcon.setFallbackSearchPaths(self.FALLBACK_PATH_LIGHT)
-        else:
-            QIcon.setFallbackSearchPaths(self.FALLBACK_PATH_DARK)
         self.reset_search_paths()
         _refresh_all_icons()
 
@@ -419,10 +409,6 @@ class IconThemeManager:
 
     def refresh_color_scheme(self):
         need_dark_icons = dark_theme_active()
-        if need_dark_icons:
-            QIcon.setFallbackSearchPaths(self.FALLBACK_PATH_DARK)
-        else:
-            QIcon.setFallbackSearchPaths(self.FALLBACK_PATH_LIGHT)
         if self._current.uses_dark_icons == need_dark_icons:
             return None
         if self.current.pairname:

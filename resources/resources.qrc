@@ -149,18 +149,4 @@
         <file alias="default_sunny.png">icons/account/default_sunny.png</file>
         <file alias="unknown.png">icons/account/unknown.png</file>
     </qresource>
-    <qresource prefix="/">
-        <file>icons/fallback/dark/download.svg</file>
-        <file>icons/fallback/dark/database.svg</file>
-        <file>icons/fallback/dark/preferences-desktop-theme.svg</file>
-        <file>icons/fallback/dark/bug.svg</file>
-        <file>icons/fallback/dark/person-sync.svg</file>
-        <file>icons/fallback/dark/settings.svg</file>
-        <file>icons/fallback/light/database.svg</file>
-        <file>icons/fallback/light/download.svg</file>
-        <file>icons/fallback/light/bug.svg</file>
-        <file>icons/fallback/light/person-sync.svg</file>
-        <file>icons/fallback/light/settings.svg</file>
-        <file>icons/fallback/light/preferences-desktop-theme.svg</file>
-    </qresource>
 </RCC>
