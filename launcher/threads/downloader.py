@@ -227,8 +227,7 @@ class DownloadQueue:
         try:
             if self._still_adding and not self._downloads:
                 self._wait_condition.wait(self._mutex)
-                return self.get_download()
-            elif self._downloads:
+            if self._downloads:
                 return self._downloads.pop()
             raise StopIteration
         finally:
