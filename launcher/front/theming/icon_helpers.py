@@ -745,7 +745,7 @@ _ICONMAPPINGS: dict[IconName, Icon] = {
         IconName.TOOLTIP,
     ),
     IconName.RESET: Icon(
-        QIcon.ThemeIcon.ViewRestore,
+        QIcon.ThemeIcon.EditUndo,
         "refresh",
         "\ue845",
         "circle-counter-clockwise",
