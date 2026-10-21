@@ -299,6 +299,8 @@ class MainWindow(QMainWindow):
 
     @Slot()
     def _on_config_update(self):
+        # we can't directly remove the cornerWidget without
+        # deleting it, so this is the next best option
         self.menuBar().setCornerWidget(QWidget(), Qt.Corner.TopRightCorner)
         lifecycle.qapp.processEvents()
         h = self.menuBar().height()

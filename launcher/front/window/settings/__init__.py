@@ -216,8 +216,8 @@ class SettingsWindow(BindingMixin, QDialog):
 
     @Slot()
     def _on_ok(self):
-        self.accept()
         self._do_save()
+        self.accept()
 
     def _make_general_page(self):
         general = self.SettingsPage("General")

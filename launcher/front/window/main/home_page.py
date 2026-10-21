@@ -68,12 +68,14 @@ class HomePage(BindingMixin, QWidget):
     def bind(self):
         self._reset_progress_bar_sizes()
         lifecycle.config_updated.connect(self._reset_progress_bar_sizes)
+        lifecycle.config_updated.connect(self.config_changed)
 
         installer.starting.connect(self._on_installer_starting)
         installer.finished.connect(self.on_install_finished)
         installer.step.connect(self._on_installer_step)
         installer.downloaded_file.connect(self._on_downloaded_file)
         installer.update_bytes.connect(self._step_progress_bar)
+        self.config_changed()
 
     @Slot(int)
     def _step_progress_bar(self, amount: int):
@@ -485,6 +487,7 @@ class HomePage(BindingMixin, QWidget):
         self.progress_label.setText("")
         self.progress_bar.setValue(0)
 
+    @Slot()
     def config_changed(self):
         self.game_logs.setHidden(not config.show_logs_on_home)
         self.stretcher.setHidden(config.show_logs_on_home)
@@ -506,7 +509,7 @@ class HomePage(BindingMixin, QWidget):
                     "Resetting home page game logs due to option being "
                     "unchecked"
                 )
-                self.game_logs.setPlainText("*taps mic* This thing on?")
+                self.game_logs.clear()
 
     @Slot(str, str, str, str, str)
     def handle_game_log(
