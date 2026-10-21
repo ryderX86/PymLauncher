@@ -4,6 +4,7 @@ minecraftlauncher.front.window.main.home_page
 Home page, play button, profile info, progress bar, all that stuff.
 """
 
+from types import NoneType
 import logging
 import os
 import time
@@ -159,33 +160,35 @@ class HomePage(BindingMixin, QWidget):
 
         open_rp_button = QPushButton("Resource Packs")
         open_rp_button.setProperty("mini", True)
-        open_rp_button.clicked.connect(lambda: self._open_prof_folder("rp"))
+        open_rp_button.clicked.connect(
+            Slot()(lambda: self._open_prof_folder("rp"))
+        )
         profile_action_row.addWidget(open_rp_button, 0)
 
         open_save_button = QPushButton("Worlds")
         open_save_button.clicked.connect(
-            lambda: self._open_prof_folder("world")
+            Slot()(lambda: self._open_prof_folder("world"))
         )
         open_save_button.setProperty("mini", True)
         profile_action_row.addWidget(open_save_button, 0)
 
         open_mods_button = QPushButton("Mods")
         open_mods_button.clicked.connect(
-            lambda: self._open_prof_folder("mods")
+            Slot()(lambda: self._open_prof_folder("mods"))
         )
         open_mods_button.setProperty("mini", True)
         profile_action_row.addWidget(open_mods_button, 0)
 
         open_screenshots_button = QPushButton("Screenshots")
         open_screenshots_button.clicked.connect(
-            lambda: self._open_prof_folder("screenshots")
+            Slot()(lambda: self._open_prof_folder("screenshots"))
         )
         open_screenshots_button.setProperty("mini", True)
         profile_action_row.addWidget(open_screenshots_button, 0)
 
         open_versions_button = QPushButton("Versions")
         open_versions_button.clicked.connect(
-            lambda: self._open_prof_folder("versions")
+            Slot()(lambda: self._open_prof_folder("versions"))
         )
         open_versions_button.setProperty("mini", True)
         profile_action_row.addWidget(open_versions_button, 0)
@@ -341,6 +344,7 @@ class HomePage(BindingMixin, QWidget):
         prof.set_last_used()
         self._reset_play_button()
 
+    @Slot()
     def _open_prof_folder(self, folder: str | None = None):
         p: str | os.PathLike
         prof = profile_manager.get_current_profile()
@@ -397,6 +401,8 @@ class HomePage(BindingMixin, QWidget):
         qurl = QUrl.fromLocalFile(p)
         QDesktopServices.openUrl(qurl)
 
+    @Slot(LauncherAccount)
+    @Slot(NoneType)
     def _check_set_demo_mode_text(self, lp: LauncherAccount | None = None):
         if not self.play_button.isEnabled():
             return
