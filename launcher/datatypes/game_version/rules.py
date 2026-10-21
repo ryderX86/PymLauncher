@@ -1,3 +1,4 @@
+import sys
 from typing import Literal, assert_never
 import json
 import logging
@@ -90,8 +91,9 @@ class OSRule:
         elif not isinstance(self.os["versionRange"], dict):
             log.warning("versionRange in rule is not a dict!")
             return True
-        match constants.OS:
-            case "windows" | "linux":
+        match sys.platform:
+            # TODO: darwin/macOS
+            case "win32":
                 try:
                     ver = parse(constants.OS_VER)
                 except Exception:
