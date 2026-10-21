@@ -97,9 +97,11 @@ class HomePage(BindingMixin, QWidget):
             log_tmp = constants.DEFAULT_LOG_TEMPLATE
             log_tmp_type = config.GameLogTemplateType.DEFAULT
         self.progress_bar.setValue(0)
+        self.progress_bar.setMaximum(0)
         self.progress_label.setText("")
         self.progress_bar.setVisible(True)
         self.progress_label.setVisible(True)
+        self.progress_label.setText("Preparing...")
         if config.show_logs_on_home:
             self.game_logs.clear()
 

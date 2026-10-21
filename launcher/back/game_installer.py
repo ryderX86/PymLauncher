@@ -183,7 +183,7 @@ class GameInstaller(QObject):
         if assets_stub.available():
             self.assets = assets_stub.get()
         else:
-            self.step.emit("Getting assets index", "Preparing", 1)
+            self.step.emit("Getting assets index", "Preparing", 0)
             self.assets = assets_stub.download()
 
     def download_assets(self):
