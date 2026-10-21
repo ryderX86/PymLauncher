@@ -11,7 +11,6 @@ Supports reading the official Minecraft launcher's
 from collections.abc import Callable, Iterable
 from datetime import datetime, timezone
 from functools import lru_cache
-from types import FunctionType
 from typing import Any, Literal
 import copy
 import json
@@ -53,8 +52,6 @@ type ProfileType = Literal["custom", "latest-release", "latest-snapshot"]
 profiles: dict[str, LaunchProfile] = {}
 
 _current_profile: LaunchProfile | None = None
-_profile_switch_handlers: list[Callable[[LaunchProfile], None]] = []
-_profile_refresh_handlers: list[Callable] = []
 
 _launcher_settings = {**_DEFAULT_SETTINGS_JSON}
 
@@ -117,27 +114,13 @@ def add_profile_switch_handler(func: Callable[[LaunchProfile], None]):
 
     TODO: See if `pyqtSignal()` is better for this.
     """
-    _profile_switch_handlers.append(func)
-    return _profile_switch_handlers.index(func)
+    SIGNAL.switched_profile.connect(func)
 
 
 def remove_profile_switch_handler(
-    func_idx: Callable[[LaunchProfile], None] | int,
+    func: Callable[[LaunchProfile], None],
 ):
-    match func_idx:
-        case int():
-            if func_idx > len(_profile_switch_handlers):
-                raise IndexError()
-            _profile_switch_handlers.pop(func_idx)
-            return
-        case FunctionType() | Callable():
-            if func_idx not in _profile_switch_handlers:
-                return
-            _profile_switch_handlers.pop(
-                _profile_switch_handlers.index(func_idx)
-            )
-        case _:
-            raise TypeError(f"Unexpected type: {type(func_idx).__name__!r}")
+    SIGNAL.switched_profile.disconnect(func)
     return
 
 
@@ -146,24 +129,15 @@ def _refresh_profiles():
         return
     # something probably changed in the main cache, so clear LRU for row getter
     get_row_from_profile.cache_clear()
-    for func in _profile_refresh_handlers:
-        func()
+    SIGNAL.refresh_profiles.emit()
 
 
-def add_profile_refresh_handler(func: Callable):
-    _profile_refresh_handlers.append(func)
-    return _profile_refresh_handlers.index(func)
+def add_profile_refresh_handler(func: Callable[[], Any]):
+    SIGNAL.refresh_profiles.connect(func)
 
 
-def remove_profile_refresh_handler(func_idx: Callable | int):
-    if isinstance(func_idx, int):
-        if func_idx > len(_profile_refresh_handlers):
-            raise IndexError()
-        _profile_refresh_handlers.pop(func_idx)
-        return
-    if func_idx not in _profile_refresh_handlers:
-        return
-    _profile_refresh_handlers.pop(_profile_refresh_handlers.index(func_idx))
+def remove_profile_refresh_handler(func: Callable[[], Any]):
+    SIGNAL.refresh_profiles.disconnect(func)
     return
 
 
@@ -212,8 +186,7 @@ def set_current_profile(prof: LaunchProfile):
     global _current_profile
     log.debug("Switching profile to %r (ID: %r)", prof.name, prof.uuid)
     _current_profile = profiles[prof.uuid]
-    for func in _profile_switch_handlers:
-        func(prof)
+    SIGNAL.switched_profile.emit(prof)
     return
 
 
@@ -230,6 +203,8 @@ class _Signal(QObject):
     profile_added = Signal(LaunchProfile)
     profile_deleted = Signal(str, int)  # uid, row
     """`uid: str, row: int`"""
+    switched_profile = Signal(LaunchProfile)
+    refresh_profiles = Signal()
 
 
 SIGNAL = _Signal()

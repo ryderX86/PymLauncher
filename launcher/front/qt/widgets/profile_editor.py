@@ -511,6 +511,8 @@ class ProfileEditor(BindingMixin, QWidget):
         self.version_combo_box.setCurrentIndex(idx)
         self._version_validator.reset_last_val(item.text())
 
+    @Slot()
+    @Slot(LaunchProfile)
     def _load_profile(self, *_):
         _ = QSignalBlocker(self)  # block signals until GC'd
         with self.data_changed.suppressed():

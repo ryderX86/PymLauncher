@@ -259,10 +259,12 @@ class HomePage(BindingMixin, QWidget):
             self._check_set_demo_mode_text
         )
 
+    @Slot()
     def _refresh_profiles(self):
         current = profile_manager.get_current_profile()
         self._on_profile_change(current)
 
+    @Slot(LaunchProfile)
     def _on_profile_change(self, profile: LaunchProfile):
         self._reset_play_button()
         try:

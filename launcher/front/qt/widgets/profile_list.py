@@ -69,6 +69,7 @@ class ProfileList(BindingMixin, QWidget):
         )
         self._view.viewport().installEventFilter(self._right_click_list_filter)
 
+    @Slot(LaunchProfile)
     def _switch_profile(self, new: LaunchProfile):
         if new is None:
             return
@@ -76,6 +77,7 @@ class ProfileList(BindingMixin, QWidget):
         with self._on_select.suppressed():
             self._view.setCurrentRow(idx)
 
+    @Slot()
     def _list_profiles(self):
         sorting = profile_manager.get_profile_sorting()
 
