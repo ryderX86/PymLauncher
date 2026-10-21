@@ -86,8 +86,12 @@ class HomePage(BindingMixin, QWidget):
         # use globals to avoid some(?) attribute lookup, since formatting is
         # going to be slow enough as-is.
         global log_tmp, log_tmp_type
-        log_tmp = config.logging_template or constants.DEFAULT_LOG_TEMPLATE
         log_tmp_type = config.determine_log_template_format(log_tmp)[0]
+        if log_tmp_type != config.GameLogTemplateType.UNKNOWN:
+            log_tmp = config.logging_template or constants.DEFAULT_LOG_TEMPLATE
+        else:
+            log_tmp = constants.DEFAULT_LOG_TEMPLATE
+            log_tmp_type = config.GameLogTemplateType.DEFAULT
         self.progress_bar.setValue(0)
         self.progress_label.setText("")
         self.progress_bar.setVisible(True)
@@ -534,7 +538,10 @@ class HomePage(BindingMixin, QWidget):
             match log_tmp_type:
                 case config.GameLogTemplateType.PERCENT:
                     self.game_logs.appendPlainText(log_tmp % inf)
-                case config.GameLogTemplateType.FORMAT:
+                case (
+                    config.GameLogTemplateType.FORMAT
+                    | config.GameLogTemplateType.DEFAULT
+                ):
                     self.game_logs.appendPlainText(log_tmp.format_map(inf))
                 case _:  # fallback for invalid/unknown
                     self.game_logs.appendPlainText(

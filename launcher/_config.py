@@ -32,8 +32,8 @@ class JarRedownloadBehavior(IntEnum):
     REDOWNLOAD_ONCE = 2
 
 
-_PERCENT_RE = r"(\B(%\(([a-zA-Z_\-]+)\)s))+"
-_FSTRING_RE = r"(\B(\{([a-zA-Z_\-]+)\}))+"
+_PERCENT_RE = r"(\B(%\(([^{}]+)\)s))+"
+_FSTRING_RE = r"(\B(\{([^{}]+)\}))+"
 VALID_FORMAT_NAMES = {"timestamp", "logger", "thread", "level", "message"}
 
 
@@ -75,6 +75,7 @@ class ConfigHolder:
         PERCENT = "%s"
         FORMAT = "{}"
         UNKNOWN = "<unknown>"
+        DEFAULT = "\x00"
 
         @classmethod
         def _missing_(cls, value: object):
@@ -252,6 +253,8 @@ class ConfigHolder:
 
     @classmethod
     def determine_log_template_format(cls, template: str):
+        if not template:
+            return (cls.GameLogTemplateType.DEFAULT,)
         percent_matches = re.findall(_PERCENT_RE, template)
         fstring_mathces = re.findall(_FSTRING_RE, template)
         invalid_matches = []

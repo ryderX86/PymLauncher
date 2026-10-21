@@ -333,6 +333,13 @@ class SettingsWindow(BindingMixin, QDialog):
             placeholderText=constants.DEFAULT_LOG_TEMPLATE,
             clearButtonEnabled=True,
         )
+        self.home_log_fmt.editingFinished.connect(self._check_log_fmt)
+        self.home_log_fmt_warning_label = QLabel(wordWrap=True)
+        w = QWidget()
+        vrow = QVBoxLayout(w)
+        vrow.setContentsMargins(0, 0, 0, 0)
+        vrow.setSpacing(2)
+        self.home_log_fmt_warning_label.setHidden(True)
         hplf_final = TooltipHint.widget_tooltip(
             "Accepted formats:<ul>"
             "<li><code>%(name)s</code></li>"
@@ -345,7 +352,9 @@ class SettingsWindow(BindingMixin, QDialog):
             "<li><code>message</code></li></ul>",
             self.home_log_fmt,
         )
-        visual.addWidget(hplf_final, 0)
+        vrow.addWidget(hplf_final, 0)
+        vrow.addWidget(self.home_log_fmt_warning_label, 0)
+        visual.addWidget(w, 0)
         self._mappers.add(
             WidgetMappingAdapter(
                 read=self.home_log_fmt.text,
@@ -517,3 +526,25 @@ class SettingsWindow(BindingMixin, QDialog):
             case _:
                 self.home_log_fmt.setText("")
                 self.home_log_fmt.setEnabled(False)
+
+    @Slot()
+    def _check_log_fmt(self):
+        txt = self.home_log_fmt.text()
+        keys = config.determine_log_template_format(txt)
+        fmt = keys[0]
+        if len(keys) > 1:
+            unknown = keys[1:]
+            label_txt_begin = "Invalid keys: "
+            keys = set()
+            for key in unknown:
+                keys.add(f'"{key}"')
+            self.home_log_fmt_warning_label.setText(
+                f"{label_txt_begin}<i>{", ".join(keys)}</i>"
+            )
+            self.home_log_fmt_warning_label.setVisible(True)
+        elif fmt == config.GameLogTemplateType.UNKNOWN:
+            self.home_log_fmt_warning_label.setText("Unknown logging type")
+            self.home_log_fmt_warning_label.setVisible(True)
+        else:
+            self.home_log_fmt_warning_label.setText("")
+            self.home_log_fmt_warning_label.setVisible(False)
