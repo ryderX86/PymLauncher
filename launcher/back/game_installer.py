@@ -74,13 +74,15 @@ class GameInstaller(QObject):
             delete(t)
         self._threads = []
 
-    @Slot()
-    def _handle_downloaded(self):
+    @Slot(str, int)
+    def _handle_downloaded(self, path: str, size: int):
         self._new_overridden_count += 1
+        self.downloaded_file.emit(path, size)
 
-    @Slot()
-    def _handle_skipped(self):
+    @Slot(str, int)
+    def _handle_skipped(self, path: str, size: int):
         self._skipped_count += 1
+        self.downloaded_file.emit(path, size)
 
     @Slot(Exception)
     def _handle_exception(self, err: Exception):
@@ -104,11 +106,15 @@ class GameInstaller(QObject):
             if queue:
                 t.set_queue(queue)
             self._threads.append(t)
-            t.exception.connect(self._handle_exception)
-            t.downloaded_file.connect(self.downloaded_file.emit)
-            t.downloaded_file.connect(self._handle_downloaded)
-            t.skipped_file.connect(self.downloaded_file.emit)
-            t.skipped_file.connect(self._handle_skipped)
+            t.exception.connect(
+                self._handle_exception, Qt.ConnectionType.QueuedConnection
+            )
+            t.downloaded_file.connect(
+                self._handle_downloaded, Qt.ConnectionType.QueuedConnection
+            )
+            t.skipped_file.connect(
+                self._handle_skipped, Qt.ConnectionType.QueuedConnection
+            )
 
     def set_queue_for_all(self, queue: DownloadQueue | None):
         for t in self._threads:
@@ -129,7 +135,7 @@ class GameInstaller(QObject):
         for t in self._threads:
             t.finished.connect(
                 self._check_remaining_threads,
-                Qt.ConnectionType.UniqueConnection,
+                Qt.ConnectionType.SingleShotConnection,
             )
         self._loop.exec(QEventLoop.ProcessEventsFlag.AllEvents)
         for t in self._threads:  # hack for qthread deletion crashes
@@ -388,7 +394,6 @@ class GameInstaller(QObject):
         lifecycle.shutting_down.connect(self._interrupt)
         st = time.perf_counter()
         self.starting.emit()
-        log.debug("Prepping variables")
         self.prep_vars()
         self.prep_threads()
 

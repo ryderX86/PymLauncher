@@ -215,24 +215,19 @@ class DownloadQueue:
     def end_append(self):
         self._mutex.lock()
         self._still_adding = False
-        if not self._downloads:
-            log.debug("No downloads left after append, releasing all threads")
-            self._wait_condition.wakeAll()
+        self._wait_condition.wakeAll()
         self._mutex.unlock()
 
     def append(self, dl: Download):
-        self._mutex.lock()
-        try:
-            self._downloads.add(dl)
-            self._wait_condition.wakeOne()
-        finally:
-            self._mutex.unlock()
+        self._downloads.add(dl)
+        self._wait_condition.wakeOne()
 
     def get_download(self) -> Download:
         self._mutex.lock()
         try:
             if self._still_adding and not self._downloads:
                 self._wait_condition.wait(self._mutex)
+                return self.get_download()
             elif self._downloads:
                 return self._downloads.pop()
             raise StopIteration
