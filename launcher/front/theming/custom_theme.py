@@ -1,5 +1,4 @@
 from dataclasses import asdict, dataclass, fields
-from enum import StrEnum
 import logging
 import os
 import re
@@ -188,11 +187,6 @@ class BuiltinTheme(BaseTheme):
 
 
 class CustomTheme(BaseTheme):
-    class Type(StrEnum):
-        PRISM = "prism"
-        PALETTE = "paletteOnly"
-        PYM = "pym"
-
     __slots__ = (
         "_palette",
         "_qss",
