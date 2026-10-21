@@ -345,14 +345,15 @@ class HomePage(BindingMixin, QWidget):
     def _on_status(self, text: str):
         self.progress_label.setText(text)
 
-    @Slot()
-    def on_game_closed(self):
+    @Slot(str)
+    def on_game_closed(self, exit_code_str: str):
         self.play_button.setEnabled(True)
         # we WILL have profiles by this point or i deserve the crash this will
         # allow
         prof = profile_manager.get_current_profile()
         prof.set_last_used()
         self._reset_play_button()
+        self.game_closed.emit(exit_code_str)
 
     @Slot()
     def _open_prof_folder(self, folder: str | None = None):
