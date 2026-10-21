@@ -189,22 +189,8 @@ class MainWindow(QMainWindow):
         main_area = QVBoxLayout()
         body_layout.addLayout(main_area)
 
-        # self.tab_selector = QTabBar(
-        #     shape=QTabBar.Shape.RoundedNorth,
-        #     movable=False,
-        #     documentMode=True,
-        #     expanding=False,
-        #     drawBase=True,
-        # )
-
         self.pages = QTabWidget()
         main_area.addWidget(self.pages, 1)
-        if lifecycle.qapp.style().name().lower() == "windows11":
-            self.pages.setStyleSheet("""
-                QTabWidget::pane:after {
-                    border: 1px solid rgba(255, 255, 255, 0.03);
-                }
-                """)
 
         # self.pages.setFrameShape(QFrame.Shape.StyledPanel)
 
@@ -222,13 +208,6 @@ class MainWindow(QMainWindow):
 
         for label, page in self.tab_list.items():
             self.pages.addTab(page, label)
-
-        #     tab_idx = self.tab_selector.addTab(label)
-        #     self.tab_selector.setTabData(tab_idx, page)
-        # self.tab_selector.currentChanged.connect(self._on_tab_change)
-        #
-        # self.tab_selector.setDocumentMode(True)
-        # main_area.addWidget(self.tab_selector)
 
         root_layout.addWidget(body)
 
