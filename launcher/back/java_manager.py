@@ -153,22 +153,25 @@ def get_jvm_version(version: str) -> JavaVersion:
                 str(manifest_path),
             )
             if sha1:
-                with open(manifest_path, "rb") as file:
-                    mf_bytes = file.read()
-                mf_sha1 = hashlib.sha1(mf_bytes).hexdigest()
-                if mf_sha1 == sha1:
-                    return JavaVersion.parse(
-                        version,
-                        version_id,
-                        json.loads(mf_bytes.decode("utf-8")),
-                    )
-                else:
-                    log.warning(
-                        "JRE manifest at '%s' is outdated or "
-                        "corrupted, redownloading...",
-                        str(manifest_path),
-                    )
-                    os.unlink(manifest_path)
+                file = open(manifest_path, "rb")
+                try:
+                    mf_sha1 = hashlib.file_digest(file, "sha1")
+                    file.seek(0)
+                    if mf_sha1 == sha1:
+                        return JavaVersion.parse(
+                            version,
+                            version_id,
+                            json.load(file),
+                        )
+                    else:
+                        log.warning(
+                            "JRE manifest at '%s' is outdated or "
+                            "corrupted, redownloading...",
+                            str(manifest_path),
+                        )
+                        os.unlink(manifest_path)
+                finally:
+                    file.close()
             else:
                 with open(manifest_path, "r") as file:
                     mf_text = file.read()
