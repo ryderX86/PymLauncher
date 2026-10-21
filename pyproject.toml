@@ -1,7 +1,7 @@
 [project]
 name = "PymLauncher"
-version = "1.0.2.1"
-requires-python = ">= 3.15"
+version = "1.0.3.0"
+requires-python = ">= 3.14"
 
 [tool]
 
