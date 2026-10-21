@@ -155,7 +155,7 @@ def get_jvm_version(version: str) -> JavaVersion:
             if sha1:
                 file = open(manifest_path, "rb")
                 try:
-                    mf_sha1 = hashlib.file_digest(file, "sha1")
+                    mf_sha1 = hashlib.file_digest(file, "sha1").hexdigest()
                     file.seek(0)
                     if mf_sha1 == sha1:
                         return JavaVersion.parse(
