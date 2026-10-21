@@ -86,8 +86,12 @@ class HomePage(BindingMixin, QWidget):
         # use globals to avoid some(?) attribute lookup, since formatting is
         # going to be slow enough as-is.
         global log_tmp, log_tmp_type
-        log_tmp_type = config.determine_log_template_format(log_tmp)[0]
-        if log_tmp_type != config.GameLogTemplateType.UNKNOWN:
+        fmts = config.determine_log_template_format(log_tmp)
+        log_tmp_type = fmts[0]
+        if (
+            log_tmp_type != config.GameLogTemplateType.UNKNOWN
+            and len(fmts) == 1
+        ):
             log_tmp = config.logging_template or constants.DEFAULT_LOG_TEMPLATE
         else:
             log_tmp = constants.DEFAULT_LOG_TEMPLATE
