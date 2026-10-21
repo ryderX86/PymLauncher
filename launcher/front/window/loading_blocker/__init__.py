@@ -1,9 +1,8 @@
 import logging
 import sys
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import (
-    QApplication,
     QProgressBar,
     QProgressDialog,
 )
@@ -58,6 +57,10 @@ class LoadingBlockerWindow(BindingMixin, QProgressDialog):
             """
             self.previous_text: str = "Loading..."
 
+        def _open_if_active(self):
+            if self.shown:
+                self.parent.open()
+
         def __enter__(self):
             # startdebug
             self.parent.recursion_count += 1
@@ -67,8 +70,11 @@ class LoadingBlockerWindow(BindingMixin, QProgressDialog):
                     self.previous_text = self.parent.current_text
                     self.parent.set_text(self.shown_text)
                 if not self.parent.isVisible():
-                    self.parent.open()
                     self.shown = True
+                    if d := self.parent.minimumDuration():
+                        QTimer.singleShot(d, self._open_if_active)
+                    else:
+                        self.parent.open()
             else:
                 if self.parent.isVisible():
                     self.previous_text = self.parent.current_text
@@ -153,14 +159,6 @@ class LoadingBlockerWindow(BindingMixin, QProgressDialog):
     @property
     def current_text(self):
         return self.labelText()
-
-    def show(self) -> None:
-        super().show()
-        QApplication.processEvents()
-
-    def open(self, *_) -> None:
-        super().open()
-        QApplication.processEvents()
 
     def shown(self, text: str | None = None):
         """

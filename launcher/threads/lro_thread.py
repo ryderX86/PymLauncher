@@ -18,7 +18,7 @@ from PySide6.QtGui import (
     QInputEvent,
     QKeyEvent,
 )
-from PySide6.QtWidgets import QApplication, QMainWindow, QProgressDialog
+from PySide6.QtWidgets import QApplication, QMainWindow
 
 from launcher import lifecycle
 from launcher.front.window.loading_blocker import LoadingBlockerWindow
@@ -51,19 +51,20 @@ class LROThread(QThread):
     T = TypeVar("T")
     _result: object | None = None
     _exception: Exception | None = None
-    _dialog: QProgressDialog | None
+    _dialog: LoadingBlockerWindow | None
 
     def __init__(
         self,
         parent=None,
         dialog_instance_or_type: (
-            type[QProgressDialog] | QProgressDialog | None
+            type[LoadingBlockerWindow] | LoadingBlockerWindow | None
         ) = LoadingBlockerWindow,
         *,
         msg: str | None = None,
         max_expected_time: int | float | None = None,
     ):
         self.affinity = QThread.currentThread()
+        self.msg = msg
         if isinstance(dialog_instance_or_type, type):
             self._dialog = dialog_instance_or_type(parent)
         elif dialog_instance_or_type is None:
@@ -74,8 +75,6 @@ class LROThread(QThread):
             for w in QApplication.topLevelWidgets():
                 if isinstance(w, QMainWindow):
                     self._dialog.setParent(w)
-            if msg:
-                self._dialog.setLabelText(msg)
             self._dialog.setCancelButton(None)
             self._dialog_old_flags = self._dialog.windowFlags()
             self._dialog_old_modality = self._dialog.windowModality()
@@ -134,9 +133,8 @@ class LROThread(QThread):
             if sys.platform not in {"win32"}:
                 ef = LROInputEventFilter(lifecycle.qapp)
                 lifecycle.qapp.installEventFilter(ef)
-            self._dialog.open()
-            loop.exec()
-            self._dialog.close()
+            with self._dialog.shown(self.msg):
+                loop.exec()
             self._dialog.setWindowFlags(self._dialog_old_flags)
             self._dialog.setWindowModality(self._dialog_old_modality)
             if sys.platform not in {"win32"}:

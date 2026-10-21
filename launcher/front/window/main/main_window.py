@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QMainWindow,
+    QMenu,
     QSizePolicy,
     QStatusBar,
     QTabWidget,
@@ -41,7 +42,7 @@ from launcher.front.window.modloaders import FabricInstallWindow
 from launcher.front.window.settings import SettingsWindow
 from launcher.front.window.skin_change import SkinChange
 from launcher.functions.error_box import error_box
-from launcher.threads.lro_thread import run_lro
+from launcher.threads.lro_thread import run_lro, run_potential_lro
 
 from .home_page import HomePage
 from .profiles_page import ProfilesPage
@@ -276,12 +277,21 @@ class MainWindow(QMainWindow):
             self.utils_menu.addAction(
                 "Force account refresh", debug_utils.force_account_refresh
             )
-            self.utils_menu.addAction(
+            tests_menu = QMenu("Tests", self.utils_menu)
+            tests_menu.addAction(
                 "Test LROThread (3 sec)", self._test_lro_thread
             )
+            tests_menu.addAction(
+                "Test LROThread w/ duration (3 sec)",
+                self._test_lro_thread_min_duration,
+            )
+            self.utils_menu.addMenu(tests_menu)
 
     def _test_lro_thread(self):
         return run_lro("Testing LROs", sleep, 3)
+
+    def _test_lro_thread_min_duration(self):
+        return run_potential_lro(0.25, "Testing LROs w/ timer", sleep, 3)
 
     def showEvent(self, event: QShowEvent) -> None:
         self._on_config_update()
