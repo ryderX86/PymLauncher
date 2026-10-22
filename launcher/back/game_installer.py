@@ -7,12 +7,14 @@ from PySide6.QtCore import (
     QMutex,
     QObject,
     Qt,
+    QThread,
+    QThreadPool,
     Signal,
     Slot,
 )
 from shiboken6 import delete
 
-from launcher import config, constants, lifecycle, paths
+from launcher import config, lifecycle, paths
 from launcher.back import java_manager, profile_manager, version_manager
 from launcher.threads.downloader import (
     Download,
@@ -90,6 +92,8 @@ class GameInstaller(QObject):
         self._error_occured = True
         for t in self._threads:
             t.requestInterruption()
+            if q := t.get_queue():
+                q.interrupt()
         if not self._already_handled_error:
             self.download_error.emit(err)
         # set this w/ mutex so we don't spam the error signal
@@ -97,9 +101,18 @@ class GameInstaller(QObject):
         self._mutex.unlock()
 
     def prep_threads(self, queue: DownloadQueue | None = None, limit: int = 0):
+        tp = QThreadPool.globalInstance()
         self._clear_threads()
         if not limit:
-            limit = constants.CPU_THREADS
+            tp.setMaxThreadCount(QThread.idealThreadCount())
+            limit = tp.maxThreadCount() - tp.activeThreadCount()
+            if limit != QThread.idealThreadCount():
+                log.warning(
+                    "Limited threads to %d/%d (%d active)",
+                    limit,
+                    QThread.idealThreadCount(),
+                    tp.activeThreadCount(),
+                )
         for i in range(limit):
             t = DownloaderThread(parent=self)
             t.setObjectName(f"{type(self).__name__}.thread.{i}")
@@ -133,10 +146,10 @@ class GameInstaller(QObject):
         self._skipped_count = 0
         self._new_overridden_count = 0
         for t in self._threads:
-            t.finished.connect(
-                self._check_remaining_threads,
-                Qt.ConnectionType.SingleShotConnection,
-            )
+            t.finished.connect(self._check_remaining_threads)
+        if not any(t.isRunning() for t in self._threads):
+            log.warning("Threads not running, returning early")
+            return
         self._loop.exec(QEventLoop.ProcessEventsFlag.AllEvents)
         for t in self._threads:  # hack for qthread deletion crashes
             if not t.wait(5):
@@ -150,8 +163,10 @@ class GameInstaller(QObject):
         self._interrupted = True
         for t in self._threads:
             if t.isRunning():
-                log.debug("Stopping thread %r", t.objectName())
                 t.requestInterruption()
+                if q := t.get_queue():
+                    q.interrupt()
+                log.debug("Stopping thread %r", t.objectName())
                 while not t.wait(150):
                     log.debug("Thread still running!")
 

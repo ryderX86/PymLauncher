@@ -222,6 +222,11 @@ class DownloadQueue:
         self._downloads.add(dl)
         self._wait_condition.wakeOne()
 
+    def interrupt(self):
+        self._still_adding = False
+        self._downloads = set()
+        self._wait_condition.wakeAll()
+
     def get_download(self) -> Download:
         self._mutex.lock()
         try:
@@ -239,6 +244,9 @@ class DownloaderThread(QThread):
     downloaded_file = Signal(str, int)  # file name, size
     skipped_file = Signal(str, int)
     logger = log.getChild("DownloaderThread")
+
+    # instance attributes
+    _queue: DownloadQueue | None
 
     def __init_subclass__(cls) -> None:
         cls.logger = log.getChild(cls.__name__)
@@ -279,6 +287,9 @@ class DownloaderThread(QThread):
             except StopIteration:
                 break
 
+    def get_queue(self):
+        return self._queue
+
     def download(self, inf: Download):
         # first check if we even need to download
         if os.path.exists(inf.file_path):
@@ -289,6 +300,8 @@ class DownloaderThread(QThread):
                     h := get_file_hash(inf.file_path, inf.hash_type)
                 ) in inf.hash_list:
                     self.skipped_file.emit(inf.file_path, inf.size)
+                    if isinstance(inf, NativeDownload):
+                        self.extract_native(inf)
                     return
                 else:
                     log.warning(
@@ -301,6 +314,8 @@ class DownloaderThread(QThread):
             elif config.redownload_option <= 0:
                 # no redownloads, we leave
                 self.skipped_file.emit(inf.file_path, inf.size)
+                if isinstance(inf, NativeDownload):
+                    self.extract_native(inf)
                 return
         elif not os.path.isdir((d := os.path.split(inf.file_path)[0])):
             os.makedirs(d, exist_ok=True)
@@ -313,6 +328,8 @@ class DownloaderThread(QThread):
                     "404 at %r, but file exists, have to assume it works.",
                     inf.url,
                 )
+                if isinstance(inf, NativeDownload):
+                    self.extract_native(inf)
                 return
             log.error(err)
             raise err
