@@ -30,10 +30,10 @@ class HashType(StrEnum):
     MD5 = "MD5"
     SHA1 = "SHA-1"
     # secure
-    SHA224 = "SHA224"
-    SHA256 = "SHA256"
-    SHA384 = "SHA384"
-    SHA512 = "SHA512"
+    SHA224 = "SHA-224"
+    SHA256 = "SHA-256"
+    SHA384 = "SHA-384"
+    SHA512 = "SHA-512"
 
 
 def get_file_hash(file: str | BufferedReader, hash_type: HashType):
@@ -43,10 +43,12 @@ def get_file_hash(file: str | BufferedReader, hash_type: HashType):
         close = True
     else:
         close = False
-    file.seek(0)
+        file.seek(0)
     hash_ = hashlib.file_digest(file, hash_type).hexdigest()
     if close:
         file.close()
+    else:
+        file.seek(0)
     return hash_
 
 
