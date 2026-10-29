@@ -130,9 +130,5 @@ class XboxToken:
     def user_hash(self):
         return self.json["DisplayClaims"]["xui"][0]["uhs"]
 
-    @property
-    def gamertag(self):
-        return self.json["DisplayClaims"]["xui"][0].get("gtg")
-
     def as_json(self):
         return self.json
