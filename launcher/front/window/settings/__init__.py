@@ -11,10 +11,9 @@ from PySide6.QtWidgets import (
     QLabel,
     QLayout,
     QLineEdit,
-    QListWidget,
     QListWidgetItem,
     QPushButton,
-    QStackedLayout,
+    QTabWidget,
     QVBoxLayout,
     QWidget,
 )
@@ -124,14 +123,8 @@ class SettingsWindow(BindingMixin, QDialog):
         self._main_lo = QHBoxLayout()
         self._layout.addLayout(self._main_lo, 1)
 
-        self.tabs_list = QListWidget(
-            supportedDragActions=Qt.DropAction.IgnoreAction
-        )
-        self.tabs_list.setFixedWidth(150)
-        self._main_lo.addWidget(self.tabs_list, 0)
-
-        self.main = QStackedLayout()
-        self._main_lo.addLayout(self.main, 1)
+        self.main = QTabWidget()
+        self._main_lo.addWidget(self.main, 1)
 
         action_row = QHBoxLayout()
         action_row.addStretch()
@@ -148,7 +141,6 @@ class SettingsWindow(BindingMixin, QDialog):
         self._make_connectivity_page()
         self._make_appearance_page()
 
-        self.tabs_list.currentRowChanged.connect(self.main.setCurrentIndex)
         self.setMinimumHeight(500)
 
     def bind(self):
@@ -169,7 +161,6 @@ class SettingsWindow(BindingMixin, QDialog):
             QDialogButtonBox.StandardButton.Cancel
         ).clicked.connect(self.reject)
         self.rejected.connect(self.reset)
-        self.tabs_list.setCurrentRow(0)
         self._buttons.button(QDialogButtonBox.StandardButton.Apply).setEnabled(
             False
         )
@@ -300,18 +291,6 @@ class SettingsWindow(BindingMixin, QDialog):
         # visual section
         visual = general.add_section("Visual Behavior")
 
-        show_tooltip_icons = QCheckBox("Show Tooltip Icons")
-        visual.addWidget(show_tooltip_icons, 0)
-        self._mappers.add(
-            WidgetMappingAdapter(
-                read=show_tooltip_icons.isChecked,
-                write=show_tooltip_icons.setChecked,
-                attr_name="tooltip_icons_enabled",
-                signal=show_tooltip_icons.checkStateChanged,
-                widget=show_tooltip_icons,
-            )
-        )
-
         home_page_logs = QCheckBox("Show game logs on home page")
         hpl_final = TooltipHint.widget_tooltip(
             "Show the game's console logs on the home screen.\n"
@@ -370,8 +349,7 @@ class SettingsWindow(BindingMixin, QDialog):
 
         general.lo.addStretch()
 
-        self.tabs_list.addItem(general.list_item)
-        self.main.addWidget(general)
+        self.main.addTab(general, "General")
 
     def _make_connectivity_page(self):
         connectivity = self.SettingsPage("Connectivity")
@@ -432,8 +410,7 @@ class SettingsWindow(BindingMixin, QDialog):
 
         connectivity.lo.addStretch()
 
-        self.tabs_list.addItem(connectivity.list_item)
-        self.main.addWidget(connectivity)
+        self.main.addTab(connectivity, "Connectivity")
 
     def _make_appearance_page(self):
         appearance = self.SettingsPage("Appearance")
@@ -483,10 +460,22 @@ class SettingsWindow(BindingMixin, QDialog):
             )
         )
 
+        other = appearance.add_section("Other")
+        show_tooltip_icons = QCheckBox("Show Tooltip Icons")
+        other.addWidget(show_tooltip_icons, 0)
+        self._mappers.add(
+            WidgetMappingAdapter(
+                read=show_tooltip_icons.isChecked,
+                write=show_tooltip_icons.setChecked,
+                attr_name="tooltip_icons_enabled",
+                signal=show_tooltip_icons.checkStateChanged,
+                widget=show_tooltip_icons,
+            )
+        )
+
         appearance.lo.addStretch(1)
 
-        self.tabs_list.addItem(appearance.list_item)
-        self.main.addWidget(appearance)
+        self.main.addTab(appearance, "Appearance")
 
     def _set_theme_selector(self, data):
         idx = self.theme_selector.findData(
