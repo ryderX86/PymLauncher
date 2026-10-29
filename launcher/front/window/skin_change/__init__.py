@@ -138,9 +138,6 @@ class SkinChange(QDialog):
                 self.current_cape_cloud = account.profile.current_cape["id"]
         if account.profile_needs_update():
             log.debug("Account has old profile info, updating")
-            run_potential_lro(
-                0.25, "Fetching current profile", account.get_profile_info
-            )
 
         self._build_ui()
         self.current_cloud_hash = hashlib.sha256(
@@ -324,6 +321,17 @@ class SkinChange(QDialog):
         if not account_man.active:
             log.warning("No active account, aborting")
             return
+        elif (
+            not account_man.active.profile
+        ) or account_man.active.profile.demo:
+            log.warning("Cannot change skin on demo account, aborting")
+            return
+        if account_man.active.profile_needs_update():
+            run_potential_lro(
+                0.25,
+                "Updating profile",
+                account_man.active.profile.refresh_profile_info,
+            )
         inst = cls(account_man.active, parent)
         inst.exec()
         inst.deleteLater()

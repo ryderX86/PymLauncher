@@ -161,7 +161,7 @@ class MinecraftProfile:
         self,
         profile_info: dict,
         mc_token: MinecraftToken | None = None,
-        demo_profile: bool = False,
+        demo_profile: bool | None = None,
     ):
         """Don't use this for new profiles. Use `cls.from_token()` instead."""
         self._token = mc_token
@@ -177,7 +177,10 @@ class MinecraftProfile:
         self._cape_thumbnails = None
 
         self.current_skin = self.default_skin_inf
-        self._is_demo_profile = demo_profile
+        if demo_profile is not None:
+            self._is_demo_profile = demo_profile
+        else:
+            self._is_demo_profile = profile_info.get("demo", False)
 
         self.current_cape = None
         self._check_current_skin()
@@ -286,10 +289,8 @@ class MinecraftProfile:
     def from_token(cls, mc_token: MinecraftToken):
         try:
             return cls(cls._get_profile_json(mc_token))
-        except ProfileNotFoundError as err:
-            log.warning(
-                "No account profile, setting to demo profile", exc_info=err
-            )
+        except ProfileNotFoundError:
+            log.info("No account profile, setting to demo profile")
             return cls(
                 {"id": TRIAL_UUID, "name": "Demo Player"},
                 mc_token,
@@ -358,6 +359,7 @@ class MinecraftProfile:
                 "skins": self.skins,
                 "capes": self.capes,
                 "last_updated": self.last_updated,
+                "demo": self._is_demo_profile,
                 **self._other_info,
             }.items()
             if v
@@ -538,8 +540,13 @@ class MinecraftProfile:
             return _cached_skins[name.value]
 
         img = QPixmap(
-            f":/skin-placeholders/default_{name.value}.png"
+            f":/skin-placeholders/default_{name.value.lower()}.png"
         ).toImage()
+        img.setText("id", f"demo_{name.value.lower()}")
         ico = resources.icon_from_qimg(img, True)
         _cached_skins[name.value] = ico
         return _cached_skins[name.value]
+
+    @property
+    def demo(self):
+        return self._is_demo_profile

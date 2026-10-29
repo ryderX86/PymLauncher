@@ -32,7 +32,9 @@ from launcher import (
     paths,
     set_exiting,
 )
+from launcher.auth.launcher_account import LauncherAccount
 from launcher.back import profile_manager
+from launcher.back.account_manager import account_man
 from launcher.constants import LAUNCHER_VERSION
 from launcher.front.qt.widgets import AccountSelect
 from launcher.front.qt.widgets.profile_list import ProfileList
@@ -265,7 +267,10 @@ class MainWindow(QMainWindow):
             self._open_data_folder,
         )
 
-        self.utils_menu.addAction("Change skin", SkinChange.change_skin)
+        self._change_skin_action = self.utils_menu.addAction(
+            "Change skin", SkinChange.change_skin
+        )
+        account_man.signals.account_changed.connect(self._on_account_changed)
 
         if constants.DEV:
             self.utils_menu.addAction(
@@ -310,3 +315,10 @@ class MainWindow(QMainWindow):
         self.menuBar().setCornerWidget(
             self.account_dropdown, Qt.Corner.TopRightCorner
         )
+
+    @Slot(LauncherAccount)
+    def _on_account_changed(self, account: LauncherAccount):
+        if (not account.profile) or account.profile.demo:
+            self._change_skin_action.setDisabled(True)
+        else:
+            self._change_skin_action.setDisabled(False)

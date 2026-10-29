@@ -243,7 +243,8 @@ class LauncherAccount:
             mc_token = None
 
         if raw_profile:
-            profile = MinecraftProfile(raw_profile, mc_token)
+            demo = raw_profile.pop("demo", False)
+            profile = MinecraftProfile(raw_profile, mc_token, demo)
         else:
             profile = None
 

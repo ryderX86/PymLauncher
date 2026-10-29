@@ -76,6 +76,7 @@ class HomePage(BindingMixin, QWidget):
         installer.downloaded_file.connect(self._on_downloaded_file)
         installer.update_bytes.connect(self._step_progress_bar)
         self.config_changed()
+        self._check_set_demo_mode_text()
 
     @Slot(int)
     def _step_progress_bar(self, amount: int):
