@@ -7,6 +7,7 @@ from typing import NamedTuple
 import configparser
 import logging
 import os
+import platform
 import sys
 
 from PySide6.QtCore import (
@@ -154,13 +155,24 @@ class IconTheme:
 
         @classmethod
         def get_system_fonts(cls):  # type: ignore
-            _SYSICON_FONTS = {
-                "Windows 11": "Segoe Fluent Icons",
-                "Windows 10": "Segoe MDL2 Assets",
-                "Windows 8": "Segoe UI Symbol",
-            }
-            for displayname, themeid in _SYSICON_FONTS.items():
-                yield cls.load_system_icon_font(displayname, themeid)
+            if (winmajver := float(platform.win32_ver()[0])) >= 11:
+                return (
+                    cls.load_system_icon_font(
+                        "Windows 11", "Segoe Fluent Icons"
+                    ),
+                )
+            elif winmajver >= 10:
+                return (
+                    cls.load_system_icon_font(
+                        "Windows 10", "Segoe MDL2 Assets"
+                    ),
+                )
+            elif winmajver >= 8:
+                return (
+                    cls.load_system_icon_font("Windows 8", "Segoe UI Symbol"),
+                )
+            else:
+                return tuple()
 
     else:
 
