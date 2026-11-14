@@ -12,10 +12,12 @@ from PySide6.QtCore import (
     Signal,
     Slot,
 )
+from PySide6.QtGui import QInputEvent, QKeyEvent
 from shiboken6 import delete
 
 from launcher import config, lifecycle, paths
 from launcher.back import java_manager, profile_manager, version_manager
+from launcher.front.event_filters import MiscEventFilter
 from launcher.threads.downloader import (
     Download,
     DownloaderThread,
@@ -405,8 +407,7 @@ class GameInstaller(QObject):
                 count,
             )
 
-    def install(self):
-        lifecycle.shutting_down.connect(self._interrupt)
+    def _do_install(self):
         st = time.perf_counter()
         self.starting.emit()
         self.prep_vars()
@@ -437,7 +438,17 @@ class GameInstaller(QObject):
             self.finished.emit(False)
             return
         self.finished.emit(True)
-        lifecycle.shutting_down.disconnect(self._interrupt)
+
+    def install(self):
+        lifecycle.shutting_down.connect(self._interrupt)
+        # eat inputs while the installer is active
+        ef = MiscEventFilter((QInputEvent, QKeyEvent), True, lifecycle.qapp)
+        lifecycle.qapp.installEventFilter(ef)
+        try:
+            self._do_install()
+        finally:
+            lifecycle.qapp.removeEventFilter(ef)
+            lifecycle.shutting_down.disconnect(self._interrupt)
 
 
 installer = GameInstaller()

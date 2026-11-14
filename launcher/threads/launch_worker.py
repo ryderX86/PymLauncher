@@ -14,8 +14,9 @@ import os
 import random
 import re
 import subprocess
+import threading
 
-from PySide6.QtCore import QThread, Signal, Slot
+from PySide6.QtCore import QObject, Signal, Slot
 
 from launcher import (
     JarRedownloadBehavior,
@@ -382,6 +383,8 @@ def build_launch_command(
 
 
 class LogParser:
+    __slots__ = ("_parser", "_current_log_count", "_callback")
+
     ROOT_TAG = b'<root xmlns:log4j="mc">\n'
     EVENT_TAG = "{mc}Event"
     MSG_TAG = "{mc}Message"
@@ -451,8 +454,15 @@ class LogParser:
         pass
 
 
-class LaunchWorker(QThread):
-    """Background worker for launching the game."""
+class LaunchWorker(QObject):
+    """
+    Background worker for launching the game.
+
+    We use Python's builtin `threading` module so that in the case the launcher
+    is closed before the game is, we avoid a hard-crash from Qt by using a
+    daemon thread that can safely quit without being instructed to, which is
+    techincally a lot safer than using `QThread::terminate()`.
+    """
 
     progress = Signal(
         str, float, float, bool
@@ -461,11 +471,7 @@ class LaunchWorker(QThread):
     status = Signal(str)  # status text
     game_closed = Signal(str)
     game_log = Signal(str, str, str, str, str)
-    """
-    `[0]` (`int`) - Exit code<br>
-    `[1]` (`str`) - stdout<br>
-    `[2]` (`str`) - stderr
-    """
+    finished = Signal()
     _instance: LaunchWorker | None = None
 
     log = log.getChild("LaunchWorker")
@@ -477,6 +483,7 @@ class LaunchWorker(QThread):
     cmd: list[str]
     _p: subprocess.Popen[str] | None
     _callback: Callable[[str], None] | None
+    _thread: threading.Thread
 
     def __init__(
         self,
@@ -528,7 +535,7 @@ class LaunchWorker(QThread):
         log.info("Minecraft started; PID: %d", self._p.pid)
         return
 
-    def post_launch_loop(self):
+    def start_logging_thread(self):
         """
         Establishes the logging loop and waiting after the game launches.
         """
@@ -555,24 +562,22 @@ class LaunchWorker(QThread):
 
             self._callback = callback
 
-        def loop(self):
-            assert isinstance(self, LaunchWorker)
-            assert self._callback
-            assert self._p
-            if self._p.stdout:
-                parser = LogParser(self.game_log.emit)
-                for line in iter(self._p.stdout.readline, ""):
-                    parser.update(line)
-                    self._p.stdout.flush()
-            self._p.wait()
+        self._thread = threading.Thread(target=self._log_loop, daemon=True)
+        self._thread.start()
 
-        loop(self)
-
-        self.log.info("Game process returned with code %d", self._p.returncode)
-        if self._p.returncode == 0:
+    def _log_loop(self):
+        assert self._p
+        if self._p.stdout:
+            parser = LogParser(self.game_log.emit)
+            for line in iter(self._p.stdout.readline, ""):
+                parser.update(line)
+                self._p.stdout.flush()
+        returncode: int = self._p.wait()
+        self.log.info("Game process returned with code %d", returncode)
+        if returncode == 0:
             if config.redownload_option > 1:
                 config.redownload_option = JarRedownloadBehavior.NEVER
-        self.game_closed.emit(str(self._p.returncode))
+        self.game_closed.emit(str(returncode))
 
     def bootstrap(self):
         """
@@ -639,7 +644,7 @@ class LaunchWorker(QThread):
         self._ready_for_launch = True
 
         self.startup_process()
-        self.post_launch_loop()
+        self.start_logging_thread()
         return
 
     def run(self):
@@ -651,7 +656,7 @@ class LaunchWorker(QThread):
     @Slot(bool)
     def start_if_success(self, success: bool):
         if success:
-            self.start()
+            self.run()
         else:
             return
 
