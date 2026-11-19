@@ -46,7 +46,7 @@ _parser.add_argument(
     "--debug",
     action="store_true",
     default=False,
-    dest="debug_logging",
+    dest="debug",
 )
 # _parser.add_argument(
 #     "--force-offline",
@@ -69,7 +69,7 @@ class LaunchArgsContainer:
     game_dir: str | None
     resource_debug: bool
     exporting_debug: bool
-    debug_logging: bool
+    debug: bool
     launch_profile: str | None
 
     def __init__(self):
@@ -77,7 +77,7 @@ class LaunchArgsContainer:
         self.game_dir = None
         self.resource_debug = False
         self.exporting_debug = False
-        self.debug_logging = False
+        self.debug = False
         self.launch_profile = None
 
     def get_args(self):
@@ -87,7 +87,7 @@ class LaunchArgsContainer:
         self.game_dir = args.game_dir
         self.resource_debug = args.resource_debug
         self.exporting_debug = args.exporting_debug
-        self.debug_logging = args.debug_logging
+        self.debug = args.debug
         self.launch_profile = args.launch_profile
 
         if self.work_dir is not None:

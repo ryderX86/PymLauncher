@@ -3,7 +3,7 @@ import logging
 import os
 import time
 
-from PySide6.QtCore import QCoreApplication, QSize, QUrl
+from PySide6.QtCore import QCoreApplication, QSize, Qt, QUrl
 from PySide6.QtGui import QClipboard, QDesktopServices, QIcon, QImage, QPixmap
 from PySide6.QtWidgets import QApplication
 
@@ -129,3 +129,14 @@ def popup_folder(directory: str):
     if not is_path_valid(directory):
         raise ValueError(f"Invalid directory: {directory!r}")
     QDesktopServices.openUrl(QUrl.fromLocalFile(directory))
+
+
+_DEBUG_MODS = (
+    Qt.KeyboardModifier.ControlModifier
+    | Qt.KeyboardModifier.ShiftModifier
+    | Qt.KeyboardModifier.AltModifier
+)
+
+
+def query_debug_kb_modifiers() -> bool:
+    return QApplication.queryKeyboardModifiers() & (_DEBUG_MODS) == _DEBUG_MODS

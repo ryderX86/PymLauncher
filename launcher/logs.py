@@ -10,9 +10,10 @@ from PySide6.QtCore import (
     qInstallMessageHandler,
 )
 
-from launcher import constants, launchargs, paths
+from launcher import constants, launchargs, lifecycle, paths
 
 ROOT_LOGGER = logging.getLogger()
+_already_cycled_log_file: bool = False
 
 
 class _LoggingFormatter(logging.Formatter):
@@ -44,13 +45,16 @@ class _LoggingFormatter(logging.Formatter):
 
 
 def setup():
+    global _already_cycled_log_file
     # first checks
     if not paths.ready:
         raise RuntimeError("setup() called before PathFinder object is ready")
     if not launchargs.ready:
         raise RuntimeError("setup() called before CLI args are parsed")
 
-    use_debug_logging = launchargs.debug_logging or constants.DEV
+    use_debug_logging = (
+        launchargs.debug or constants.DEV or lifecycle.debug_mode
+    )
 
     # formatting:
     if use_debug_logging:
@@ -74,8 +78,10 @@ def setup():
         fh = RotatingFileHandler(log_file, backupCount=4, maxBytes=1000**3)
         fh.setLevel(logging.DEBUG)
         fh.setFormatter(FORMATTER)
-        if os.path.isfile(log_file):
-            fh.doRollover()
+        if not _already_cycled_log_file:
+            if os.path.isfile(log_file):
+                fh.doRollover()
+            _already_cycled_log_file = True
         ROOT_LOGGER.addHandler(fh)
 
         # set up to log final exception if we crash while frozen

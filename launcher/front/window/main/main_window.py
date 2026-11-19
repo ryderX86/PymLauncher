@@ -35,7 +35,6 @@ from launcher import (
 from launcher.auth.launcher_account import LauncherAccount
 from launcher.back import profile_manager
 from launcher.back.account_manager import account_man
-from launcher.constants import LAUNCHER_VERSION
 from launcher.front.qt.widgets import AccountSelect
 from launcher.front.qt.widgets.profile_list import ProfileList
 from launcher.front.theming import IconName, get_icon
@@ -219,7 +218,7 @@ class MainWindow(QMainWindow):
         self.setStatusBar(self.status)
         self.status.showMessage("Ready to go")
         self.status.setSizeGripEnabled(False)
-        ver_label = QLabel(LAUNCHER_VERSION)
+        ver_label = QLabel(constants.LAUNCHER_VERSION)
         ver_label.setContentsMargins(0, 0, 6, 0)
         ver_label.setProperty("secondary", True)
         self.status.addPermanentWidget(ver_label, 0)
@@ -272,7 +271,7 @@ class MainWindow(QMainWindow):
         )
         account_man.signals.account_changed.connect(self._on_account_changed)
 
-        if constants.DEV:
+        if lifecycle.debug_mode:
             self.utils_menu.addAction(
                 "See accounts.bin", debug_utils.preview_accounts_file
             )

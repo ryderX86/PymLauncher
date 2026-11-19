@@ -48,6 +48,7 @@ class _Lifecycle(QObject):
     config_updated = Signal()
 
     bootstrap_already_run: bool
+    debug_mode: bool
     _qapp: QApplication
 
     def __init__(self):
@@ -55,6 +56,7 @@ class _Lifecycle(QObject):
         self.bootstrap_already_run = False
         self.bootstrap_done.connect(self._on_bootstrap)
         self._threads = set()
+        self.debug_mode = not bool(globals().get("__compiled__", False))
 
     @Slot()
     def _on_bootstrap(self):

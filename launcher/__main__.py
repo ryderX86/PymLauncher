@@ -42,7 +42,7 @@ from .front.window.loading_blocker import LoadingBlockerWindow
 from .front.window.login import LoginWindow
 from .front.window.main.main_window import MainWindow
 from .front.window.warning import ButtonConfig, WarningDialog, WarningType
-from .functions import detect_set_clipboard, uisleep
+from .functions import detect_set_clipboard, query_debug_kb_modifiers, uisleep
 from .functions.error_box import error_box
 from .offline import connectivity_poller, offline_man
 from .ostools import setup_app_id
@@ -53,7 +53,6 @@ from .threads.bootstrap import (
     LaunchProfileBootstrap,
     VersionManifestBootstrap,
 )
-from .threads.install_worker import InstallWorker
 from .threads.launch_worker import LaunchWorker
 from .threads.lro_thread import LROThread
 
@@ -83,7 +82,6 @@ class LauncherApp:
     fonts: FontList
     """Named tuple containing the fonts"""
 
-    install_worker: InstallWorker
     launch_worker: LaunchWorker
 
     # Trackers for threads
@@ -92,6 +90,7 @@ class LauncherApp:
     version_mf_loaded: bool
 
     event_loop_running: bool
+    user_wants_debug: bool
 
     def __init__(self):
         if system_plugin_paths:
@@ -108,6 +107,11 @@ class LauncherApp:
         self.relog_after_bootstrap = False
 
         self._loop = QEventLoop()
+
+        # check if we're potentially debugging:
+        self.user_wants_debug = query_debug_kb_modifiers()
+        if self.user_wants_debug:
+            log.info("Debug mode modifiers detected")
 
         self.fonts = get_fonts()
         detect_set_clipboard()
@@ -344,6 +348,16 @@ class LauncherApp:
                     self.login_dialog.finished.connect(loop.quit)
                     loop.exec(QEventLoop.ProcessEventsFlag.AllEvents)
             self._refresh_account_ui()
+
+        # final check for keyboard modifiers:
+        if (
+            (not (lifecycle.debug_mode or not launchargs.debug))
+            and query_debug_kb_modifiers()
+            and self.user_wants_debug
+        ):
+            log.info("Launched in debug mode (manual)")
+            lifecycle.debug_mode = True
+            logs.setup()  # reset logging so it actually stores debug logs
 
         log.info("Showtime!")
         self.main_window.show()
@@ -702,6 +716,8 @@ def main():
         return
     else:
         launchargs.get_args()
+        if launchargs.debug or constants.DEV:
+            lifecycle.debug_mode = True
         setup_app_id()
     try:
         paths.setup()
