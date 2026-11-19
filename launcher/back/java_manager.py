@@ -15,7 +15,7 @@ import time
 
 from PySide6.QtCore import QThreadPool
 
-from launcher import config, paths
+from launcher import config, constants, paths
 from launcher.constants import (
     ARCH,
     JAVA_MANIFEST_URL,
@@ -50,7 +50,7 @@ def get_jvm_manifest(force_update: bool = False) -> dict:
     elif os.path.isfile(paths.jvm_manifest):
         log.debug("Checking cached jre_manifest.json...")
         cache_age = os.stat(paths.jvm_manifest).st_mtime
-        max_age = time.time() - timedelta(days=7).total_seconds()
+        max_age = time.time() - constants.LONG_CACHE_TIME
         if max_age < cache_age:
             with open(paths.jvm_manifest, "r") as f:
                 mf_text = f.read()
