@@ -22,7 +22,6 @@ from launcher import (
     JarRedownloadBehavior,
     config,
     constants,
-    launchargs,
     paths,
 )
 from launcher.auth import LauncherAccount, MinecraftToken
@@ -372,12 +371,11 @@ def build_launch_command(
         cmd.extend(["--height", str(resolution_height)])
 
     cmd = remove_empty_strings(cmd)
-    if constants.DEV or launchargs.debug_logging:
-        for arg in cmd:
-            if "${" in arg and "}" in arg:
-                log.warning(
-                    "Unhandled template literal in launch argument: %r", arg
-                )
+    for arg in cmd:
+        if "${" in arg and "}" in arg:
+            log.warning(
+                "Unhandled template literal in launch argument: %r", arg
+            )
 
     return cmd
 
