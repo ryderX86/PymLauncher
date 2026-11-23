@@ -17,14 +17,12 @@ log = logging.getLogger(__name__)
 
 class _OfflineModeManager(QObject):
     _offline: bool
-    _offline_hooks: list[Callable[[bool], None]]
 
     offline_mode_set = Signal(bool)
 
     def __init__(self):
         super().__init__()
         self._offline = False
-        self._offline_hooks = []
 
     @property
     def offline(self):
@@ -42,9 +40,6 @@ class _OfflineModeManager(QObject):
         log.debug(
             "Connection status set: %s", "Offline" if is_offline else "Online"
         )
-        for func in self._offline_hooks:
-            func(is_offline)
-        log.debug("Called %s hook functions", len(self._offline_hooks))
         if is_offline:
             _start_status_checker_thread(self._back_online)
 
