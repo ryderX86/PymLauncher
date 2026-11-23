@@ -1,7 +1,7 @@
 # TODO
 Things that need doing
 ## User-end QoL changes
-- [ ] Disable version list refresh button upon going into offline mode
+- [x] ~~Disable version list refresh button upon going into offline mode~~
 - [ ] Download "<...>.sha1" files for bulk downloads when there's no SHA1 in
       the manifest
 - [ ] Rework QML for the skin change window to use one continuous view for both

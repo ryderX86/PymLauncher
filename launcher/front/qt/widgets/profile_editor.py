@@ -267,6 +267,7 @@ class ProfileEditor(BindingMixin, QWidget):
         self.version_refresh.setIcon(get_icon(IconName.REFRESH))
         self.version_refresh.clicked.connect(self._versions_refresh_button)
         self.version_refresh.setMaximumWidth(32)
+        offline_man.offline_mode_set.connect(self.version_refresh.setDisabled)
         version_select_row.addWidget(self.version_refresh, 0)
         self.form_layout.addRow("Version:", version_select_row)
         self.proxy = VersionProxyModel()
