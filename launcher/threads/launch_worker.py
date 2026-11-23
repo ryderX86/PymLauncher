@@ -471,6 +471,7 @@ class LaunchWorker(QObject):
     game_log = Signal(str, str, str, str, str)
     finished = Signal()
     _instance: LaunchWorker | None = None
+    active: bool = False
 
     log = log.getChild("LaunchWorker")
 
@@ -490,6 +491,7 @@ class LaunchWorker(QObject):
         parent=None,
     ):
         super().__init__(parent)
+        type(self).active = False
         self._ready_for_launch = False
         self._callback = log_hook
         self.installer = installer
@@ -560,7 +562,9 @@ class LaunchWorker(QObject):
 
             self._callback = callback
 
-        self._thread = threading.Thread(target=self._log_loop, daemon=True)
+        self._thread = threading.Thread(
+            target=self._start_log_loop, daemon=True
+        )
         self._thread.start()
 
     def _log_loop(self):
@@ -576,6 +580,12 @@ class LaunchWorker(QObject):
             if config.redownload_option > 1:
                 config.redownload_option = JarRedownloadBehavior.NEVER
         self.game_closed.emit(str(returncode))
+
+    def _start_log_loop(self):
+        try:
+            self._log_loop()
+        finally:
+            type(self).active = False
 
     def bootstrap(self):
         """
@@ -646,10 +656,12 @@ class LaunchWorker(QObject):
         return
 
     def run(self):
+        type(self).active = True
         try:
             self.bootstrap()
         except Exception as err:
             log.error("Error in LaunchWorker bootstrap():", exc_info=err)
+            type(self).active = False
 
     @Slot(bool)
     def start_if_success(self, success: bool):

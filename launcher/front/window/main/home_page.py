@@ -263,6 +263,9 @@ class HomePage(BindingMixin, QWidget):
         self.play_button.setProperty("play", True)
         self.play_button.setMinimumHeight(50)
         self.play_button.setMinimumWidth(280)
+        self.play_button.clicked.connect(
+            lambda: self.play_button.setDisabled(True)
+        )
         self.play_button.clicked.connect(self._on_play)
         self.play_button.setDisabled(True)
 

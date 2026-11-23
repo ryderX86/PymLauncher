@@ -447,6 +447,11 @@ class LauncherApp:
 
     @Slot(str)
     def on_game_closed(self, exit_code: str):
+        # hack
+        installer.finished.disconnect(self.launch_worker.start_if_success)
+        self.launch_worker.deleteLater()
+        QApplication.processEvents(QEventLoop.ProcessEventsFlag.AllEvents)
+        del self.launch_worker
         ec = int(exit_code)
         if ec == 0:
             return
@@ -498,6 +503,9 @@ class LauncherApp:
 
     @Slot()
     def play(self):
+        if LaunchWorker.active:
+            log.warning("Tried to start the game twice! Aborting.")
+            return
         if not account_man.active:
             error_box("No active account! Please submit a bug report.")
             return
@@ -544,6 +552,8 @@ class LauncherApp:
             self.main_window.home_page.on_launch_finished,
             Qt.ConnectionType.UniqueConnection,
         )
+        if config.post_launch_option is config.PostLaunchBehavior.CLOSE:
+            self.launch_worker.done.connect(QApplication.closeAllWindows)
         self.launch_worker.game_closed.connect(
             self.on_game_closed,
         )
@@ -554,9 +564,6 @@ class LauncherApp:
         self.launch_worker.game_log.connect(
             self.main_window.home_page.handle_game_log,
             Qt.ConnectionType.UniqueConnection,
-        )
-        self.launch_worker.finished.connect(
-            self.launch_worker.deleteLater, Qt.ConnectionType.UniqueConnection
         )
         installer.finished.connect(
             self.launch_worker.start_if_success,
